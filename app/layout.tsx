@@ -1,12 +1,14 @@
-import type { Metadata } from 'next'
-import { GeistSans } from 'geist/font/sans'
-import { GeistMono } from 'geist/font/mono'
-import './globals.css'
+import type React from "react"
+import type { Metadata } from "next"
+import { GeistSans } from "geist/font/sans"
+import { GeistMono } from "geist/font/mono"
+import "./globals.css"
 
 export const metadata: Metadata = {
-  title: 'v0 App',
-  description: 'Created with v0',
-  generator: 'v0.app',
+  title: "BrainBerry - Neurodiverse Learning Platform",
+  description:
+    "Therapeutic gaming system designed for neurodiverse children. Personalized learning experiences configured by therapists and parents.",
+  generator: "v0.app",
 }
 
 export default function RootLayout({
