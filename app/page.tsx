@@ -2,39 +2,15 @@
 
 import type React from "react"
 
-import { Brain, Calendar, MapPin, Instagram, Facebook, Twitter, X, User, Users } from "lucide-react"
+import { Brain, Calendar, MapPin, Instagram, Facebook, Twitter } from "lucide-react"
 import Image from "next/image"
-import { useState } from "react"
-
-type UserRole = "THERAPIST_PARENT" | "CHILD" | null
-type ModalStep = "role-selection" | "login" | null
+import { useRouter } from "next/navigation"
 
 export default function BrainBerry() {
-  const [modalStep, setModalStep] = useState<ModalStep>(null)
-  const [selectedRole, setSelectedRole] = useState<UserRole>(null)
-  const [loginData, setLoginData] = useState({ email: "", password: "", childCode: "" })
+  const router = useRouter()
 
-  const openTrialFlow = () => {
-    setModalStep("role-selection")
-    setSelectedRole(null)
-  }
-
-  const selectRole = (role: UserRole) => {
-    setSelectedRole(role)
-    setModalStep("login")
-  }
-
-  const closeModal = () => {
-    setModalStep(null)
-    setSelectedRole(null)
-    setLoginData({ email: "", password: "", childCode: "" })
-  }
-
-  const handleLogin = (e: React.FormEvent) => {
-    e.preventDefault()
-    // Handle login logic here
-    console.log("Login attempt:", { role: selectedRole, data: loginData })
-    closeModal()
+  const goToLogin = () => {
+    router.push("/login")
   }
 
   return (
@@ -54,17 +30,14 @@ export default function BrainBerry() {
               <a href="#programs" className="text-black hover:text-main font-medium">
                 Programs
               </a>
-              <a href="#join" className="text-black hover:text-main font-medium">
-                Get Started
-              </a>
               <a href="#community" className="text-black hover:text-main font-medium">
                 Community
               </a>
               <button
-                onClick={openTrialFlow}
+                onClick={goToLogin}
                 className="bg-main text-main-foreground px-6 py-2 border-2 border-black shadow-brutal hover:shadow-brutal-lg transition-all font-bold"
               >
-                START FREE TRIAL
+                JOIN NOW
               </button>
             </nav>
           </div>
@@ -96,7 +69,7 @@ export default function BrainBerry() {
                 Welcome to BrainBerry — therapeutic gaming designed for neurodiverse minds.
               </p>
               <button
-                onClick={openTrialFlow}
+                onClick={goToLogin}
                 className="bg-chart-2 text-white px-8 py-4 border-4 border-border shadow-brutal hover:shadow-brutal-lg transition-all font-bold text-lg"
               >
                 EXPLORE PROGRAMS
@@ -277,7 +250,7 @@ export default function BrainBerry() {
                 Join our community of families and therapists. All learners welcome.
               </p>
               <button
-                onClick={openTrialFlow}
+                onClick={goToLogin}
                 className="bg-chart-2 text-main-foreground px-12 py-6 border-4 border-border shadow-brutal-2xl hover:shadow-brutal-3xl transition-all font-bold text-2xl"
               >
                 START FREE TRIAL
@@ -355,135 +328,6 @@ export default function BrainBerry() {
           </div>
         </div>
       </footer>
-
-      {modalStep && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white border-4 border-black shadow-brutal-3xl max-w-md w-full max-h-[90vh] overflow-y-auto">
-            {/* Modal Header */}
-            <div className="flex justify-between items-center p-6 border-b-4 border-black">
-              <h2 className="text-2xl font-bold">{modalStep === "role-selection" ? "Choose Your Role" : "Sign In"}</h2>
-              <button onClick={closeModal} className="p-2 hover:bg-gray-100 border-2 border-black shadow-brutal">
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-
-            {/* Role Selection */}
-            {modalStep === "role-selection" && (
-              <div className="p-6 space-y-4">
-                <p className="text-lg font-medium text-center mb-6">Select your role to get started with BrainBerry</p>
-
-                <button
-                  onClick={() => selectRole("THERAPIST_PARENT")}
-                  className="w-full bg-chart-1 text-main-foreground p-6 border-4 border-black shadow-brutal hover:shadow-brutal-lg transition-all"
-                >
-                  <div className="flex items-center justify-center space-x-3 mb-2">
-                    <Users className="h-8 w-8" />
-                    <span className="text-xl font-bold">THERAPIST / PARENT</span>
-                  </div>
-                  <p className="text-sm font-medium">
-                    Full access to create games, manage children, and view analytics
-                  </p>
-                </button>
-
-                <button
-                  onClick={() => selectRole("CHILD")}
-                  className="w-full bg-chart-2 text-main-foreground p-6 border-4 border-black shadow-brutal hover:shadow-brutal-lg transition-all"
-                >
-                  <div className="flex items-center justify-center space-x-3 mb-2">
-                    <User className="h-8 w-8" />
-                    <span className="text-xl font-bold">CHILD</span>
-                  </div>
-                  <p className="text-sm font-medium">Play-only access to assigned games and activities</p>
-                </button>
-              </div>
-            )}
-
-            {/* Login Forms */}
-            {modalStep === "login" && (
-              <div className="p-6">
-                <div className="mb-6 text-center">
-                  <div
-                    className={`inline-block px-4 py-2 border-2 border-black shadow-brutal ${
-                      selectedRole === "THERAPIST_PARENT" ? "bg-chart-1" : "bg-chart-2"
-                    } text-main-foreground font-bold`}
-                  >
-                    {selectedRole === "THERAPIST_PARENT" ? "THERAPIST / PARENT" : "CHILD"} LOGIN
-                  </div>
-                </div>
-
-                <form onSubmit={handleLogin} className="space-y-4">
-                  {selectedRole === "THERAPIST_PARENT" ? (
-                    <>
-                      <div>
-                        <label className="block text-sm font-bold mb-2">Email</label>
-                        <input
-                          type="email"
-                          value={loginData.email}
-                          onChange={(e) => setLoginData({ ...loginData, email: e.target.value })}
-                          className="w-full px-4 py-3 border-2 border-black shadow-brutal font-medium"
-                          placeholder="your@email.com"
-                          required
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-bold mb-2">Password</label>
-                        <input
-                          type="password"
-                          value={loginData.password}
-                          onChange={(e) => setLoginData({ ...loginData, password: e.target.value })}
-                          className="w-full px-4 py-3 border-2 border-black shadow-brutal font-medium"
-                          placeholder="••••••••"
-                          required
-                        />
-                      </div>
-                    </>
-                  ) : (
-                    <div>
-                      <label className="block text-sm font-bold mb-2">Child Access Code</label>
-                      <input
-                        type="text"
-                        value={loginData.childCode}
-                        onChange={(e) => setLoginData({ ...loginData, childCode: e.target.value })}
-                        className="w-full px-4 py-3 border-2 border-black shadow-brutal font-medium text-center text-2xl tracking-widest"
-                        placeholder="ABC123"
-                        required
-                      />
-                      <p className="text-sm text-gray-600 mt-2 text-center">
-                        Ask your therapist or parent for your access code
-                      </p>
-                    </div>
-                  )}
-
-                  <div className="flex space-x-3 pt-4">
-                    <button
-                      type="button"
-                      onClick={() => setModalStep("role-selection")}
-                      className="flex-1 bg-gray-200 text-black px-6 py-3 border-2 border-black shadow-brutal hover:shadow-brutal-lg transition-all font-bold"
-                    >
-                      BACK
-                    </button>
-                    <button
-                      type="submit"
-                      className={`flex-1 px-6 py-3 border-2 border-black shadow-brutal hover:shadow-brutal-lg transition-all font-bold text-main-foreground ${
-                        selectedRole === "THERAPIST_PARENT" ? "bg-chart-1" : "bg-chart-2"
-                      }`}
-                    >
-                      SIGN IN
-                    </button>
-                  </div>
-                </form>
-
-                {selectedRole === "THERAPIST_PARENT" && (
-                  <div className="mt-6 pt-4 border-t-2 border-gray-200 text-center">
-                    <p className="text-sm text-gray-600 mb-2">Don't have an account?</p>
-                    <button className="text-main font-bold underline">Create Free Account</button>
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-        </div>
-      )}
     </div>
   )
 }
