@@ -1,12 +1,32 @@
 "use client"
 import { Users, User, Plus, BarChart3, Settings, Palette, Loader2, Link2, CheckCircle2 } from "lucide-react"
 import { useEffect, useState } from "react"
-import { toast } from 'sonner'
-import { useMockData } from './MockDataContext'
 
-interface Child { id: string; name: string; age: number; diagnosis: string; notes?: string | null }
-interface Assignment { id: string; moldId: string; childId: string; status: string; progress: number; mold: { id: string; name: string; difficulty: string }; }
-interface MoldLite { id: string; name: string; difficulty: string; primaryObjective: string; meta?: any }
+interface Child { 
+  id: string
+  name: string
+  age: number
+  diagnosis: string
+  notes?: string | null
+  accessCode: string
+}
+
+interface Assignment { 
+  id: string
+  moldId: string
+  childId: string
+  status: string
+  progress: number
+  mold: { id: string; name: string; difficulty: string }
+}
+
+interface MoldLite { 
+  id: string
+  name: string
+  difficulty: string
+  primaryObjective: string
+  meta?: any
+}
 
 export default function ChildrenTab() {
   const [selectedChild, setSelectedChild] = useState<string | null>(null)
@@ -20,60 +40,166 @@ export default function ChildrenTab() {
   const [assignModal, setAssignModal] = useState(false)
   const [assignMoldId, setAssignMoldId] = useState('')
 
-  const { useMock, dataset, addChild, addAssignment, updateAssignmentProgress } = useMockData()
-
   async function fetchChildren() {
-    if (useMock) { setChildren((dataset?.children||[]) as any); return }
     setLoading(true)
     try {
-      const res = await fetch('/api/children')
-      if (res.ok) setChildren(await res.json())
-      else toast.error('Failed to load children')
-    } finally { setLoading(false) }
-  }
-  async function fetchAssignments(childId: string) {
-    if (useMock) {
-      const full = (dataset?.assignments||[]).filter(a=>a.childId===childId)
-      // attach mold info from dataset molds
-      const moldMap = Object.fromEntries((dataset?.molds||[]).map(m=>[m.id,m]))
-      setAssignments(full.map(a => ({ ...a, mold: moldMap[a.moldId] || { id:a.moldId, name:'Unknown', difficulty:'Easy' } })) as any)
-      return
+      const token = localStorage.getItem('brainberry_user_token')
+      if (!token) return
+
+      const res = await fetch('/api/children', {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      })
+      if (res.ok) {
+        setChildren(await res.json())
+      } else {
+        console.error('Failed to load children')
+      }
+    } catch (error) {
+      console.error('Error fetching children:', error)
+    } finally { 
+      setLoading(false) 
     }
-    const res = await fetch(`/api/assignments?childId=${childId}`)
-    if (res.ok) setAssignments(await res.json())
-  }
-  async function fetchMolds() {
-    if (useMock) { setAllMolds((dataset?.molds||[]) as any); return }
-    const res = await fetch('/api/molds')
-    if (res.ok) setAllMolds(await res.json())
   }
 
-  useEffect(() => { fetchChildren(); fetchMolds() }, [useMock])
-  useEffect(() => { if (selectedChild) fetchAssignments(selectedChild) }, [selectedChild, useMock])
+  async function fetchAssignments(childId: string) {
+    try {
+      const token = localStorage.getItem('brainberry_user_token')
+      if (!token) return
+
+      const res = await fetch(`/api/assignments?childId=${childId}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      })
+      if (res.ok) setAssignments(await res.json())
+    } catch (error) {
+      console.error('Error fetching assignments:', error)
+    }
+  }
+
+  async function fetchMolds() {
+    try {
+      const token = localStorage.getItem('brainberry_user_token')
+      if (!token) return
+
+      const res = await fetch('/api/molds', {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      })
+      if (res.ok) setAllMolds(await res.json())
+    } catch (error) {
+      console.error('Error fetching molds:', error)
+    }
+  }
+
+  useEffect(() => { 
+    fetchChildren()
+    fetchMolds() 
+  }, [])
+  
+  useEffect(() => { 
+    if (selectedChild) fetchAssignments(selectedChild) 
+  }, [selectedChild])
 
   async function createChild(e: React.FormEvent) {
     e.preventDefault()
     if (!newChild.name || !newChild.age) return
-  if (useMock) { toast.success('Mock child added'); addChild(newChild.name, Number(newChild.age), newChild.diagnosis); setChildren((dataset?.children||[]) as any); setNewChild({ name:'', age:'', diagnosis:'HYBRID' }); return }
+    
     setCreating(true)
     try {
-      const res = await fetch('/api/children', { method: 'POST', headers: { 'Content-Type':'application/json' }, body: JSON.stringify({ name: newChild.name, age: Number(newChild.age), diagnosis: newChild.diagnosis }) })
-      if (res.ok) { toast.success('Child created'); setNewChild({ name:'', age:'', diagnosis:'HYBRID' }); fetchChildren() } else toast.error('Create failed')
-    } finally { setCreating(false) }
+      const token = localStorage.getItem('brainberry_user_token')
+      if (!token) return
+
+      const res = await fetch('/api/children', { 
+        method: 'POST', 
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        }, 
+        body: JSON.stringify({ 
+          name: newChild.name, 
+          age: Number(newChild.age), 
+          diagnosis: newChild.diagnosis 
+        }) 
+      })
+      
+      if (res.ok) { 
+        console.log('Child created successfully')
+        setNewChild({ name: '', age: '', diagnosis: 'HYBRID' })
+        fetchChildren() 
+      } else {
+        console.error('Failed to create child')
+      }
+    } catch (error) {
+      console.error('Error creating child:', error)
+    } finally { 
+      setCreating(false) 
+    }
   }
 
   async function assignMold() {
     if (!assignMoldId || !selectedChild) return
-  if (useMock) { toast.success('Mock assignment created'); addAssignment(selectedChild, assignMoldId); fetchAssignments(selectedChild); setAssignModal(false); setAssignMoldId(''); return }
-    const res = await fetch('/api/assignments', { method: 'POST', headers: { 'Content-Type':'application/json' }, body: JSON.stringify({ childId: selectedChild, moldId: assignMoldId }) })
-    if (res.ok) { toast.success('Mold assigned'); setAssignModal(false); setAssignMoldId(''); fetchAssignments(selectedChild) } else toast.error('Assign failed')
+    
+    try {
+      const token = localStorage.getItem('brainberry_user_token')
+      if (!token) return
+
+      const res = await fetch('/api/assignments', { 
+        method: 'POST', 
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        }, 
+        body: JSON.stringify({ 
+          childId: selectedChild, 
+          moldId: assignMoldId 
+        }) 
+      })
+      
+      if (res.ok) { 
+        console.log('Mold assigned successfully')
+        setAssignModal(false)
+        setAssignMoldId('')
+        fetchAssignments(selectedChild) 
+      } else {
+        console.error('Failed to assign mold')
+      }
+    } catch (error) {
+      console.error('Error assigning mold:', error)
+    }
   }
 
-  async function updateProgress(a: Assignment, delta: number) {
-    const newProgress = Math.min(100, Math.max(0, a.progress + delta))
-  if (useMock) { updateAssignmentProgress(a.id, newProgress); setAssignments(list => list.map(x=> x.id===a.id ? { ...x, progress:newProgress, status: newProgress===100 ? 'completed':'in-progress' } : x)); return }
-    const res = await fetch(`/api/assignments/${a.id}`, { method: 'PUT', headers: { 'Content-Type':'application/json' }, body: JSON.stringify({ progress: newProgress, status: newProgress===100? 'completed':'in-progress' }) })
-    if (res.ok) { toast.success('Progress updated'); fetchAssignments(a.childId) } else toast.error('Update failed')
+  async function updateProgress(assignment: Assignment, delta: number) {
+    const newProgress = Math.min(100, Math.max(0, assignment.progress + delta))
+    
+    try {
+      const token = localStorage.getItem('brainberry_user_token')
+      if (!token) return
+
+      const res = await fetch(`/api/assignments/${assignment.id}`, { 
+        method: 'PUT', 
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        }, 
+        body: JSON.stringify({ 
+          progress: newProgress, 
+          status: newProgress === 100 ? 'completed' : 'in-progress' 
+        }) 
+      })
+      
+      if (res.ok) { 
+        console.log('Progress updated successfully')
+        fetchAssignments(assignment.childId) 
+      } else {
+        console.error('Failed to update progress')
+      }
+    } catch (error) {
+      console.error('Error updating progress:', error)
+    }
   }
 
   if (selectedChild) {

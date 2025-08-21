@@ -3,56 +3,59 @@ import { Library, Search, Plus, Star, Eye, Edit, Trash2 } from "lucide-react"
 import { useState, useEffect } from "react"
 import GameMoldBuilder from "./GameMoldBuilder"
 import { GameMold } from "@/lib/molds"
-import { useMockData } from './MockDataContext'
 
 interface LocalTemplate extends GameMold {}
 
 export default function MoldLibraryTab() {
-  const { useMock, dataset } = useMockData()
   const [selectedCategory, setSelectedCategory] = useState<string>("all")
   const [viewMode, setViewMode] = useState<string>("browse")
   const [editingMold, setEditingMold] = useState<LocalTemplate | null>(null)
   const [molds, setMolds] = useState<LocalTemplate[]>([])
 
   async function refresh() {
-  if (useMock) { setMolds((dataset?.molds||[]) as any); return }
-    const res = await fetch('/api/molds')
-    if (res.ok) {
-      const data = await res.json()
-      setMolds(data)
+    try {
+      const token = localStorage.getItem('auth_token')
+      if (!token) return
+
+      const res = await fetch('/api/molds', {
+        headers: { 'Authorization': `Bearer ${token}` }
+      })
+      if (res.ok) {
+        const data = await res.json()
+        setMolds(data)
+      }
+    } catch (error) {
+      console.error('Failed to load molds:', error)
     }
   }
 
-  useEffect(() => { refresh() }, [viewMode, useMock])
+  useEffect(() => { refresh() }, [viewMode])
 
-  // Dynamic categories (real data) or derived from mock dataset
-  const categories = useMock ? (
-    (() => {
-      const dsMolds = dataset?.molds || []
-      const catCounts: Record<string, number> = {}
-  dsMolds.forEach((m:any) => { const cat = m.category || 'other'; catCounts[cat] = (catCounts[cat]||0)+1 })
-      const entries = Object.entries(catCounts).map(([id,count]) => ({ id, name: id.charAt(0).toUpperCase()+id.slice(1), count }))
-      return [{ id:'all', name:'All Templates', count: dsMolds.length }, ...entries]
-    })()
-  ) : (
-    (() => {
-      const catCounts: Record<string, number> = {}
-      molds.forEach(m => { catCounts[m.category] = (catCounts[m.category]||0)+1 })
-      const entries = Object.entries(catCounts).map(([id,count]) => ({ id, name: id.charAt(0).toUpperCase()+id.slice(1), count }))
-      return [{ id:'all', name:'All Molds', count: molds.length }, ...entries]
-    })()
+  // Dynamic categories from real data
+  const categories = (() => {
+    const catCounts: Record<string, number> = {}
+    molds.forEach(m => { 
+      const cat = m.category || 'other'
+      catCounts[cat] = (catCounts[cat] || 0) + 1 
+    })
+    const entries = Object.entries(catCounts).map(([id, count]) => ({ 
+      id, 
+      name: id.charAt(0).toUpperCase() + id.slice(1), 
+      count 
+    }))
+    return [{ id: 'all', name: 'All Molds', count: molds.length }, ...entries]
+  })()
+
+  const filteredMolds = molds.filter(m => 
+    selectedCategory === 'all' ? true : m.category === selectedCategory
   )
-
-  // Showcase only in mock using dataset molds
-  const showcase = useMock ? (dataset?.molds || []) : []
-  const filteredShowcase = showcase.filter((m:any) => selectedCategory==='all' ? true : m.category === selectedCategory)
 
   if (viewMode === "create" || viewMode === 'edit') {
     return (
       <GameMoldBuilder 
         onCancel={() => { setEditingMold(null); setViewMode('browse') }} 
         initialData={editingMold || undefined}
-        onSaved={() => { setEditingMold(null); setViewMode('browse') }}
+        onSaved={() => { setEditingMold(null); setViewMode('browse'); refresh() }}
       />
     )
   }
@@ -64,7 +67,6 @@ export default function MoldLibraryTab() {
         <div className="bg-white border-4 border-black shadow-brutal-xl p-8 transform rotate-1 inline-block">
           <h1 className="flex items-center justify-center space-x-3 text-4xl md:text-6xl font-bold text-chart-3 mb-4">
             <span>MOLD LIBRARY</span>
-            {useMock && <span className="text-xs px-2 py-1 bg-yellow-300 border-2 border-black text-black font-bold -rotate-2">MOCK</span>}
           </h1>
           <p className="text-lg text-gray-700">
             The creator space for therapeutic game templates
@@ -72,109 +74,100 @@ export default function MoldLibraryTab() {
         </div>
       </div>
 
-      {/* Action Bar */}
+      {/* Controls */}
       <div className="bg-white border-4 border-black shadow-brutal-xl p-6">
         <div className="flex flex-col md:flex-row items-center justify-between space-y-4 md:space-y-0">
           <div className="flex items-center space-x-4">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
-              <input
-                type="text"
-                placeholder="Search templates..."
-                className="pl-10 pr-4 py-3 border-2 border-black w-64"
-              />
+            <div>
+              <label className="block font-bold mb-2 text-sm">Category:</label>
+              <select 
+                value={selectedCategory} 
+                onChange={e => setSelectedCategory(e.target.value)} 
+                className="border-2 border-black p-3 font-bold"
+              >
+                {categories.map(cat => (
+                  <option key={cat.id} value={cat.id}>
+                    {cat.name} ({cat.count})
+                  </option>
+                ))}
+              </select>
             </div>
-            <select className="border-2 border-black p-3">
-              <option>All Difficulties</option>
-              <option>Easy</option>
-              <option>Medium</option>
-              <option>Hard</option>
-            </select>
           </div>
-          <button
-            onClick={() => setViewMode("create")}
-            className="bg-chart-1 text-white px-6 py-3 border-2 border-black shadow-brutal hover:shadow-brutal-lg transition-all font-bold flex items-center space-x-2"
-          >
-            <Plus className="h-5 w-5" />
-            <span>CREATE NEW</span>
-          </button>
-        </div>
-      </div>
-
-      {/* Categories */}
-      <div className="bg-white border-4 border-black shadow-brutal-xl p-6">
-        <h2 className="text-xl font-bold mb-4">Categories</h2>
-        <div className="flex flex-wrap gap-2">
-          {categories.map((category) => (
-            <button
-              key={category.id}
-              onClick={() => setSelectedCategory(category.id)}
-              className={`px-4 py-2 border-2 border-black shadow-brutal hover:shadow-brutal-lg transition-all font-bold text-sm transform ${
-                selectedCategory === category.id
-                  ? "bg-chart-3 text-white shadow-brutal-lg rotate-1"
-                  : "bg-white text-black hover:-rotate-1"
-              }`}
+          <div className="flex space-x-4">
+            <button 
+              onClick={() => setViewMode('create')}
+              className="bg-chart-2 border-4 border-black px-6 py-3 font-bold hover:bg-chart-1 flex items-center space-x-2"
             >
-              {category.name} ({category.count})
+              <Plus className="w-4 h-4" />
+              <span>Create New</span>
             </button>
-          ))}
+          </div>
         </div>
       </div>
 
-      {/* Template Showcase (mock mode only) */}
-      {useMock && (
-        <div className="bg-white border-4 border-black shadow-brutal-xl p-6">
-          <h2 className="text-xl font-bold mb-4">Template Showcase</h2>
-          {filteredShowcase.length === 0 && <p className="text-xs text-gray-600">No templates for this category.</p>}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {filteredShowcase.map((mold:any) => (
-              <div key={mold.id} className="border-4 border-black bg-secondary shadow-brutal-xl p-4 flex flex-col">
-                <div className="flex items-start justify-between mb-2">
-                  <h3 className="font-bold text-lg leading-tight">{mold.name}</h3>
-                  <span className="text-xs font-bold px-2 py-1 bg-white border-2 border-black shadow-brutal">v{mold.version}</span>
-                </div>
-                <p className="text-xs text-gray-700 mb-3 line-clamp-3">{mold.primaryObjective}</p>
-                <div className="mt-auto space-y-2">
-                  <div className="grid grid-cols-2 gap-2 text-[10px] font-bold">
-                    <span className="bg-white border-2 border-black px-2 py-1 text-center">{mold.meta?.difficulty}</span>
-                    <span className="bg-white border-2 border-black px-2 py-1 text-center">{mold.structureType}</span>
-                    {mold.meta?.ageRange && <span className="bg-white border-2 border-black px-2 py-1 text-center col-span-2">Ages {mold.meta.ageRange.min}-{mold.meta.ageRange.max}</span>}
-                  </div>
+      {/* Molds Grid */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {filteredMolds.map(mold => (
+          <div key={mold.id} className="bg-white border-4 border-black shadow-brutal-lg">
+            <div className="p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-xl font-bold">{mold.name}</h3>
+                <div className="flex space-x-2">
+                  <button 
+                    onClick={() => { setEditingMold(mold); setViewMode('edit') }}
+                    className="bg-chart-1 border-2 border-black p-2 hover:bg-chart-2"
+                  >
+                    <Edit className="w-4 h-4" />
+                  </button>
                 </div>
               </div>
-            ))}
+              
+              <p className="text-gray-700 mb-4">{mold.primaryObjective}</p>
+              
+              <div className="flex items-center justify-between text-sm">
+                <span className="font-bold bg-gray-100 px-2 py-1 border border-black">
+                  {mold.category || 'General'}
+                </span>
+                <div className="flex items-center space-x-2">
+                  <span className="text-gray-600">
+                    {mold.scenes?.length || 0} scenes
+                  </span>
+                </div>
+              </div>
+            </div>
           </div>
+        ))}
+      </div>
+
+      {/* Empty State */}
+      {filteredMolds.length === 0 && (
+        <div className="bg-gray-100 border-4 border-black shadow-brutal-lg p-12 text-center">
+          <Library className="w-16 h-16 mx-auto mb-4 text-gray-400" />
+          <h3 className="text-2xl font-bold mb-2">No Molds Found</h3>
+          <p className="text-gray-600 mb-6">
+            {selectedCategory === 'all' 
+              ? "You haven't created any game molds yet."
+              : `No molds found in the "${selectedCategory}" category.`
+            }
+          </p>
+          <button 
+            onClick={() => setViewMode('create')}
+            className="bg-chart-2 border-4 border-black px-8 py-4 font-bold hover:bg-chart-1 flex items-center space-x-2 mx-auto"
+          >
+            <Plus className="w-5 h-5" />
+            <span>Create Your First Mold</span>
+          </button>
         </div>
       )}
 
-      {/* Saved Molds */}
-      <div className="bg-white border-4 border-black shadow-brutal-xl p-6">
-        <h2 className="text-xl font-bold mb-4">Your Saved Game Molds</h2>
-        {molds.length === 0 && (
-          <p className="text-sm text-gray-600">No game molds yet. Click CREATE NEW to start building therapeutic templates.</p>
-        )}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {molds.map(mold => (
-            <div key={mold.id} className="border-4 border-black bg-secondary shadow-brutal-xl p-4 flex flex-col">
-              <div className="flex items-start justify-between mb-2">
-                <h3 className="font-bold text-lg leading-tight">{mold.name}</h3>
-                <span className="text-xs font-bold px-2 py-1 bg-white border-2 border-black shadow-brutal">v{mold.version}</span>
-              </div>
-              <p className="text-xs text-gray-700 mb-3 line-clamp-3">{mold.primaryObjective}</p>
-              <div className="mt-auto space-y-2">
-                <div className="grid grid-cols-2 gap-2 text-[10px] font-bold">
-                  <span className="bg-white border-2 border-black px-2 py-1 text-center">{mold.meta.difficulty}</span>
-                  <span className="bg-white border-2 border-black px-2 py-1 text-center">{mold.structureType}</span>
-                  <span className="bg-white border-2 border-black px-2 py-1 text-center col-span-2">Ages {mold.meta.ageRange.min}-{mold.meta.ageRange.max}</span>
-                </div>
-                <div className="flex space-x-2">
-                  <button onClick={() => { setEditingMold(mold); setViewMode('edit') }} className="flex-1 bg-chart-2 text-white py-1 border-2 border-black shadow-brutal text-xs font-bold flex items-center justify-center space-x-1"><Edit className="h-3 w-3"/><span>EDIT</span></button>
-                  <button onClick={async () => { if (confirm('Delete this mold?')) { await fetch(`/api/molds/${mold.id}`, { method: 'DELETE' }); refresh() } }} className="flex-1 bg-red-500 text-white py-1 border-2 border-black shadow-brutal text-xs font-bold flex items-center justify-center space-x-1"><Trash2 className="h-3 w-3"/><span>DEL</span></button>
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
+      {/* Info */}
+      <div className="bg-blue-100 border-4 border-black shadow-brutal-lg p-6">
+        <h3 className="text-xl font-bold mb-4">About Game Molds</h3>
+        <p className="text-gray-700">
+          Game molds are reusable templates that define the structure, mechanics, and therapeutic goals 
+          of educational games. Create custom molds tailored to specific learning objectives and assign 
+          them to children for targeted skill development.
+        </p>
       </div>
     </div>
   )

@@ -1,8 +1,24 @@
 import React from "react"
 
-export default function PlayTab() {
+interface PlayTabProps {
+  childName?: string
+}
+
+export default function PlayTab({ childName }: PlayTabProps) {
   return (
     <div className="space-y-8">
+      {/* Welcome Message */}
+      {childName && (
+        <div className="text-center mb-6">
+          <div className="bg-gradient-to-r from-chart-1 to-chart-2 text-white border-4 border-black shadow-brutal-xl p-6 transform rotate-1 inline-block">
+            <h1 className="text-3xl md:text-4xl font-bold mb-2">
+              🌟 Welcome back, {childName}! 🌟
+            </h1>
+            <p className="text-lg">Ready for some fun learning adventures?</p>
+          </div>
+        </div>
+      )}
+
       {/* Today's Quest - Large Featured */}
       <div className="text-center">
         <div className="bg-white border-4 border-black shadow-brutal-xl p-8 transform -rotate-1 inline-block max-w-2xl">

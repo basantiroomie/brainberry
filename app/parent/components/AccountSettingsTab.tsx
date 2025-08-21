@@ -1,25 +1,83 @@
-import { Settings, User, Bell, Shield, Palette, Download, Trash2, Save } from "lucide-react"
-import { useState } from "react"
+import { Settings, User, Shield, Palette, Download, Trash2, Save, Copy, Eye, EyeOff } from "lucide-react"
+import { useState, useEffect } from "react"
 
-export default function AccountSettingsTab() {
+interface UserProps {
+  user: {
+    id: string
+    name: string
+    email: string
+    role: string
+    phone?: string
+    license?: string
+    organization?: string
+  } | null
+}
+
+interface ChildProfile {
+  id: string
+  name: string
+  age: number
+  diagnosis: string
+  accessCode: string
+}
+
+export default function AccountSettingsTab({ user }: UserProps) {
   const [activeSection, setActiveSection] = useState<string>("profile")
-  const [notifications, setNotifications] = useState({
-    email: true,
-    push: true,
-    weekly: true,
-    achievements: false
-  })
-  // Controlled select states replacing deprecated <option selected>
-  const [reportFrequency, setReportFrequency] = useState("Weekly")
+  const [children, setChildren] = useState<ChildProfile[]>([])
+  const [showCodes, setShowCodes] = useState<Record<string, boolean>>({})
+  const [copiedCode, setCopiedCode] = useState<string | null>(null)
+  
+  // Controlled select states
   const [themePref, setThemePref] = useState("Brutal (Default)")
   const [layoutPref, setLayoutPref] = useState("Compact")
   const [languagePref, setLanguagePref] = useState("English")
   const [sessionLength, setSessionLength] = useState("30 minutes")
   const [autosaveFreq, setAutosaveFreq] = useState("Every minute")
 
+  useEffect(() => {
+    fetchChildren()
+  }, [])
+
+  const fetchChildren = async () => {
+    try {
+      const token = localStorage.getItem('brainberry_user_token')
+      if (!token) return
+
+      const response = await fetch('/api/children', {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      })
+      
+      if (response.ok) {
+        const data = await response.json()
+        setChildren(data)
+      }
+    } catch (error) {
+      console.error('Failed to fetch children:', error)
+    }
+  }
+
+  const copyToClipboard = async (code: string) => {
+    try {
+      await navigator.clipboard.writeText(code)
+      setCopiedCode(code)
+      setTimeout(() => setCopiedCode(null), 2000)
+    } catch (error) {
+      console.error('Failed to copy code:', error)
+    }
+  }
+
+  const toggleCodeVisibility = (childId: string) => {
+    setShowCodes(prev => ({
+      ...prev,
+      [childId]: !prev[childId]
+    }))
+  }
+
   const sections = [
     { id: "profile", name: "Profile", icon: User },
-    { id: "notifications", name: "Notifications", icon: Bell },
+    { id: "child-codes", name: "Child Access Codes", icon: Settings },
     { id: "privacy", name: "Privacy & Security", icon: Shield },
     { id: "preferences", name: "Preferences", icon: Palette },
     { id: "data", name: "Data Management", icon: Download }
@@ -82,32 +140,31 @@ export default function AccountSettingsTab() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
                   <label className="block font-bold mb-2">Full Name:</label>
-                  <input type="text" defaultValue="Dr. Sarah Johnson" className="w-full border-2 border-black p-3" />
+                  <input type="text" defaultValue={user?.name || ''} className="w-full border-2 border-black p-3" />
                 </div>
                 <div>
                   <label className="block font-bold mb-2">Email:</label>
-                  <input type="email" defaultValue="sarah@brainberry.com" className="w-full border-2 border-black p-3" />
+                  <input type="email" defaultValue={user?.email || ''} className="w-full border-2 border-black p-3" />
                 </div>
                 <div>
                   <label className="block font-bold mb-2">Role:</label>
-                  <select className="w-full border-2 border-black p-3">
-                    <option>Licensed Therapist</option>
-                    <option>Parent</option>
-                    <option>Educator</option>
-                    <option>Researcher</option>
+                  <select className="w-full border-2 border-black p-3" defaultValue={user?.role || ''}>
+                    <option value="THERAPIST">Licensed Therapist</option>
+                    <option value="PARENT">Parent</option>
+                    <option value="RESEARCHER">Researcher</option>
                   </select>
                 </div>
                 <div>
                   <label className="block font-bold mb-2">Phone Number:</label>
-                  <input type="tel" defaultValue="+1 (555) 123-4567" className="w-full border-2 border-black p-3" />
+                  <input type="tel" defaultValue={user?.phone || ''} className="w-full border-2 border-black p-3" />
                 </div>
                 <div className="md:col-span-2">
                   <label className="block font-bold mb-2">License/Certification:</label>
-                  <input type="text" defaultValue="LCSW #123456" className="w-full border-2 border-black p-3" />
+                  <input type="text" defaultValue={user?.license || ''} className="w-full border-2 border-black p-3" />
                 </div>
                 <div className="md:col-span-2">
                   <label className="block font-bold mb-2">Organization:</label>
-                  <input type="text" defaultValue="Children's Mental Health Center" className="w-full border-2 border-black p-3" />
+                  <input type="text" defaultValue={user?.organization || ''} className="w-full border-2 border-black p-3" />
                 </div>
               </div>
               <button className="bg-chart-5 text-white px-6 py-3 border-2 border-black shadow-brutal hover:shadow-brutal-lg transition-all font-bold flex items-center space-x-2">
@@ -117,74 +174,71 @@ export default function AccountSettingsTab() {
             </div>
           )}
 
-          {activeSection === "notifications" && (
+          {activeSection === "child-codes" && (
             <div className="space-y-6">
-              <h2 className="text-2xl font-bold">Notification Preferences</h2>
+              <h2 className="text-2xl font-bold">Child Access Codes</h2>
+              <p className="text-gray-600">
+                Share these codes with your children so they can log into their portal. Each child has a unique 6-digit code.
+              </p>
+              
               <div className="space-y-4">
-                <div className="border-2 border-gray-200 p-4 rounded">
-                  <h3 className="font-bold mb-3">Communication</h3>
-                  <div className="space-y-2">
-                    <label className="flex items-center justify-between">
-                      <span>Email notifications</span>
-                      <input 
-                        type="checkbox" 
-                        checked={notifications.email}
-                        onChange={(e) => setNotifications({...notifications, email: e.target.checked})}
-                        className="h-5 w-5" 
-                      />
-                    </label>
-                    <label className="flex items-center justify-between">
-                      <span>Push notifications</span>
-                      <input 
-                        type="checkbox" 
-                        checked={notifications.push}
-                        onChange={(e) => setNotifications({...notifications, push: e.target.checked})}
-                        className="h-5 w-5" 
-                      />
-                    </label>
+                {children.length === 0 ? (
+                  <div className="border-2 border-gray-200 p-8 rounded text-center">
+                    <p className="text-gray-600">No children profiles found.</p>
+                    <p className="text-sm text-gray-500 mt-2">Add children in the Children tab to see their access codes here.</p>
                   </div>
-                </div>
-                
-                <div className="border-2 border-gray-200 p-4 rounded">
-                  <h3 className="font-bold mb-3">Reports</h3>
-                  <div className="space-y-2">
-                    <label className="flex items-center justify-between">
-                      <span>Weekly progress reports</span>
-                      <input 
-                        type="checkbox" 
-                        checked={notifications.weekly}
-                        onChange={(e) => setNotifications({...notifications, weekly: e.target.checked})}
-                        className="h-5 w-5" 
-                      />
-                    </label>
-                    <label className="flex items-center justify-between">
-                      <span>Achievement alerts</span>
-                      <input 
-                        type="checkbox" 
-                        checked={notifications.achievements}
-                        onChange={(e) => setNotifications({...notifications, achievements: e.target.checked})}
-                        className="h-5 w-5" 
-                      />
-                    </label>
-                  </div>
-                </div>
-
-                <div className="border-2 border-gray-200 p-4 rounded">
-                  <h3 className="font-bold mb-3">Frequency</h3>
-                  <div>
-                    <label className="block font-bold mb-2">Report frequency:</label>
-                    <select className="w-full border-2 border-black p-3" value={reportFrequency} onChange={e=>setReportFrequency(e.target.value)}>
-                      <option value="Daily">Daily</option>
-                      <option value="Weekly">Weekly</option>
-                      <option value="Monthly">Monthly</option>
-                    </select>
-                  </div>
-                </div>
+                ) : (
+                  children.map((child) => (
+                    <div key={child.id} className="border-2 border-gray-200 p-4 rounded bg-white">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <h3 className="font-bold text-lg">{child.name}</h3>
+                          <p className="text-sm text-gray-600">Age: {child.age} • Diagnosis: {child.diagnosis}</p>
+                        </div>
+                        <div className="flex items-center space-x-3">
+                          <div className="text-center">
+                            <label className="block text-xs font-bold text-gray-600 mb-1">ACCESS CODE</label>
+                            <div className="flex items-center space-x-2">
+                              <span className={`font-mono text-xl font-bold px-3 py-2 border-2 border-black ${
+                                showCodes[child.id] ? 'bg-yellow-100' : 'bg-gray-100'
+                              }`}>
+                                {showCodes[child.id] ? child.accessCode : '••••••'}
+                              </span>
+                              <button
+                                onClick={() => toggleCodeVisibility(child.id)}
+                                className="p-2 border-2 border-black bg-white hover:bg-gray-50 transition-all"
+                                title={showCodes[child.id] ? "Hide code" : "Show code"}
+                              >
+                                {showCodes[child.id] ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                              </button>
+                              <button
+                                onClick={() => copyToClipboard(child.accessCode)}
+                                className="p-2 border-2 border-black bg-chart-1 text-white hover:bg-chart-1/80 transition-all"
+                                title="Copy code"
+                              >
+                                <Copy className="h-4 w-4" />
+                              </button>
+                            </div>
+                            {copiedCode === child.accessCode && (
+                              <p className="text-xs text-green-600 mt-1 font-bold">Copied!</p>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ))
+                )}
               </div>
-              <button className="bg-chart-5 text-white px-6 py-3 border-2 border-black shadow-brutal hover:shadow-brutal-lg transition-all font-bold flex items-center space-x-2">
-                <Save className="h-5 w-5" />
-                <span>SAVE PREFERENCES</span>
-              </button>
+              
+              <div className="bg-blue-50 border-2 border-blue-200 p-4 rounded">
+                <h4 className="font-bold text-blue-800 mb-2">How to use access codes:</h4>
+                <ul className="text-sm text-blue-700 space-y-1">
+                  <li>1. Go to the login page and select "CHILD"</li>
+                  <li>2. Enter the 6-digit access code</li>
+                  <li>3. The child will be taken to their personalized portal</li>
+                  <li>4. Codes are case-sensitive and should be kept secure</li>
+                </ul>
+              </div>
             </div>
           )}
 
