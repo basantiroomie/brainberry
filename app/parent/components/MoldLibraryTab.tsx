@@ -14,7 +14,7 @@ export default function MoldLibraryTab() {
 
   async function refresh() {
     try {
-      const token = localStorage.getItem('auth_token')
+      const token = localStorage.getItem('brainberry_user_token')
       if (!token) return
 
       const res = await fetch('/api/molds', {
