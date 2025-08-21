@@ -1,6 +1,7 @@
 "use client"
 
 import { Brain, Settings, LogOut } from "lucide-react"
+import { BrandLogo } from "@/components/BrandLogo"
 import { useRouter } from "next/navigation"
 import { useState } from "react"
 
@@ -65,8 +66,7 @@ export default function ChildDashboard() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
             <div className="flex items-center space-x-2">
-              <Brain className="h-8 w-8 text-chart-2" />
-              <span className="text-xl font-bold text-black">BRAINBERRY</span>
+              <BrandLogo variant="child" />
               <span className="text-sm text-gray-500">| Child Zone</span>
             </div>
             

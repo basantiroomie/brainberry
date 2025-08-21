@@ -9,6 +9,13 @@ export default function AccountSettingsTab() {
     weekly: true,
     achievements: false
   })
+  // Controlled select states replacing deprecated <option selected>
+  const [reportFrequency, setReportFrequency] = useState("Weekly")
+  const [themePref, setThemePref] = useState("Brutal (Default)")
+  const [layoutPref, setLayoutPref] = useState("Compact")
+  const [languagePref, setLanguagePref] = useState("English")
+  const [sessionLength, setSessionLength] = useState("30 minutes")
+  const [autosaveFreq, setAutosaveFreq] = useState("Every minute")
 
   const sections = [
     { id: "profile", name: "Profile", icon: User },
@@ -166,10 +173,10 @@ export default function AccountSettingsTab() {
                   <h3 className="font-bold mb-3">Frequency</h3>
                   <div>
                     <label className="block font-bold mb-2">Report frequency:</label>
-                    <select className="w-full border-2 border-black p-3">
-                      <option>Daily</option>
-                      <option selected>Weekly</option>
-                      <option>Monthly</option>
+                    <select className="w-full border-2 border-black p-3" value={reportFrequency} onChange={e=>setReportFrequency(e.target.value)}>
+                      <option value="Daily">Daily</option>
+                      <option value="Weekly">Weekly</option>
+                      <option value="Monthly">Monthly</option>
                     </select>
                   </div>
                 </div>
@@ -246,28 +253,28 @@ export default function AccountSettingsTab() {
                   <div className="space-y-3">
                     <div>
                       <label className="block font-bold mb-2">Theme:</label>
-                      <select className="w-full border-2 border-black p-3">
-                        <option selected>Brutal (Default)</option>
-                        <option>Professional</option>
-                        <option>Playful</option>
-                        <option>Minimal</option>
+                      <select className="w-full border-2 border-black p-3" value={themePref} onChange={e=>setThemePref(e.target.value)}>
+                        <option value="Brutal (Default)">Brutal (Default)</option>
+                        <option value="Professional">Professional</option>
+                        <option value="Playful">Playful</option>
+                        <option value="Minimal">Minimal</option>
                       </select>
                     </div>
                     <div>
                       <label className="block font-bold mb-2">Dashboard Layout:</label>
-                      <select className="w-full border-2 border-black p-3">
-                        <option selected>Compact</option>
-                        <option>Spacious</option>
-                        <option>Custom</option>
+                      <select className="w-full border-2 border-black p-3" value={layoutPref} onChange={e=>setLayoutPref(e.target.value)}>
+                        <option value="Compact">Compact</option>
+                        <option value="Spacious">Spacious</option>
+                        <option value="Custom">Custom</option>
                       </select>
                     </div>
                     <div>
                       <label className="block font-bold mb-2">Language:</label>
-                      <select className="w-full border-2 border-black p-3">
-                        <option selected>English</option>
-                        <option>Spanish</option>
-                        <option>French</option>
-                        <option>German</option>
+                      <select className="w-full border-2 border-black p-3" value={languagePref} onChange={e=>setLanguagePref(e.target.value)}>
+                        <option value="English">English</option>
+                        <option value="Spanish">Spanish</option>
+                        <option value="French">French</option>
+                        <option value="German">German</option>
                       </select>
                     </div>
                   </div>
@@ -278,20 +285,20 @@ export default function AccountSettingsTab() {
                   <div className="space-y-3">
                     <div>
                       <label className="block font-bold mb-2">Default session length:</label>
-                      <select className="w-full border-2 border-black p-3">
-                        <option>15 minutes</option>
-                        <option selected>30 minutes</option>
-                        <option>45 minutes</option>
-                        <option>60 minutes</option>
+                      <select className="w-full border-2 border-black p-3" value={sessionLength} onChange={e=>setSessionLength(e.target.value)}>
+                        <option value="15 minutes">15 minutes</option>
+                        <option value="30 minutes">30 minutes</option>
+                        <option value="45 minutes">45 minutes</option>
+                        <option value="60 minutes">60 minutes</option>
                       </select>
                     </div>
                     <div>
                       <label className="block font-bold mb-2">Auto-save frequency:</label>
-                      <select className="w-full border-2 border-black p-3">
-                        <option>Every 30 seconds</option>
-                        <option selected>Every minute</option>
-                        <option>Every 5 minutes</option>
-                        <option>Manual only</option>
+                      <select className="w-full border-2 border-black p-3" value={autosaveFreq} onChange={e=>setAutosaveFreq(e.target.value)}>
+                        <option value="Every 30 seconds">Every 30 seconds</option>
+                        <option value="Every minute">Every minute</option>
+                        <option value="Every 5 minutes">Every 5 minutes</option>
+                        <option value="Manual only">Manual only</option>
                       </select>
                     </div>
                   </div>

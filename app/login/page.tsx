@@ -4,6 +4,7 @@ import type React from "react"
 import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { Brain, User, Users, X } from "lucide-react"
+import { BrandLogo } from "@/components/BrandLogo"
 import Link from "next/link"
 
 type UserRole = "THERAPIST_PARENT" | "CHILD" | null
@@ -49,10 +50,7 @@ export default function LoginPage() {
       <header className="absolute top-0 left-0 right-0 z-50 bg-white border-b-4 border-black shadow-brutal-xl">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
-            <Link href="/" className="flex items-center space-x-2">
-              <Brain className="h-8 w-8 text-black" />
-              <span className="text-xl font-bold text-black">BRAINBERRY</span>
-            </Link>
+            <BrandLogo />
             <Link 
               href="/"
               className="text-black hover:text-main font-medium"

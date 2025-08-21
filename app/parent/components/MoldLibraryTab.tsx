@@ -1,181 +1,59 @@
-import { Library, Search, Plus, Star, Filter, Eye, Edit } from "lucide-react"
-import { useState } from "react"
+"use client"
+import { Library, Search, Plus, Star, Eye, Edit, Trash2 } from "lucide-react"
+import { useState, useEffect } from "react"
+import GameMoldBuilder from "./GameMoldBuilder"
+import { GameMold } from "@/lib/molds"
+import { useMockData } from './MockDataContext'
+
+interface LocalTemplate extends GameMold {}
 
 export default function MoldLibraryTab() {
+  const { useMock, dataset } = useMockData()
   const [selectedCategory, setSelectedCategory] = useState<string>("all")
   const [viewMode, setViewMode] = useState<string>("browse")
+  const [editingMold, setEditingMold] = useState<LocalTemplate | null>(null)
+  const [molds, setMolds] = useState<LocalTemplate[]>([])
 
-  const categories = [
-    { id: "all", name: "All Templates", count: 124 },
-    { id: "memory", name: "Memory Games", count: 32 },
-    { id: "attention", name: "Attention Training", count: 28 },
-    { id: "emotional", name: "Emotional Regulation", count: 24 },
-    { id: "social", name: "Social Skills", count: 20 },
-    { id: "motor", name: "Motor Skills", count: 20 }
-  ]
-
-  const gameTemplates = [
-    {
-      id: "1",
-      name: "Memory Palace Adventure",
-      category: "memory",
-      rating: 4.8,
-      difficulty: "Medium",
-      ageRange: "6-12",
-      description: "Help children build memory skills through spatial navigation",
-      customizable: true,
-      featured: true
-    },
-    {
-      id: "2", 
-      name: "Focus Forest",
-      category: "attention",
-      rating: 4.6,
-      difficulty: "Easy",
-      ageRange: "5-10",
-      description: "Sustained attention training in a peaceful forest setting",
-      customizable: true,
-      featured: false
-    },
-    {
-      id: "3",
-      name: "Emotion Detective",
-      category: "emotional",
-      rating: 4.9,
-      difficulty: "Medium",
-      ageRange: "7-14",
-      description: "Learn to identify and regulate emotions through mystery solving",
-      customizable: true,
-      featured: true
-    },
-    {
-      id: "4",
-      name: "Social Circle",
-      category: "social",
-      rating: 4.5,
-      difficulty: "Hard",
-      ageRange: "8-16",
-      description: "Practice social interactions in safe virtual environments",
-      customizable: false,
-      featured: false
+  async function refresh() {
+  if (useMock) { setMolds((dataset?.molds||[]) as any); return }
+    const res = await fetch('/api/molds')
+    if (res.ok) {
+      const data = await res.json()
+      setMolds(data)
     }
-  ]
+  }
 
-  const filteredTemplates = selectedCategory === "all" 
-    ? gameTemplates 
-    : gameTemplates.filter(template => template.category === selectedCategory)
+  useEffect(() => { refresh() }, [viewMode, useMock])
 
-  if (viewMode === "create") {
+  // Dynamic categories (real data) or derived from mock dataset
+  const categories = useMock ? (
+    (() => {
+      const dsMolds = dataset?.molds || []
+      const catCounts: Record<string, number> = {}
+  dsMolds.forEach((m:any) => { const cat = m.category || 'other'; catCounts[cat] = (catCounts[cat]||0)+1 })
+      const entries = Object.entries(catCounts).map(([id,count]) => ({ id, name: id.charAt(0).toUpperCase()+id.slice(1), count }))
+      return [{ id:'all', name:'All Templates', count: dsMolds.length }, ...entries]
+    })()
+  ) : (
+    (() => {
+      const catCounts: Record<string, number> = {}
+      molds.forEach(m => { catCounts[m.category] = (catCounts[m.category]||0)+1 })
+      const entries = Object.entries(catCounts).map(([id,count]) => ({ id, name: id.charAt(0).toUpperCase()+id.slice(1), count }))
+      return [{ id:'all', name:'All Molds', count: molds.length }, ...entries]
+    })()
+  )
+
+  // Showcase only in mock using dataset molds
+  const showcase = useMock ? (dataset?.molds || []) : []
+  const filteredShowcase = showcase.filter((m:any) => selectedCategory==='all' ? true : m.category === selectedCategory)
+
+  if (viewMode === "create" || viewMode === 'edit') {
     return (
-      <div className="space-y-6">
-        {/* Header */}
-        <div className="bg-white border-4 border-black shadow-brutal-xl p-6">
-          <div className="flex items-center justify-between mb-4">
-            <h1 className="text-3xl font-bold">CREATE NEW GAME TEMPLATE</h1>
-            <button
-              onClick={() => setViewMode("browse")}
-              className="bg-gray-500 text-white px-4 py-2 border-2 border-black shadow-brutal hover:shadow-brutal-lg transition-all font-bold"
-            >
-              ← BACK TO LIBRARY
-            </button>
-          </div>
-        </div>
-
-        {/* Template Builder */}
-        <div className="bg-white border-4 border-black shadow-brutal-xl p-8">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="space-y-4">
-              <h2 className="text-xl font-bold mb-4">Basic Information</h2>
-              <div>
-                <label className="block font-bold mb-2">Game Name:</label>
-                <input type="text" placeholder="Enter game name..." className="w-full border-2 border-black p-3 text-lg" />
-              </div>
-              <div>
-                <label className="block font-bold mb-2">Category:</label>
-                <select className="w-full border-2 border-black p-3 text-lg">
-                  <option>Memory Games</option>
-                  <option>Attention Training</option>
-                  <option>Emotional Regulation</option>
-                  <option>Social Skills</option>
-                  <option>Motor Skills</option>
-                </select>
-              </div>
-              <div>
-                <label className="block font-bold mb-2">Target Age Range:</label>
-                <div className="flex space-x-2">
-                  <input type="number" placeholder="Min" className="flex-1 border-2 border-black p-3" />
-                  <span className="self-center font-bold">to</span>
-                  <input type="number" placeholder="Max" className="flex-1 border-2 border-black p-3" />
-                </div>
-              </div>
-              <div>
-                <label className="block font-bold mb-2">Difficulty Level:</label>
-                <select className="w-full border-2 border-black p-3 text-lg">
-                  <option>Easy</option>
-                  <option>Medium</option>
-                  <option>Hard</option>
-                </select>
-              </div>
-            </div>
-
-            <div className="space-y-4">
-              <h2 className="text-xl font-bold mb-4">Game Mechanics</h2>
-              <div>
-                <label className="block font-bold mb-2">Primary Objective:</label>
-                <textarea placeholder="Describe the main learning goal..." className="w-full border-2 border-black p-3 h-24"></textarea>
-              </div>
-              <div>
-                <label className="block font-bold mb-2">Game Type:</label>
-                <div className="space-y-2">
-                  <label className="flex items-center">
-                    <input type="radio" name="gameType" className="mr-2" />
-                    Puzzle/Problem Solving
-                  </label>
-                  <label className="flex items-center">
-                    <input type="radio" name="gameType" className="mr-2" />
-                    Action/Reaction
-                  </label>
-                  <label className="flex items-center">
-                    <input type="radio" name="gameType" className="mr-2" />
-                    Story/Adventure
-                  </label>
-                  <label className="flex items-center">
-                    <input type="radio" name="gameType" className="mr-2" />
-                    Creative/Building
-                  </label>
-                </div>
-              </div>
-              <div>
-                <label className="block font-bold mb-2">Customization Options:</label>
-                <div className="space-y-2">
-                  <label className="flex items-center">
-                    <input type="checkbox" className="mr-2" />
-                    Theme/Visual Style
-                  </label>
-                  <label className="flex items-center">
-                    <input type="checkbox" className="mr-2" />
-                    Difficulty Scaling
-                  </label>
-                  <label className="flex items-center">
-                    <input type="checkbox" className="mr-2" />
-                    Time Limits
-                  </label>
-                  <label className="flex items-center">
-                    <input type="checkbox" className="mr-2" />
-                    Reward System
-                  </label>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div className="mt-8 text-center">
-            <button className="bg-chart-1 text-white px-8 py-4 border-4 border-black shadow-brutal-xl hover:shadow-brutal-2xl transition-all font-bold text-lg">
-              CREATE TEMPLATE
-            </button>
-          </div>
-        </div>
-      </div>
+      <GameMoldBuilder 
+        onCancel={() => { setEditingMold(null); setViewMode('browse') }} 
+        initialData={editingMold || undefined}
+        onSaved={() => { setEditingMold(null); setViewMode('browse') }}
+      />
     )
   }
 
@@ -184,8 +62,9 @@ export default function MoldLibraryTab() {
       {/* Header */}
       <div className="text-center mb-8">
         <div className="bg-white border-4 border-black shadow-brutal-xl p-8 transform rotate-1 inline-block">
-          <h1 className="text-4xl md:text-6xl font-bold text-chart-3 mb-4">
-            MOLD LIBRARY
+          <h1 className="flex items-center justify-center space-x-3 text-4xl md:text-6xl font-bold text-chart-3 mb-4">
+            <span>MOLD LIBRARY</span>
+            {useMock && <span className="text-xs px-2 py-1 bg-yellow-300 border-2 border-black text-black font-bold -rotate-2">MOCK</span>}
           </h1>
           <p className="text-lg text-gray-700">
             The creator space for therapeutic game templates
@@ -242,63 +121,60 @@ export default function MoldLibraryTab() {
         </div>
       </div>
 
-      {/* Templates Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {filteredTemplates.map((template) => (
-          <div key={template.id} className="bg-white border-4 border-black shadow-brutal-xl hover:shadow-brutal-2xl transition-all">
-            {template.featured && (
-              <div className="bg-yellow-400 text-black px-3 py-1 text-xs font-bold border-b-2 border-black flex items-center">
-                <Star className="h-3 w-3 mr-1" />
-                FEATURED
-              </div>
-            )}
-            <div className="p-6">
-              <div className="flex items-start justify-between mb-3">
-                <h3 className="text-lg font-bold flex-1">{template.name}</h3>
-                <div className="flex items-center space-x-1 text-yellow-500">
-                  <Star className="h-4 w-4 fill-current" />
-                  <span className="text-sm font-bold">{template.rating}</span>
+      {/* Template Showcase (mock mode only) */}
+      {useMock && (
+        <div className="bg-white border-4 border-black shadow-brutal-xl p-6">
+          <h2 className="text-xl font-bold mb-4">Template Showcase</h2>
+          {filteredShowcase.length === 0 && <p className="text-xs text-gray-600">No templates for this category.</p>}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {filteredShowcase.map((mold:any) => (
+              <div key={mold.id} className="border-4 border-black bg-secondary shadow-brutal-xl p-4 flex flex-col">
+                <div className="flex items-start justify-between mb-2">
+                  <h3 className="font-bold text-lg leading-tight">{mold.name}</h3>
+                  <span className="text-xs font-bold px-2 py-1 bg-white border-2 border-black shadow-brutal">v{mold.version}</span>
+                </div>
+                <p className="text-xs text-gray-700 mb-3 line-clamp-3">{mold.primaryObjective}</p>
+                <div className="mt-auto space-y-2">
+                  <div className="grid grid-cols-2 gap-2 text-[10px] font-bold">
+                    <span className="bg-white border-2 border-black px-2 py-1 text-center">{mold.meta?.difficulty}</span>
+                    <span className="bg-white border-2 border-black px-2 py-1 text-center">{mold.structureType}</span>
+                    {mold.meta?.ageRange && <span className="bg-white border-2 border-black px-2 py-1 text-center col-span-2">Ages {mold.meta.ageRange.min}-{mold.meta.ageRange.max}</span>}
+                  </div>
                 </div>
               </div>
-              
-              <p className="text-gray-600 text-sm mb-4">{template.description}</p>
-              
-              <div className="space-y-2 mb-4">
-                <div className="flex justify-between text-sm">
-                  <span className="font-bold">Age Range:</span>
-                  <span>{template.ageRange}</span>
-                </div>
-                <div className="flex justify-between text-sm">
-                  <span className="font-bold">Difficulty:</span>
-                  <span className={`px-2 py-1 rounded text-xs font-bold ${
-                    template.difficulty === 'Easy' ? 'bg-green-100 text-green-800' :
-                    template.difficulty === 'Medium' ? 'bg-yellow-100 text-yellow-800' :
-                    'bg-red-100 text-red-800'
-                  }`}>
-                    {template.difficulty}
-                  </span>
-                </div>
-                <div className="flex justify-between text-sm">
-                  <span className="font-bold">Customizable:</span>
-                  <span className={template.customizable ? 'text-green-600' : 'text-gray-500'}>
-                    {template.customizable ? 'Yes' : 'No'}
-                  </span>
-                </div>
-              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
-              <div className="flex space-x-2">
-                <button className="flex-1 bg-chart-3 text-white py-2 px-3 border-2 border-black shadow-brutal hover:shadow-brutal-lg transition-all font-bold text-sm flex items-center justify-center space-x-1">
-                  <Eye className="h-4 w-4" />
-                  <span>PREVIEW</span>
-                </button>
-                <button className="flex-1 bg-chart-2 text-white py-2 px-3 border-2 border-black shadow-brutal hover:shadow-brutal-lg transition-all font-bold text-sm flex items-center justify-center space-x-1">
-                  <Edit className="h-4 w-4" />
-                  <span>USE</span>
-                </button>
+      {/* Saved Molds */}
+      <div className="bg-white border-4 border-black shadow-brutal-xl p-6">
+        <h2 className="text-xl font-bold mb-4">Your Saved Game Molds</h2>
+        {molds.length === 0 && (
+          <p className="text-sm text-gray-600">No game molds yet. Click CREATE NEW to start building therapeutic templates.</p>
+        )}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {molds.map(mold => (
+            <div key={mold.id} className="border-4 border-black bg-secondary shadow-brutal-xl p-4 flex flex-col">
+              <div className="flex items-start justify-between mb-2">
+                <h3 className="font-bold text-lg leading-tight">{mold.name}</h3>
+                <span className="text-xs font-bold px-2 py-1 bg-white border-2 border-black shadow-brutal">v{mold.version}</span>
+              </div>
+              <p className="text-xs text-gray-700 mb-3 line-clamp-3">{mold.primaryObjective}</p>
+              <div className="mt-auto space-y-2">
+                <div className="grid grid-cols-2 gap-2 text-[10px] font-bold">
+                  <span className="bg-white border-2 border-black px-2 py-1 text-center">{mold.meta.difficulty}</span>
+                  <span className="bg-white border-2 border-black px-2 py-1 text-center">{mold.structureType}</span>
+                  <span className="bg-white border-2 border-black px-2 py-1 text-center col-span-2">Ages {mold.meta.ageRange.min}-{mold.meta.ageRange.max}</span>
+                </div>
+                <div className="flex space-x-2">
+                  <button onClick={() => { setEditingMold(mold); setViewMode('edit') }} className="flex-1 bg-chart-2 text-white py-1 border-2 border-black shadow-brutal text-xs font-bold flex items-center justify-center space-x-1"><Edit className="h-3 w-3"/><span>EDIT</span></button>
+                  <button onClick={async () => { if (confirm('Delete this mold?')) { await fetch(`/api/molds/${mold.id}`, { method: 'DELETE' }); refresh() } }} className="flex-1 bg-red-500 text-white py-1 border-2 border-black shadow-brutal text-xs font-bold flex items-center justify-center space-x-1"><Trash2 className="h-3 w-3"/><span>DEL</span></button>
+                </div>
               </div>
             </div>
-          </div>
-        ))}
+          ))}
+        </div>
       </div>
     </div>
   )

@@ -1,17 +1,20 @@
 "use client"
 
 import { useRouter } from "next/navigation"
-import { LogOut, Settings } from "lucide-react"
+import { LogOut, Settings, FlaskConical } from "lucide-react"
+import { BrandLogo } from "@/components/BrandLogo"
 import { useState } from "react"
+import { MockDataProvider, useMockData } from "./components/MockDataContext"
 import DashboardTab from "./components/DashboardTab"
 import ChildrenTab from "./components/ChildrenTab"
 import MoldLibraryTab from "./components/MoldLibraryTab"
 import AnalyticsTab from "./components/AnalyticsTab"
 import AccountSettingsTab from "./components/AccountSettingsTab"
 
-export default function ParentDashboard() {
+function ParentDashboardInner() {
   const router = useRouter()
   const [activeTab, setActiveTab] = useState<string>("dashboard")
+  const { useMock, setUseMock } = useMockData()
 
   const goToLogin = () => {
     router.push('/login')
@@ -49,7 +52,7 @@ export default function ParentDashboard() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
             <div className="flex items-center">
-              <h1 className="text-2xl font-bold">BRAINBERRY</h1>
+              <BrandLogo />
             </div>
             
             {/* Tabs positioned left of settings/logout */}
@@ -69,7 +72,15 @@ export default function ParentDashboard() {
                   </button>
                 ))}
               </div>
-              <button 
+              <button
+                onClick={() => setUseMock(!useMock)}
+                className={`flex items-center space-x-2 px-4 py-2 border-2 border-black shadow-brutal hover:shadow-brutal-lg transition-all font-bold ${useMock ? 'bg-yellow-300 text-black' : 'bg-white text-black'}`}
+                title="Toggle global mock data mode"
+              >
+                <FlaskConical className="h-4 w-4" />
+                <span>{useMock ? 'MOCK ON' : 'MOCK OFF'}</span>
+              </button>
+              <button
                 onClick={goToLogin}
                 className="flex items-center space-x-2 bg-red-500 text-white px-4 py-2 border-2 border-black shadow-brutal hover:shadow-brutal-lg transition-all"
               >
@@ -86,5 +97,13 @@ export default function ParentDashboard() {
         {renderTabContent()}
       </div>
     </div>
+  )
+}
+
+export default function ParentDashboard() {
+  return (
+    <MockDataProvider>
+      <ParentDashboardInner />
+    </MockDataProvider>
   )
 }

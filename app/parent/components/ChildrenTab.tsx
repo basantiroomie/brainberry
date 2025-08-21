@@ -1,16 +1,80 @@
-import { Users, User, Plus, BarChart3, Settings, Palette } from "lucide-react"
-import { useState } from "react"
+"use client"
+import { Users, User, Plus, BarChart3, Settings, Palette, Loader2, Link2, CheckCircle2 } from "lucide-react"
+import { useEffect, useState } from "react"
+import { toast } from 'sonner'
+import { useMockData } from './MockDataContext'
+
+interface Child { id: string; name: string; age: number; diagnosis: string; notes?: string | null }
+interface Assignment { id: string; moldId: string; childId: string; status: string; progress: number; mold: { id: string; name: string; difficulty: string }; }
+interface MoldLite { id: string; name: string; difficulty: string; primaryObjective: string; meta?: any }
 
 export default function ChildrenTab() {
   const [selectedChild, setSelectedChild] = useState<string | null>(null)
   const [childSubTab, setChildSubTab] = useState<string>("overview")
+  const [loading, setLoading] = useState(false)
+  const [creating, setCreating] = useState(false)
+  const [children, setChildren] = useState<Child[]>([])
+  const [assignments, setAssignments] = useState<Assignment[]>([])
+  const [allMolds, setAllMolds] = useState<MoldLite[]>([])
+  const [newChild, setNewChild] = useState({ name: '', age: '', diagnosis: 'HYBRID' })
+  const [assignModal, setAssignModal] = useState(false)
+  const [assignMoldId, setAssignMoldId] = useState('')
 
-  const children = [
-    { id: "1", name: "Emma", age: 8, status: "Active", progress: 85, lastActive: "Today, 2:30 PM" },
-    { id: "2", name: "Alex", age: 10, status: "Active", progress: 92, lastActive: "Yesterday, 4:15 PM" },
-    { id: "3", name: "Sarah", age: 7, status: "Active", progress: 78, lastActive: "2 days ago, 1:20 PM" },
-    { id: "4", name: "Michael", age: 9, status: "Inactive", progress: 65, lastActive: "1 week ago" }
-  ]
+  const { useMock, dataset, addChild, addAssignment, updateAssignmentProgress } = useMockData()
+
+  async function fetchChildren() {
+    if (useMock) { setChildren((dataset?.children||[]) as any); return }
+    setLoading(true)
+    try {
+      const res = await fetch('/api/children')
+      if (res.ok) setChildren(await res.json())
+      else toast.error('Failed to load children')
+    } finally { setLoading(false) }
+  }
+  async function fetchAssignments(childId: string) {
+    if (useMock) {
+      const full = (dataset?.assignments||[]).filter(a=>a.childId===childId)
+      // attach mold info from dataset molds
+      const moldMap = Object.fromEntries((dataset?.molds||[]).map(m=>[m.id,m]))
+      setAssignments(full.map(a => ({ ...a, mold: moldMap[a.moldId] || { id:a.moldId, name:'Unknown', difficulty:'Easy' } })) as any)
+      return
+    }
+    const res = await fetch(`/api/assignments?childId=${childId}`)
+    if (res.ok) setAssignments(await res.json())
+  }
+  async function fetchMolds() {
+    if (useMock) { setAllMolds((dataset?.molds||[]) as any); return }
+    const res = await fetch('/api/molds')
+    if (res.ok) setAllMolds(await res.json())
+  }
+
+  useEffect(() => { fetchChildren(); fetchMolds() }, [useMock])
+  useEffect(() => { if (selectedChild) fetchAssignments(selectedChild) }, [selectedChild, useMock])
+
+  async function createChild(e: React.FormEvent) {
+    e.preventDefault()
+    if (!newChild.name || !newChild.age) return
+  if (useMock) { toast.success('Mock child added'); addChild(newChild.name, Number(newChild.age), newChild.diagnosis); setChildren((dataset?.children||[]) as any); setNewChild({ name:'', age:'', diagnosis:'HYBRID' }); return }
+    setCreating(true)
+    try {
+      const res = await fetch('/api/children', { method: 'POST', headers: { 'Content-Type':'application/json' }, body: JSON.stringify({ name: newChild.name, age: Number(newChild.age), diagnosis: newChild.diagnosis }) })
+      if (res.ok) { toast.success('Child created'); setNewChild({ name:'', age:'', diagnosis:'HYBRID' }); fetchChildren() } else toast.error('Create failed')
+    } finally { setCreating(false) }
+  }
+
+  async function assignMold() {
+    if (!assignMoldId || !selectedChild) return
+  if (useMock) { toast.success('Mock assignment created'); addAssignment(selectedChild, assignMoldId); fetchAssignments(selectedChild); setAssignModal(false); setAssignMoldId(''); return }
+    const res = await fetch('/api/assignments', { method: 'POST', headers: { 'Content-Type':'application/json' }, body: JSON.stringify({ childId: selectedChild, moldId: assignMoldId }) })
+    if (res.ok) { toast.success('Mold assigned'); setAssignModal(false); setAssignMoldId(''); fetchAssignments(selectedChild) } else toast.error('Assign failed')
+  }
+
+  async function updateProgress(a: Assignment, delta: number) {
+    const newProgress = Math.min(100, Math.max(0, a.progress + delta))
+  if (useMock) { updateAssignmentProgress(a.id, newProgress); setAssignments(list => list.map(x=> x.id===a.id ? { ...x, progress:newProgress, status: newProgress===100 ? 'completed':'in-progress' } : x)); return }
+    const res = await fetch(`/api/assignments/${a.id}`, { method: 'PUT', headers: { 'Content-Type':'application/json' }, body: JSON.stringify({ progress: newProgress, status: newProgress===100? 'completed':'in-progress' }) })
+    if (res.ok) { toast.success('Progress updated'); fetchAssignments(a.childId) } else toast.error('Update failed')
+  }
 
   if (selectedChild) {
     const child = children.find(c => c.id === selectedChild)
@@ -25,7 +89,7 @@ export default function ChildrenTab() {
               </div>
               <div>
                 <h1 className="text-3xl font-bold">{child?.name} ({child?.age} years old)</h1>
-                <p className="text-gray-600">Last active: {child?.lastActive}</p>
+                <p className="text-gray-600 text-sm">Diagnosis: {child?.diagnosis}</p>
               </div>
             </div>
             <button
@@ -38,7 +102,7 @@ export default function ChildrenTab() {
 
           {/* Sub-tabs */}
           <div className="flex space-x-2">
-            {["overview", "progress", "customize", "settings"].map((tab) => (
+            {["overview", "assignments", "progress", "settings"].map((tab) => (
               <button
                 key={tab}
                 onClick={() => setChildSubTab(tab)}
@@ -60,42 +124,48 @@ export default function ChildrenTab() {
             <div className="space-y-6">
               <h2 className="text-2xl font-bold">Current Goals & Games</h2>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="border-2 border-gray-300 p-4 rounded">
-                  <h3 className="font-bold mb-2">🎯 Current Goal: Impulse Control</h3>
-                  <p className="text-gray-600 mb-2">Working on self-regulation through interactive games</p>
-                  <div className="bg-gray-200 rounded-full h-2 mb-2">
-                    <div className="bg-chart-2 h-2 rounded-full" style={{width: '60%'}}></div>
+                {assignments.slice(0,2).map(a => (
+                  <div key={a.id} className="border-2 border-gray-300 p-4">
+                    <h3 className="font-bold mb-1">🎯 {a.mold.name}</h3>
+                    <p className="text-gray-600 text-xs mb-2">{a.mold.difficulty} • {a.status}</p>
+                    <div className="bg-gray-200 rounded-full h-2 mb-2"><div className="bg-chart-2 h-2 rounded-full" style={{ width: `${a.progress}%` }}></div></div>
+                    <span className="text-xs font-bold text-gray-600">{a.progress}% Complete</span>
                   </div>
-                  <span className="text-sm text-gray-500">60% Complete</span>
-                </div>
-                <div className="border-2 border-gray-300 p-4 rounded">
-                  <h3 className="font-bold mb-2">🧠 Assigned Game: Memory Palace</h3>
-                  <p className="text-gray-600 mb-2">Adventure-based memory training</p>
-                  <button className="bg-chart-2 text-white px-4 py-2 border border-black font-bold text-sm">
-                    VIEW GAME
-                  </button>
-                </div>
+                ))}
+                {assignments.length===0 && <div className="border-2 border-dashed border-gray-300 p-4 text-center text-sm text-gray-500 font-bold">No assignments yet – go to ASSIGNMENTS tab.</div>}
+              </div>
+            </div>
+          )}
+          {childSubTab === 'assignments' && (
+            <div className="space-y-4">
+              <div className="flex justify-between items-center">
+                <h2 className="text-2xl font-bold">Assignments</h2>
+                <button onClick={() => setAssignModal(true)} className="bg-chart-2 text-white px-4 py-2 border-2 border-black shadow-brutal font-bold text-sm flex items-center space-x-2"><Link2 className="h-4 w-4"/><span>ASSIGN</span></button>
+              </div>
+              <div className="space-y-3">
+                {assignments.map(a => (
+                  <div key={a.id} className="p-4 border-2 border-black bg-secondary flex items-center justify-between">
+                    <div>
+                      <div className="font-bold text-sm">{a.mold.name}</div>
+                      <div className="text-[10px] text-gray-600 font-bold">{a.status.toUpperCase()} • {a.progress}%</div>
+                      <div className="bg-gray-200 rounded-full h-2 mt-1 w-40"><div className="bg-chart-3 h-2 rounded-full" style={{ width: `${a.progress}%` }}></div></div>
+                    </div>
+                    <div className="flex space-x-1">
+                      <button onClick={() => updateProgress(a, 10)} className="px-2 py-1 border-2 border-black bg-white text-xs font-bold">+10%</button>
+                      <button onClick={() => updateProgress(a, -10)} className="px-2 py-1 border-2 border-black bg-white text-xs font-bold">-10%</button>
+                      <a href={`/molds/${a.moldId}`} target="_blank" className="px-2 py-1 border-2 border-black bg-chart-1 text-white text-xs font-bold">PLAY</a>
+                    </div>
+                  </div>
+                ))}
+                {assignments.length===0 && <div className="p-4 border-2 border-dashed border-black text-center text-xs font-bold text-gray-500">None yet</div>}
               </div>
             </div>
           )}
 
-          {childSubTab === "progress" && (
+      {childSubTab === "progress" && (
             <div className="space-y-6">
               <h2 className="text-2xl font-bold">Detailed Analytics</h2>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="text-center p-4 bg-chart-2 text-white border-2 border-black">
-                  <div className="text-2xl font-bold">85%</div>
-                  <div>Overall Progress</div>
-                </div>
-                <div className="text-center p-4 bg-chart-3 text-white border-2 border-black">
-                  <div className="text-2xl font-bold">12</div>
-                  <div>Games Completed</div>
-                </div>
-                <div className="text-center p-4 bg-chart-4 text-white border-2 border-black">
-                  <div className="text-2xl font-bold">45min</div>
-                  <div>Avg Session Time</div>
-                </div>
-              </div>
+              {child && <ChildAnalytics childId={child.id} />}
             </div>
           )}
 
@@ -179,45 +249,106 @@ export default function ChildrenTab() {
       </div>
 
       {/* Add New Child Button */}
-      <div className="text-center mb-6">
-        <button className="bg-chart-1 text-white px-8 py-4 border-4 border-black shadow-brutal-xl hover:shadow-brutal-2xl transition-all font-bold text-lg flex items-center space-x-3 mx-auto">
-          <Plus className="h-6 w-6" />
-          <span>ADD NEW CHILD</span>
-        </button>
+      <div className="bg-white border-4 border-black shadow-brutal-xl p-6 max-w-2xl mx-auto">
+        <form onSubmit={createChild} className="grid grid-cols-1 md:grid-cols-4 gap-3 items-end">
+          <div className="md:col-span-2">
+            <label className="block text-xs font-bold mb-1">Name</label>
+            <input value={newChild.name} onChange={e=>setNewChild(c=>({...c,name:e.target.value}))} className="w-full border-2 border-black p-2 text-sm" required />
+          </div>
+            <div>
+              <label className="block text-xs font-bold mb-1">Age</label>
+              <input type="number" value={newChild.age} onChange={e=>setNewChild(c=>({...c,age:e.target.value}))} className="w-full border-2 border-black p-2 text-sm" required />
+            </div>
+            <div>
+              <label className="block text-xs font-bold mb-1">Diagnosis</label>
+              <select value={newChild.diagnosis} onChange={e=>setNewChild(c=>({...c,diagnosis:e.target.value}))} className="w-full border-2 border-black p-2 text-sm">
+                <option value="ASD">ASD</option>
+                <option value="ADHD">ADHD</option>
+                <option value="HYBRID">HYBRID</option>
+              </select>
+            </div>
+            <div className="md:col-span-4 text-right">
+              <button disabled={creating} className="bg-chart-1 text-white px-6 py-2 border-2 border-black shadow-brutal font-bold text-sm inline-flex items-center space-x-2 disabled:opacity-50">{creating ? <Loader2 className="h-4 w-4 animate-spin"/>:<Plus className="h-4 w-4"/>}<span>ADD CHILD</span></button>
+            </div>
+        </form>
       </div>
 
       {/* Children List */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {children.map((child) => (
+        {loading && <div className="col-span-2 text-center text-sm font-bold text-gray-500">Loading...</div>}
+        {children.map(child => (
           <div key={child.id} className="bg-white border-4 border-black shadow-brutal-xl p-6 hover:shadow-brutal-2xl transition-all">
             <div className="flex items-center space-x-4 mb-4">
-              <div className={`text-white rounded-full w-16 h-16 flex items-center justify-center ${
-                child.status === 'Active' ? 'bg-chart-2' : 'bg-gray-400'
-              }`}>
+              <div className="text-white rounded-full w-16 h-16 flex items-center justify-center bg-chart-2">
                 <User className="h-8 w-8" />
               </div>
               <div className="flex-1">
                 <h3 className="text-xl font-bold">{child.name} (Age {child.age})</h3>
-                <p className="text-gray-600 text-sm">Last active: {child.lastActive}</p>
-                <div className="flex items-center space-x-2 mt-2">
-                  <div className={`px-2 py-1 text-xs font-bold rounded ${
-                    child.status === 'Active' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
-                  }`}>
-                    {child.status}
-                  </div>
-                  <div className="text-sm font-bold text-chart-2">{child.progress}% Progress</div>
-                </div>
+                <p className="text-gray-600 text-xs">Diagnosis: {child.diagnosis}</p>
               </div>
             </div>
-            <button
-              onClick={() => setSelectedChild(child.id)}
-              className="w-full bg-chart-2 text-white py-2 px-4 border-2 border-black shadow-brutal hover:shadow-brutal-lg transition-all font-bold"
-            >
-              VIEW PROFILE
-            </button>
+            <button onClick={() => setSelectedChild(child.id)} className="w-full bg-chart-2 text-white py-2 px-4 border-2 border-black shadow-brutal font-bold text-sm">VIEW PROFILE</button>
           </div>
         ))}
+        {!loading && children.length===0 && <div className="col-span-2 text-center text-sm font-bold text-gray-500">No children yet – add one above.</div>}
       </div>
+
+      {assignModal && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+          <div className="bg-white border-4 border-black shadow-brutal-xl p-6 w-full max-w-md space-y-4">
+            <h2 className="text-xl font-bold">Assign Mold</h2>
+            <select value={assignMoldId} onChange={e=>setAssignMoldId(e.target.value)} className="w-full border-2 border-black p-2 font-bold">
+              <option value="">Select a mold</option>
+              {allMolds.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
+            </select>
+            <div className="flex justify-end space-x-2">
+              <button onClick={()=>{setAssignModal(false); setAssignMoldId('')}} className="px-4 py-2 border-2 border-black bg-gray-300 font-bold text-sm">CANCEL</button>
+              <button disabled={!assignMoldId} onClick={assignMold} className="px-5 py-2 border-2 border-black bg-chart-2 text-white font-bold text-sm disabled:opacity-40 inline-flex items-center space-x-2"><CheckCircle2 className="h-4 w-4"/><span>ASSIGN</span></button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function ChildAnalytics({ childId }: { childId: string }) {
+  const [data, setData] = useState<any | null>(null)
+  const [loading, setLoading] = useState(false)
+  useEffect(() => { (async () => { setLoading(true); try { const res = await fetch(`/api/analytics/summary?childId=${childId}&days=30`); if (res.ok) setData(await res.json()) } finally { setLoading(false) } })() }, [childId])
+  if (loading) return <div className="text-center text-sm font-bold text-gray-500">Loading analytics...</div>
+  if (!data) return <div className="text-center text-sm font-bold text-gray-500">No data yet</div>
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <MetricCard label="SESSIONS" value={data.totalSessions} color="chart-1" />
+        <MetricCard label="DURATION (MIN)" value={Math.round(data.totalDuration/60)} color="chart-2" />
+        <MetricCard label="AVG COMPLETION" value={data.avgCompletion + '%'} color="chart-3" />
+        <MetricCard label="ENGAGEMENT" value={data.engagementRate + '%'} color="chart-4" />
+      </div>
+      {data.skills?.length>0 && (
+        <div className="space-y-2">
+          <h3 className="font-bold text-lg">Skill Metrics</h3>
+          <div className="space-y-2">
+            {data.skills.map((s: any) => (
+              <div key={s.skill} className="flex items-center space-x-3">
+                <div className="w-32 text-xs font-bold">{s.skill}</div>
+                <div className="flex-1 bg-gray-200 h-3 rounded-full overflow-hidden"><div className="bg-chart-2 h-3" style={{ width: `${s.value}%` }}></div></div>
+                <div className="w-10 text-xs font-bold text-right">{s.value}%</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function MetricCard({ label, value, color }: { label: string; value: any; color: string }) {
+  return (
+    <div className={`bg-white border-4 border-black shadow-brutal-xl p-4 text-center`}> 
+      <div className={`text-2xl font-bold text-${color} mb-1`}>{value}</div>
+      <div className="text-[10px] font-bold text-gray-600 tracking-wide">{label}</div>
     </div>
   )
 }
