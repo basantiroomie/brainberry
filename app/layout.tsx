@@ -7,7 +7,7 @@ import "./globals.css"
 export const metadata: Metadata = {
   title: "BrainBerry - Neurodiverse Learning Platform",
   description:
-    "Therapeutic gaming system designed for neurodiverse children. Personalized learning experiences configured by therapists and parents.",
+    "Therapeutic gaming system designed for neurodiverse children. Personalized learning experiences configured by therapists and educators.",
   generator: "v0.app",
 }
 

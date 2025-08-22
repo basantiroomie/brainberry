@@ -1,24 +1,46 @@
 "use client"
 
 import type React from "react"
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { Brain, User, Users, X } from "lucide-react"
 import { BrandLogo } from "@/components/BrandLogo"
+import { createSupabaseBrowserClient } from "@/lib/supabase-browser"
 import Link from "next/link"
 
-type UserRole = "THERAPIST_PARENT" | "CHILD" | null
+type UserRole = "EDUCATOR" | "CHILD" | null
 type ModalStep = "role-selection" | "login" | null
 
 export default function LoginPage() {
   const router = useRouter()
   const [modalStep, setModalStep] = useState<ModalStep>("role-selection")
   const [selectedRole, setSelectedRole] = useState<UserRole>(null)
-  const [loginData, setLoginData] = useState({ email: "", password: "", childCode: "" })
+  const [loginData, setLoginData] = useState({ email: "", password: "", confirmPassword: "", childCode: "" })
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string|null>(null)
+  const [authMode, setAuthMode] = useState<'signin'|'signup'>('signin')
+  const supabase = createSupabaseBrowserClient()
+  if (process.env.NODE_ENV !== 'production') {
+    // Debug: show first chars of injected env values to verify correctness (should start 'https://' and 'eyJ')
+    // Remove after verification.
+    // @ts-ignore
+    console.info('[Supabase Debug]', {
+      urlPrefix: (process.env.NEXT_PUBLIC_SUPABASE_URL || '').slice(0, 30),
+      anonKeyStart: (process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '').slice(0, 3)
+    })
+  }
+
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data }) => {
+      if (data.user) router.replace('/educator')
+    })
+  }, [])
 
   const selectRole = (role: UserRole) => {
     setSelectedRole(role)
     setModalStep("login")
+    setAuthMode('signin')
+    setError(null)
   }
 
   const goBack = () => {
@@ -30,17 +52,42 @@ export default function LoginPage() {
     }
   }
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
-    
-    // Handle login logic here
-    console.log("Login attempt:", { role: selectedRole, data: loginData })
-    
-    // Redirect based on role
-    if (selectedRole === "CHILD") {
-      router.push("/child")
-    } else if (selectedRole === "THERAPIST_PARENT") {
-      router.push("/parent")
+    setError(null)
+    setLoading(true)
+    try {
+      if (selectedRole === 'EDUCATOR') {
+        if (authMode === 'signup') {
+          if (loginData.password !== loginData.confirmPassword) throw new Error('Passwords do not match')
+          const { data: signUpData, error: signUpErr } = await supabase.auth.signUp({ email: loginData.email, password: loginData.password })
+          if (signUpErr) throw signUpErr
+          if (signUpData.user) router.push('/educator')
+        } else {
+          const { data, error: signInError } = await supabase.auth.signInWithPassword({ email: loginData.email, password: loginData.password })
+          if (signInError) throw signInError
+          if (data.user) router.replace('/educator')
+        }
+      } else if (selectedRole === 'CHILD') {
+        // Validate child access code via API
+        const response = await fetch('/api/child-auth', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ accessCode: loginData.childCode })
+        })
+        if (!response.ok) {
+          const errorData = await response.json()
+          throw new Error(errorData.error || 'Invalid access code')
+        }
+        const childData = await response.json()
+        // Store child info in sessionStorage for child dashboard
+        sessionStorage.setItem('childProfile', JSON.stringify(childData))
+        router.push('/child')
+      }
+    } catch (err: any) {
+      setError(err.message || 'Login failed')
+    } finally {
+      setLoading(false)
     }
   }
 
@@ -79,11 +126,11 @@ export default function LoginPage() {
                 <p className="text-gray-600">Select your role to continue</p>
               </div>
               <button
-                onClick={() => selectRole("THERAPIST_PARENT")}
+                onClick={() => selectRole("EDUCATOR")}
                 className="w-full p-4 border-2 border-black bg-chart-1 text-white hover:shadow-brutal transition-all flex items-center justify-center space-x-3"
               >
                 <Users className="h-6 w-6" />
-                <span className="font-medium">PARENT / THERAPIST</span>
+                <span className="font-medium">EDUCATOR</span>
               </button>
               <button
                 onClick={() => selectRole("CHILD")}
@@ -97,7 +144,7 @@ export default function LoginPage() {
 
           {modalStep === "login" && (
             <form onSubmit={handleLogin} className="space-y-4">
-              {selectedRole === "THERAPIST_PARENT" ? (
+              {selectedRole === "EDUCATOR" ? (
                 <>
                   <div>
                     <label className="block text-sm font-medium mb-2">Email</label>
@@ -119,6 +166,18 @@ export default function LoginPage() {
                       required
                     />
                   </div>
+                  {authMode === 'signup' && (
+                    <div>
+                      <label className="block text-sm font-medium mb-2">Confirm Password</label>
+                      <input
+                        type="password"
+                        value={loginData.confirmPassword}
+                        onChange={(e) => setLoginData({ ...loginData, confirmPassword: e.target.value })}
+                        className="w-full p-3 border-2 border-black focus:outline-none focus:shadow-brutal"
+                        required
+                      />
+                    </div>
+                  )}
                 </>
               ) : (
                 <div>
@@ -133,12 +192,23 @@ export default function LoginPage() {
                   />
                 </div>
               )}
+              {error && <div className="text-red-600 text-sm font-medium">{error}</div>}
               <button
                 type="submit"
-                className="w-full bg-main text-main-foreground py-3 px-6 border-2 border-black shadow-brutal hover:shadow-brutal-lg transition-all font-bold"
+                disabled={loading}
+                className="w-full bg-main text-main-foreground py-3 px-6 border-2 border-black shadow-brutal hover:shadow-brutal-lg transition-all font-bold disabled:opacity-50"
               >
-                SIGN IN
+                {loading ? 'WORKING...' : authMode === 'signup' ? 'CREATE ACCOUNT' : 'SIGN IN'}
               </button>
+              {selectedRole === 'EDUCATOR' && (
+                <div className="text-center text-xs font-medium text-gray-600 space-x-2">
+                  {authMode === 'signin' ? (
+                    <button type="button" onClick={()=>{setAuthMode('signup'); setError(null)}} className="underline">Need an account? Create one</button>
+                  ) : (
+                    <button type="button" onClick={()=>{setAuthMode('signin'); setError(null)}} className="underline">Have an account? Sign in</button>
+                  )}
+                </div>
+              )}
             </form>
           )}
         </div>

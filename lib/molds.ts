@@ -55,7 +55,7 @@ export interface GameMold {
   rules: string
   scenes: GameScene[]
   customization: CustomizationBoundaries
-  meta: GameMoldMeta
+  meta?: GameMoldMeta
   createdAt: string
   updatedAt: string
   version: number

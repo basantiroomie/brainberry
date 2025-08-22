@@ -1,6 +1,6 @@
 import { Play, Crown, Gamepad2 } from "lucide-react"
 
-type TabType = "play" | "mystuff" | "freeplay" | "parentmenu"
+type TabType = "play" | "mystuff" | "freeplay" | "educatormenu"
 
 interface TabNavigationProps {
   activeTab: TabType

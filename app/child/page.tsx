@@ -3,39 +3,52 @@
 import { Brain, Settings, LogOut } from "lucide-react"
 import { BrandLogo } from "@/components/BrandLogo"
 import { useRouter } from "next/navigation"
-import { useState } from "react"
+import { useState, useEffect } from "react"
 
 // Import tab components
 import PlayTab from "./components/PlayTab"
 import MyStuffTab from "./components/MyStuffTab"
 import FreePlayTab from "./components/FreePlayTab"
-import ParentMenuTab from "./components/ParentMenuTab"
-import ParentGate from "./components/ParentGate"
+import EducatorMenuTab from "./components/EducatorMenuTab"
+import EducatorGate from "./components/EducatorGate"
 
-type TabType = "play" | "mystuff" | "freeplay" | "parentmenu"
+type TabType = "play" | "mystuff" | "freeplay" | "educatormenu"
 
 export default function ChildDashboard() {
   const router = useRouter()
   const [activeTab, setActiveTab] = useState<TabType>("play")
-  const [parentGateVisible, setParentGateVisible] = useState(false)
-  const [parentGateCounter, setParentGateCounter] = useState(0)
+  const [educatorGateVisible, setEducatorGateVisible] = useState(false)
+  const [educatorGateCounter, setEducatorGateCounter] = useState(0)
+  const [childProfile, setChildProfile] = useState<any>(null)
+
+  useEffect(() => {
+    // Get child profile from sessionStorage
+    const stored = sessionStorage.getItem('childProfile')
+    if (stored) {
+      setChildProfile(JSON.parse(stored))
+    } else {
+      // Redirect to login if no child profile found
+      router.push('/login')
+    }
+  }, [router])
 
   const handleLogout = () => {
+    sessionStorage.removeItem('childProfile')
     router.push("/")
   }
 
-  const handleParentAccess = () => {
-    setParentGateVisible(true)
+  const handleEducatorAccess = () => {
+    setEducatorGateVisible(true)
     let counter = 3
-    setParentGateCounter(counter)
+    setEducatorGateCounter(counter)
     
     const interval = setInterval(() => {
       counter--
-      setParentGateCounter(counter)
+      setEducatorGateCounter(counter)
       if (counter <= 0) {
         clearInterval(interval)
-        setActiveTab("parentmenu")
-        setParentGateVisible(false)
+        setActiveTab("educatormenu")
+        setEducatorGateVisible(false)
       }
     }, 1000)
   }
@@ -52,8 +65,8 @@ export default function ChildDashboard() {
         return <MyStuffTab />
       case "freeplay":
         return <FreePlayTab />
-      case "parentmenu":
-        return <ParentMenuTab onBackToChild={handleBackToChild} />
+      case "educatormenu":
+        return <EducatorMenuTab onBackToChild={handleBackToChild} />
       default:
         return <PlayTab />
     }
@@ -68,11 +81,14 @@ export default function ChildDashboard() {
             <div className="flex items-center space-x-2">
               <BrandLogo variant="child" />
               <span className="text-sm text-gray-500">| Child Zone</span>
+              {childProfile && (
+                <span className="text-sm font-medium text-main">Welcome, {childProfile.name}!</span>
+              )}
             </div>
             
             <div className="flex items-center space-x-4">
               {/* Tab Navigation - Only show for child tabs */}
-              {activeTab !== "parentmenu" && (
+              {activeTab !== "educatormenu" && (
                 <div className="flex items-center space-x-2">
                   <button
                     onClick={() => setActiveTab("play")}
@@ -109,9 +125,9 @@ export default function ChildDashboard() {
                 </div>
               )}
 
-              {/* Hidden Parent Access Button */}
+              {/* Hidden Educator Access Button */}
               <button
-                onMouseDown={handleParentAccess}
+                onMouseDown={handleEducatorAccess}
                 className="w-8 h-8 opacity-20 hover:opacity-50 transition-opacity"
               >
                 <Settings className="h-5 w-5 text-gray-400" />
@@ -128,8 +144,8 @@ export default function ChildDashboard() {
         </div>
       </header>
 
-      {/* Parent Gate Modal */}
-      <ParentGate isVisible={parentGateVisible} counter={parentGateCounter} />
+      {/* Educator Gate Modal */}
+      <EducatorGate isVisible={educatorGateVisible} counter={educatorGateCounter} />
 
       {/* Main Content */}
       <main className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
