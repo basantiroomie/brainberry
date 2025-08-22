@@ -15,76 +15,32 @@ export default function LoginPage() {
   const [modalStep, setModalStep] = useState<ModalStep>("role-selection")
   const [selectedRole, setSelectedRole] = useState<UserRole>(null)
   const [loginData, setLoginData] = useState({ email: "", password: "", childCode: "" })
-  const [isLoading, setIsLoading] = useState(false)
-  const [error, setError] = useState("")
 
   const selectRole = (role: UserRole) => {
     setSelectedRole(role)
     setModalStep("login")
-    setError("")
   }
 
   const goBack = () => {
     if (modalStep === "login") {
       setModalStep("role-selection")
       setSelectedRole(null)
-      setError("")
     } else {
       router.push("/")
     }
   }
 
-  const handleLogin = async (e: React.FormEvent) => {
+  const handleLogin = (e: React.FormEvent) => {
     e.preventDefault()
-    setIsLoading(true)
-    setError("")
-
-    try {
-      if (selectedRole === "CHILD") {
-        // Child login with access code
-        const response = await fetch('/api/auth/child-login', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ accessCode: loginData.childCode })
-        })
-
-        const data = await response.json()
-        
-        if (!response.ok) {
-          throw new Error(data.error || 'Login failed')
-        }
-
-        // Store child session
-        localStorage.setItem('brainberry_child_token', data.token)
-        localStorage.setItem('brainberry_child_data', JSON.stringify(data.child))
-        router.push("/child")
-
-      } else if (selectedRole === "THERAPIST_PARENT") {
-        // Parent/Therapist login with email and password
-        const response = await fetch('/api/auth/login', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ 
-            email: loginData.email, 
-            password: loginData.password 
-          })
-        })
-
-        const data = await response.json()
-        
-        if (!response.ok) {
-          throw new Error(data.error || 'Login failed')
-        }
-
-        // Store user session
-        localStorage.setItem('brainberry_user_token', data.token)
-        localStorage.setItem('brainberry_user_data', JSON.stringify(data.user))
-        router.push("/parent")
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'An error occurred')
-    } finally {
-      setIsLoading(false)
+    
+    // Handle login logic here
+    console.log("Login attempt:", { role: selectedRole, data: loginData })
+    
+    // Redirect based on role
+    if (selectedRole === "CHILD") {
+      router.push("/child")
+    } else if (selectedRole === "THERAPIST_PARENT") {
+      router.push("/parent")
     }
   }
 
@@ -141,12 +97,6 @@ export default function LoginPage() {
 
           {modalStep === "login" && (
             <form onSubmit={handleLogin} className="space-y-4">
-              {error && (
-                <div className="bg-red-100 border-2 border-red-500 text-red-700 px-4 py-3 rounded">
-                  {error}
-                </div>
-              )}
-              
               {selectedRole === "THERAPIST_PARENT" ? (
                 <>
                   <div>
@@ -157,7 +107,6 @@ export default function LoginPage() {
                       onChange={(e) => setLoginData({ ...loginData, email: e.target.value })}
                       className="w-full p-3 border-2 border-black focus:outline-none focus:shadow-brutal"
                       required
-                      disabled={isLoading}
                     />
                   </div>
                   <div>
@@ -168,7 +117,6 @@ export default function LoginPage() {
                       onChange={(e) => setLoginData({ ...loginData, password: e.target.value })}
                       className="w-full p-3 border-2 border-black focus:outline-none focus:shadow-brutal"
                       required
-                      disabled={isLoading}
                     />
                   </div>
                 </>
@@ -181,21 +129,15 @@ export default function LoginPage() {
                     onChange={(e) => setLoginData({ ...loginData, childCode: e.target.value })}
                     className="w-full p-3 border-2 border-black focus:outline-none focus:shadow-brutal text-center text-lg font-mono"
                     placeholder="Enter your code"
-                    maxLength={6}
                     required
-                    disabled={isLoading}
                   />
-                  <p className="text-xs text-gray-600 mt-1 text-center">
-                    Ask your parent or therapist for your 6-digit access code
-                  </p>
                 </div>
               )}
               <button
                 type="submit"
-                className="w-full bg-main text-main-foreground py-3 px-6 border-2 border-black shadow-brutal hover:shadow-brutal-lg transition-all font-bold disabled:opacity-50 disabled:cursor-not-allowed"
-                disabled={isLoading}
+                className="w-full bg-main text-main-foreground py-3 px-6 border-2 border-black shadow-brutal hover:shadow-brutal-lg transition-all font-bold"
               >
-                {isLoading ? 'SIGNING IN...' : 'SIGN IN'}
+                SIGN IN
               </button>
             </form>
           )}

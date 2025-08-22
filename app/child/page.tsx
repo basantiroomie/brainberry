@@ -3,7 +3,7 @@
 import { Brain, Settings, LogOut } from "lucide-react"
 import { BrandLogo } from "@/components/BrandLogo"
 import { useRouter } from "next/navigation"
-import { useState, useEffect } from "react"
+import { useState } from "react"
 
 // Import tab components
 import PlayTab from "./components/PlayTab"
@@ -14,44 +14,13 @@ import ParentGate from "./components/ParentGate"
 
 type TabType = "play" | "mystuff" | "freeplay" | "parentmenu"
 
-interface ChildData {
-  id: string
-  name: string
-  age: number
-  diagnosis: string
-}
-
 export default function ChildDashboard() {
   const router = useRouter()
   const [activeTab, setActiveTab] = useState<TabType>("play")
   const [parentGateVisible, setParentGateVisible] = useState(false)
   const [parentGateCounter, setParentGateCounter] = useState(0)
-  const [childData, setChildData] = useState<ChildData | null>(null)
-
-  useEffect(() => {
-    // Check if child is logged in and get their data
-    const token = localStorage.getItem('brainberry_child_token')
-    const childDataStr = localStorage.getItem('brainberry_child_data')
-    
-    if (!token || !childDataStr) {
-      // Redirect to login if no valid session
-      router.push('/login')
-      return
-    }
-
-    try {
-      const child = JSON.parse(childDataStr) as ChildData
-      setChildData(child)
-    } catch (error) {
-      console.error('Error parsing child data:', error)
-      router.push('/login')
-    }
-  }, [router])
 
   const handleLogout = () => {
-    // Clear child session data
-    localStorage.removeItem('brainberry_child_token')
-    localStorage.removeItem('brainberry_child_data')
     router.push("/")
   }
 
@@ -78,7 +47,7 @@ export default function ChildDashboard() {
   const renderTabContent = () => {
     switch (activeTab) {
       case "play":
-        return <PlayTab childName={childData?.name} />
+        return <PlayTab />
       case "mystuff":
         return <MyStuffTab />
       case "freeplay":
@@ -86,7 +55,7 @@ export default function ChildDashboard() {
       case "parentmenu":
         return <ParentMenuTab onBackToChild={handleBackToChild} />
       default:
-        return <PlayTab childName={childData?.name} />
+        return <PlayTab />
     }
   }
 
@@ -99,13 +68,6 @@ export default function ChildDashboard() {
             <div className="flex items-center space-x-2">
               <BrandLogo variant="child" />
               <span className="text-sm text-gray-500">| Child Zone</span>
-              {childData && (
-                <div className="flex items-center space-x-2 ml-4">
-                  <span className="text-lg font-bold text-chart-2">
-                    Welcome, {childData.name}! 🎮
-                  </span>
-                </div>
-              )}
             </div>
             
             <div className="flex items-center space-x-4">

@@ -1,41 +1,13 @@
 // Prisma schema for BrainBerry therapeutic game molds
-// Using SQLite locally; switch provider in production (e.g., postgres, mongodb).
+// Using SQLite locally; switch provider in production (e.g., postgres).
 
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
-  provider = "sqlite" // Change to "postgresql" or "mongodb" for production
+  provider = "sqlite"
   url      = env("DATABASE_URL")
-}
-
-model User {
-  id        String   @id @default(cuid())
-  email     String   @unique
-  password  String   // hashed password
-  name      String
-  role      String   // "THERAPIST", "PARENT", "RESEARCHER"
-  phone     String?
-  license   String?
-  organization String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  children  ChildProfile[]
-}
-
-model ChildProfile {
-  id        String   @id @default(cuid())
-  name      String
-  age       Int
-  diagnosis String // ASD, ADHD, HYBRID or other text
-  notes     String?
-  accessCode String @unique // 6-digit code for child login
-  userId    String  // parent/therapist who manages this child
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  createdAt DateTime @default(now())
-  assignments MoldAssignment[]
-  sessions   GameSession[]
 }
 
 model GameMold {
@@ -88,6 +60,17 @@ model Asset {
   url    String
   sceneId String
   scene  Scene  @relation(fields: [sceneId], references: [id], onDelete: Cascade)
+}
+
+model ChildProfile {
+  id        String   @id @default(cuid())
+  name      String
+  age       Int
+  diagnosis String // ASD, ADHD, HYBRID or other text
+  notes     String?
+  createdAt DateTime @default(now())
+  assignments MoldAssignment[]
+  sessions   GameSession[]
 }
 
 model MoldAssignment {

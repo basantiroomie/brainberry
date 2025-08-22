@@ -3,28 +3,9 @@ import { prisma } from '@/lib/prisma'
 import { gameMoldBaseSchema } from '@/lib/schemas'
 
 // List & Create
-export async function GET(req: NextRequest) {
-  try {
-    console.log('GET /api/molds called')
-    
-    // For now, return all molds since they're global
-    // In the future, you might want to add user-specific molds
-    const molds = await prisma.gameMold.findMany({ 
-      include: { 
-        scenes: { 
-          include: { 
-            assets: true 
-          } 
-        } 
-      } 
-    })
-    
-    console.log(`Found ${molds.length} molds`)
-    return NextResponse.json(molds)
-  } catch (error) {
-    console.error('Error fetching molds:', error)
-    return NextResponse.json({ error: 'Failed to fetch molds' }, { status: 500 })
-  }
+export async function GET() {
+  const molds = await prisma.gameMold.findMany({ include: { scenes: { include: { assets: true } } } })
+  return NextResponse.json(molds)
 }
 
 export async function POST(req: NextRequest) {

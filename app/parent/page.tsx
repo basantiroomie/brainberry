@@ -1,58 +1,28 @@
 "use client"
 
 import { useRouter } from "next/navigation"
-import { LogOut, Settings } from "lucide-react"
+import { LogOut, Settings, FlaskConical } from "lucide-react"
 import { BrandLogo } from "@/components/BrandLogo"
-import { useState, useEffect } from "react"
+import { useState } from "react"
+import { MockDataProvider, useMockData } from "./components/MockDataContext"
 import DashboardTab from "./components/DashboardTab"
 import ChildrenTab from "./components/ChildrenTab"
 import MoldLibraryTab from "./components/MoldLibraryTab"
-import GameAssignmentTab from "./components/GameAssignmentTab"
 import AnalyticsTab from "./components/AnalyticsTab"
 import AccountSettingsTab from "./components/AccountSettingsTab"
-
-interface User {
-  id: string
-  name: string
-  email: string
-  role: string
-  phone?: string
-  license?: string
-  organization?: string
-}
 
 function ParentDashboardInner() {
   const router = useRouter()
   const [activeTab, setActiveTab] = useState<string>("dashboard")
-  const [user, setUser] = useState<User | null>(null)
+  const { useMock, setUseMock } = useMockData()
 
-  useEffect(() => {
-    // Check if user is authenticated
-    const token = localStorage.getItem('brainberry_user_token')
-    const userData = localStorage.getItem('brainberry_user_data')
-    
-    if (!token || !userData) {
-      router.push('/login')
-      return
-    }
-
-    try {
-      setUser(JSON.parse(userData))
-    } catch {
-      router.push('/login')
-    }
-  }, [router])
-
-  const handleLogout = () => {
-    localStorage.removeItem('brainberry_user_token')
-    localStorage.removeItem('brainberry_user_data')
+  const goToLogin = () => {
     router.push('/login')
   }
 
   const tabs = [
     { id: "dashboard", name: "DASHBOARD" },
     { id: "children", name: "CHILDREN" },
-    { id: "assignments", name: "GAME ASSIGNMENTS" },
     { id: "library", name: "MOLD LIBRARY" },
     { id: "analytics", name: "ANALYTICS" },
     { id: "settings", name: "ACCOUNT SETTINGS" }
@@ -64,27 +34,15 @@ function ParentDashboardInner() {
         return <DashboardTab />
       case "children":
         return <ChildrenTab />
-      case "assignments":
-        return <GameAssignmentTab />
       case "library":
         return <MoldLibraryTab />
       case "analytics":
         return <AnalyticsTab />
       case "settings":
-        return <AccountSettingsTab user={user} />
+        return <AccountSettingsTab />
       default:
         return <DashboardTab />
     }
-  }
-
-  if (!user) {
-    return (
-      <div className="min-h-screen bg-secondary flex items-center justify-center">
-        <div className="text-center">
-          <h2 className="text-2xl font-bold mb-4">Loading...</h2>
-        </div>
-      </div>
-    )
   }
 
   return (
@@ -115,7 +73,15 @@ function ParentDashboardInner() {
                 ))}
               </div>
               <button
-                onClick={handleLogout}
+                onClick={() => setUseMock(!useMock)}
+                className={`flex items-center space-x-2 px-4 py-2 border-2 border-black shadow-brutal hover:shadow-brutal-lg transition-all font-bold ${useMock ? 'bg-yellow-300 text-black' : 'bg-white text-black'}`}
+                title="Toggle global mock data mode"
+              >
+                <FlaskConical className="h-4 w-4" />
+                <span>{useMock ? 'MOCK ON' : 'MOCK OFF'}</span>
+              </button>
+              <button
+                onClick={goToLogin}
                 className="flex items-center space-x-2 bg-red-500 text-white px-4 py-2 border-2 border-black shadow-brutal hover:shadow-brutal-lg transition-all"
               >
                 <LogOut className="h-4 w-4" />
@@ -135,5 +101,9 @@ function ParentDashboardInner() {
 }
 
 export default function ParentDashboard() {
-  return <ParentDashboardInner />
+  return (
+    <MockDataProvider>
+      <ParentDashboardInner />
+    </MockDataProvider>
+  )
 }
