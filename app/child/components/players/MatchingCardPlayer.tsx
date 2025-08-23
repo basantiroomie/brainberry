@@ -3,32 +3,25 @@
 import { useState, useEffect } from 'react'
 import { Play, RotateCcw, Volume2, VolumeX, ArrowLeft } from 'lucide-react'
 import { useImagePreloader, SmartImage } from '@/components/ImagePreloader'
+import OptimizedCard from '@/components/OptimizedCard'
 import GameLoadingScreen from '@/components/GameLoadingScreen'
+import { GameConfig, Card } from '../../../../types/game'
+import { logger } from '../../../../utils/logger'
 
 interface MatchingCardPlayerProps {
-  gameConfig: any
+  gameConfig: GameConfig
   childId: string
   onComplete?: () => void
   onBack?: () => void
 }
 
-interface Card {
-  id: number
-  pair_id: number
-  image_url: string
-  label: string
+interface GameCard extends Card {
   isFlipped: boolean
   isMatched: boolean
-  ai_generation?: {
-    image_prompt: string
-    style_prompt: string
-    verification_prompt: string
-    fallback_emoji: string
-  }
 }
 
 export default function MatchingCardPlayer({ gameConfig, childId, onComplete, onBack }: MatchingCardPlayerProps) {
-  const [cards, setCards] = useState<Card[]>([])
+  const [cards, setCards] = useState<GameCard[]>([])
   const [flippedCards, setFlippedCards] = useState<number[]>([])
   const [matchedPairs, setMatchedPairs] = useState<number[]>([])
   const [moves, setMoves] = useState(0)
@@ -44,13 +37,13 @@ export default function MatchingCardPlayer({ gameConfig, childId, onComplete, on
   const [loadingProgress, setLoadingProgress] = useState(0)
 
   // Extract image URLs for preloading
-  const imageUrls = gameConfig?.cards?.map((card: any) => card.image_url) || []
-  const fallbackEmojis = gameConfig?.cards?.map((card: any) => 
+  const imageUrls = gameConfig?.cards?.map((card) => card.image_url) || []
+  const fallbackEmojis = gameConfig?.cards?.map((card) => 
     card.ai_generation?.fallback_emoji || '⭐'
   ) || []
 
-  // Preload images
-  const { allLoaded } = useImagePreloader({
+  // Preload images with enhanced caching
+  const { allLoaded, getCachedUrl } = useImagePreloader({
     images: imageUrls,
     onAllLoaded: () => setImagesReady(true),
     onProgress: (loaded, total) => setLoadingProgress(loaded),
@@ -142,10 +135,16 @@ export default function MatchingCardPlayer({ gameConfig, childId, onComplete, on
         }
 
         // Check if game is complete
-        const totalPairs = gameConfig.cards.length
+        const totalPairs = gameConfig.cards?.length || 0
         if (matchedPairs.length + 1 >= totalPairs) {
           setGameComplete(true)
           onComplete?.()
+          logger.game('Game completed', undefined, { 
+            totalPairs, 
+            moves, 
+            score, 
+            gameTime 
+          })
         }
 
         // Play success sound
@@ -286,61 +285,13 @@ export default function MatchingCardPlayer({ gameConfig, childId, onComplete, on
 
         <div className="grid grid-cols-4 gap-4 max-w-2xl mx-auto">
           {cards.map(card => (
-            <div
+            <OptimizedCard
               key={card.id}
-              className={`
-                aspect-square bg-white rounded-lg border-4 shadow-lg cursor-pointer transform transition-all duration-300
-                ${card.isMatched 
-                  ? 'border-green-500 scale-105 bg-green-100' 
-                  : card.isFlipped 
-                    ? 'border-blue-500 scale-105' 
-                    : 'border-gray-300 hover:scale-105 hover:border-blue-400'
-                }
-              `}
+              card={card}
+              theme={theme}
+              primaryColor={primaryColor}
               onClick={() => handleCardClick(card.id)}
-            >
-              <div className="w-full h-full flex items-center justify-center p-2">
-                {card.isFlipped || card.isMatched ? (
-                  <div className="text-center">
-                    {/* Enhanced card display with AI-generated content */}
-                    <div 
-                      className="w-16 h-16 rounded-lg mb-2 relative overflow-hidden"
-                      style={{ backgroundColor: primaryColor + '20' }}
-                    >
-                      <SmartImage
-                        src={card.image_url}
-                        alt={card.label}
-                        className="w-full h-full rounded-lg"
-                        fallbackEmoji={card.ai_generation?.fallback_emoji || 
-                         (theme === 'animals' ? '🐾' : 
-                          theme === 'family' ? '👨‍👩‍👧‍👦' :
-                          theme === 'toys' ? '🧸' :
-                          theme === 'food' ? '🍎' :
-                          theme === 'characters' ? '🦸' : '⭐')}
-                      />
-                    </div>
-                    <div className="text-xs font-bold text-gray-800 px-1 text-center leading-tight">
-                      {card.label}
-                    </div>
-                    {/* Show AI prompt in development mode */}
-                    {process.env.NODE_ENV === 'development' && card.ai_generation && (
-                      <div className="text-xs text-gray-500 mt-1 p-1 bg-gray-100 rounded text-left">
-                        AI: {card.ai_generation.image_prompt.substring(0, 30)}...
-                      </div>
-                    )}
-                  </div>
-                ) : (
-                  <div 
-                    className="w-full h-full rounded-lg flex items-center justify-center text-4xl relative"
-                    style={{ backgroundColor: primaryColor + '60' }}
-                  >
-                    {/* Enhanced card back design */}
-                    <div className="absolute inset-0 rounded-lg border-2 border-white opacity-30"></div>
-                    <div className="relative">❓</div>
-                  </div>
-                )}
-              </div>
-            </div>
+            />
           ))}
         </div>
 

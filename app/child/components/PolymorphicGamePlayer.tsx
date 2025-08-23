@@ -3,6 +3,8 @@
 import { useState, useEffect } from 'react'
 import MatchingCardPlayer from './players/MatchingCardPlayer'
 import SortingGamePlayer from './players/SortingGamePlayer'
+import { GameConfig } from '../../../types/game'
+import { logger } from '../../../utils/logger'
 
 interface PolymorphicGamePlayerProps {
   personalizedMoldId: string
@@ -17,7 +19,7 @@ export default function PolymorphicGamePlayer({
   onComplete,
   onBack 
 }: PolymorphicGamePlayerProps) {
-  const [gameConfig, setGameConfig] = useState<any>(null)
+  const [gameConfig, setGameConfig] = useState<GameConfig | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -28,17 +30,24 @@ export default function PolymorphicGamePlayer({
   async function loadPersonalizedGame() {
     try {
       setLoading(true)
+      logger.info('Loading personalized game', 'GAME', { personalizedMoldId })
+      
       const response = await fetch(`/api/personalized-molds/${personalizedMoldId}`)
       
       if (!response.ok) {
-        throw new Error('Failed to load game')
+        throw new Error(`HTTP ${response.status}: Failed to load game`)
       }
       
       const data = await response.json()
       setGameConfig(data.config)
       setError(null)
+      
+      logger.info('Personalized game loaded successfully', 'GAME', { 
+        personalizedMoldId,
+        gameType: data.config?.game_type 
+      })
     } catch (err) {
-      console.error('Error loading personalized game:', err)
+      logger.error('Error loading personalized game', err, 'GAME')
       setError('Failed to load your personalized game 😢')
     } finally {
       setLoading(false)
@@ -93,7 +102,7 @@ export default function PolymorphicGamePlayer({
           />
         )
       
-      case 'sorting':
+      case 'sorting_challenge':
         return (
           <SortingGamePlayer
             gameConfig={gameConfig}
@@ -104,6 +113,10 @@ export default function PolymorphicGamePlayer({
         )
       
       default:
+        logger.warn('Unsupported game type', 'GAME', { 
+          gameType: gameConfig.game_type,
+          personalizedMoldId 
+        })
         return (
           <div className="min-h-screen bg-gray-100 p-8 flex items-center justify-center">
             <div className="text-center">

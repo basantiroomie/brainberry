@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { imageCache } from '@/lib/image-cache'
 
 interface ImagePreloaderProps {
   images: string[]
@@ -12,6 +13,7 @@ interface ImageLoadState {
   loaded: boolean
   error: boolean
   fallbackEmoji?: string
+  cachedUrl?: string
 }
 
 export function useImagePreloader({ images, onAllLoaded, onProgress, fallbackEmojis = [] }: ImagePreloaderProps) {
@@ -30,54 +32,55 @@ export function useImagePreloader({ images, onAllLoaded, onProgress, fallbackEmo
       url,
       loaded: false,
       error: false,
-      fallbackEmoji: fallbackEmojis[index] || '⭐'
+      fallbackEmoji: fallbackEmojis[index] || '⭐',
+      cachedUrl: undefined
     }))
     
     setImageStates(initialStates)
 
-    // Preload all images
+    // Use image cache for faster loading
     let loadedCount = 0
     const totalImages = images.length
 
-    const imagePromises = images.map((imageUrl, index) => {
-      return new Promise<void>((resolve) => {
-        // Skip data URLs as they're already loaded
-        if (imageUrl.startsWith('data:')) {
-          setImageStates(prev => prev.map((state, i) => 
-            i === index ? { ...state, loaded: true } : state
-          ))
+    const loadImages = async () => {
+      // Preload all images using the cache
+      await imageCache.preloadImages(images, 3) // Load in batches of 3
+
+      // Update states with cached URLs
+      const updatedStates = images.map((url, index) => {
+        const cachedUrl = imageCache.getCachedImage(url)
+        const isLoaded = !!cachedUrl
+        
+        if (isLoaded) {
           loadedCount++
           onProgress(loadedCount, totalImages)
-          resolve()
-          return
         }
 
-        const img = new Image()
-        
-        img.onload = () => {
-          setImageStates(prev => prev.map((state, i) => 
-            i === index ? { ...state, loaded: true } : state
-          ))
-          loadedCount++
-          onProgress(loadedCount, totalImages)
-          resolve()
+        return {
+          url,
+          loaded: isLoaded,
+          error: !isLoaded,
+          fallbackEmoji: fallbackEmojis[index] || '⭐',
+          cachedUrl: cachedUrl || undefined
         }
-        
-        img.onerror = () => {
-          console.warn(`Failed to load image: ${imageUrl}`)
-          setImageStates(prev => prev.map((state, i) => 
-            i === index ? { ...state, error: true, loaded: true } : state
-          ))
-          loadedCount++
-          onProgress(loadedCount, totalImages)
-          resolve()
-        }
-        
-        img.src = imageUrl
       })
-    })
 
-    Promise.all(imagePromises).then(() => {
+      setImageStates(updatedStates)
+      setAllLoaded(true)
+      onAllLoaded()
+    }
+
+    loadImages().catch((error) => {
+      console.error('Error loading images:', error)
+      // Fallback to showing all as loaded with errors
+      const errorStates = images.map((url, index) => ({
+        url,
+        loaded: true,
+        error: true,
+        fallbackEmoji: fallbackEmojis[index] || '⭐',
+        cachedUrl: undefined
+      }))
+      setImageStates(errorStates)
       setAllLoaded(true)
       onAllLoaded()
     })
@@ -87,7 +90,11 @@ export function useImagePreloader({ images, onAllLoaded, onProgress, fallbackEmo
   return {
     imageStates,
     allLoaded,
-    getImageState: (url: string) => imageStates.find(state => state.url === url)
+    getImageState: (url: string) => imageStates.find(state => state.url === url),
+    getCachedUrl: (url: string) => {
+      const state = imageStates.find(state => state.url === url)
+      return state?.cachedUrl || imageCache.getCachedImage(url) || url
+    }
   }
 }
 
@@ -104,9 +111,18 @@ export function SmartImage({ src, alt, className = '', fallbackEmoji = '⭐', on
   const [imageError, setImageError] = useState(false)
   const [imageLoaded, setImageLoaded] = useState(false)
 
+  // Get cached image URL for instant loading
+  const cachedSrc = imageCache.getCachedImage(src) || src
+
   useEffect(() => {
     setImageError(false)
     setImageLoaded(false)
+    
+    // If we have a cached version, mark as loaded immediately
+    if (imageCache.isCached(src)) {
+      setImageLoaded(true)
+      onLoad?.()
+    }
   }, [src])
 
   const handleLoad = () => {
@@ -130,13 +146,15 @@ export function SmartImage({ src, alt, className = '', fallbackEmoji = '⭐', on
   return (
     <div className={`relative ${className}`}>
       <img
-        src={src}
+        src={cachedSrc}
         alt={alt}
-        className={`w-full h-full object-cover transition-opacity duration-300 ${
+        className={`w-full h-full object-cover transition-opacity duration-150 ${
           imageLoaded ? 'opacity-100' : 'opacity-0'
         }`}
         onLoad={handleLoad}
         onError={handleError}
+        loading="eager"
+        decoding="sync"
       />
       {!imageLoaded && (
         <div className="absolute inset-0 flex items-center justify-center bg-gray-100 animate-pulse">

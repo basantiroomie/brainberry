@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { Gamepad, Sparkles, ArrowLeft } from 'lucide-react'
 import MoldPersonalizationWizard from './MoldPersonalizationWizard'
 import PolymorphicGamePlayer from './PolymorphicGamePlayer'
+import { imageCache } from '@/lib/image-cache'
 
 interface PlayTabProps {
   childId: string
@@ -11,7 +12,7 @@ interface PlayTabProps {
 
 type ViewMode = 'dashboard' | 'personalize' | 'play-personalized'
 
-export default function PlayTab({ childId }: PlayTabProps) {
+export default function PlayTab({ childId }: { childId: string }) {
   const [viewMode, setViewMode] = useState<ViewMode>('dashboard')
   const [selectedMold, setSelectedMold] = useState<any>(null)
   const [selectedPersonalizedGame, setSelectedPersonalizedGame] = useState<string | null>(null)
@@ -22,6 +23,17 @@ export default function PlayTab({ childId }: PlayTabProps) {
   useEffect(() => {
     if (childId) {
       loadGameData()
+    }
+
+    // Cleanup function to manage cache when component unmounts
+    return () => {
+      // Get cache stats before cleanup for logging
+      const stats = imageCache.getCacheStats()
+      if (stats.cachedImages > 0) {
+        console.log(`PlayTab unmounting: ${stats.cachedImages} images in cache (${Math.round(stats.totalSize / 1024)}KB)`)
+      }
+      // Note: We don't clear all cache here as images might be reused
+      // Cache will be cleared when specific games are deleted
     }
   }, [childId])
 
@@ -86,11 +98,23 @@ export default function PlayTab({ childId }: PlayTabProps) {
 
   async function deletePersonalizedGame(gameId: string) {
     try {
+      // Find the game to get its image URLs for cache cleanup
+      const gameToDelete = personalizedGames.find(g => g.id === gameId)
+      
       const response = await fetch(`/api/personalized-molds/${gameId}`, {
         method: 'DELETE'
       })
       
       if (response.ok) {
+        // Clear cached images for this game
+        if (gameToDelete?.game_data) {
+          const imageUrls = extractImageUrls(gameToDelete.game_data)
+          if (imageUrls.length > 0) {
+            imageCache.clearImages(imageUrls)
+            console.log(`Cleared ${imageUrls.length} cached images for deleted game`)
+          }
+        }
+        
         // Refresh the game data
         await loadGameData()
       } else {
@@ -99,6 +123,31 @@ export default function PlayTab({ childId }: PlayTabProps) {
     } catch (error) {
       console.error('Error deleting game:', error)
     }
+  }
+
+  // Helper function to extract image URLs from game data
+  function extractImageUrls(gameData: any): string[] {
+    const urls: string[] = []
+    
+    if (gameData?.cards) {
+      // Matching card game
+      gameData.cards.forEach((card: any) => {
+        if (card.image_url) urls.push(card.image_url)
+      })
+    }
+    
+    if (gameData?.categories) {
+      // Sorting game
+      gameData.categories.forEach((category: any) => {
+        if (category.items) {
+          category.items.forEach((item: any) => {
+            if (item.image_url) urls.push(item.image_url)
+          })
+        }
+      })
+    }
+    
+    return urls
   }
 
   function handlePersonalizationComplete(personalizedMoldId: string) {
@@ -112,9 +161,10 @@ export default function PlayTab({ childId }: PlayTabProps) {
   }
 
   function handleGameComplete() {
-    // Game completed, return to dashboard
-    setViewMode('dashboard')
-    setSelectedPersonalizedGame(null)
+    // Game completed - let the game component handle its own completion screen
+    // The game will show scores and completion data before user decides to go back
+    console.log('Game completed successfully!')
+    // Don't automatically redirect - let the user see their completion screen first
   }
 
   function handleBackToDashboard() {

@@ -1,5 +1,6 @@
 // Gemini AI Integration for Personalized Game Content Generation
 import { GoogleGenerativeAI } from '@google/generative-ai'
+import { logger } from '../utils/logger'
 
 // Initialize Gemini AI
 function getGeminiClient() {
@@ -78,12 +79,15 @@ RESPONSE FORMAT (JSON):
   "educational_value": "what skills this game helps develop"
 }`
 
-  console.log('Sending prompt to Gemini for matching cards...')
+  logger.info('Sending prompt to Gemini for matching cards', 'GEMINI')
   const result = await model.generateContent(geminiPrompt)
   const response = await result.response
   const text = response.text()
 
-  console.log('Gemini response received:', text.substring(0, 200))
+  logger.debug('Gemini response received', 'GEMINI', { 
+    responseLength: text.length,
+    preview: text.substring(0, 200) 
+  })
 
   // Parse JSON response from Gemini
   let geminiData: any
@@ -96,8 +100,8 @@ RESPONSE FORMAT (JSON):
       throw new Error('No valid JSON found in Gemini response')
     }
   } catch (parseError) {
-    console.error('Failed to parse Gemini JSON:', parseError)
-    console.error('Raw response:', text)
+    logger.error('Failed to parse Gemini JSON', parseError, 'GEMINI')
+    logger.debug('Raw Gemini response', 'GEMINI', { rawResponse: text })
     throw new Error('Invalid JSON response from Gemini AI')
   }
 
@@ -185,7 +189,7 @@ RESPONSE FORMAT (JSON):
   "educational_value": "what this game teaches"
 }`
 
-  console.log('Sending prompt to Gemini for sorting game...')
+  logger.info('Sending prompt to Gemini for sorting game', 'GEMINI')
   const result = await model.generateContent(geminiPrompt)
   const response = await result.response
   const text = response.text()

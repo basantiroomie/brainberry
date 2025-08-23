@@ -54,8 +54,8 @@ export default function SortingGamePlayer({ gameConfig, childId, onComplete, onB
     cat.items?.map((item: any) => item.ai_generation?.fallback_emoji || '⭐') || []
   ) || []
 
-  // Preload images
-  const { allLoaded } = useImagePreloader({
+  // Preload images with enhanced caching
+  const { allLoaded, getCachedUrl } = useImagePreloader({
     images: imageUrls,
     onAllLoaded: () => setImagesReady(true),
     onProgress: (loaded, total) => setLoadingProgress(loaded),
@@ -270,7 +270,7 @@ export default function SortingGamePlayer({ gameConfig, childId, onComplete, onB
                   <div className="mb-1">
                     <div className="w-12 h-12 mx-auto rounded">
                       <SmartImage
-                        src={item.image_url}
+                        src={getCachedUrl ? getCachedUrl(item.image_url) : item.image_url}
                         alt={item.name || item.label || 'Game item'}
                         className="w-full h-full rounded"
                         fallbackEmoji={item.ai_generation?.fallback_emoji || '⭐'}
@@ -310,7 +310,7 @@ export default function SortingGamePlayer({ gameConfig, childId, onComplete, onB
                 <div className="mb-1">
                   <div className="w-12 h-12 mx-auto rounded">
                     <SmartImage
-                      src={item.image_url}
+                      src={getCachedUrl ? getCachedUrl(item.image_url) : item.image_url}
                       alt={item.name || item.label || 'Game item'}
                       className="w-full h-full rounded"
                       fallbackEmoji={item.ai_generation?.fallback_emoji || '⭐'}
