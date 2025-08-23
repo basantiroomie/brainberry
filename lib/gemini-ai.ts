@@ -86,7 +86,7 @@ RESPONSE FORMAT (JSON):
   console.log('Gemini response received:', text.substring(0, 200))
 
   // Parse JSON response from Gemini
-  let geminiData
+  let geminiData: any
   try {
     // Extract JSON from response (Gemini might include extra text)
     const jsonMatch = text.match(/\{[\s\S]*\}/)
@@ -191,7 +191,7 @@ RESPONSE FORMAT (JSON):
   const text = response.text()
 
   // Parse and transform response similar to matching cards
-  let geminiData
+  let geminiData: any
   try {
     const jsonMatch = text.match(/\{[\s\S]*\}/)
     if (jsonMatch) {
