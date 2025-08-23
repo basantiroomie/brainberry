@@ -2,6 +2,8 @@
 
 import { useState, useEffect } from 'react'
 import { Play, RotateCcw, Volume2, VolumeX, ArrowLeft } from 'lucide-react'
+import { useImagePreloader, SmartImage } from '@/components/ImagePreloader'
+import GameLoadingScreen from '@/components/GameLoadingScreen'
 
 interface MatchingCardPlayerProps {
   gameConfig: any
@@ -38,12 +40,28 @@ export default function MatchingCardPlayer({ gameConfig, childId, onComplete, on
   const [showEncouragement, setShowEncouragement] = useState(false)
   const [encouragementMessage, setEncouragementMessage] = useState('')
   const [consecutiveMatches, setConsecutiveMatches] = useState(0)
+  const [imagesReady, setImagesReady] = useState(false)
+  const [loadingProgress, setLoadingProgress] = useState(0)
+
+  // Extract image URLs for preloading
+  const imageUrls = gameConfig?.cards?.map((card: any) => card.image_url) || []
+  const fallbackEmojis = gameConfig?.cards?.map((card: any) => 
+    card.ai_generation?.fallback_emoji || '⭐'
+  ) || []
+
+  // Preload images
+  const { allLoaded } = useImagePreloader({
+    images: imageUrls,
+    onAllLoaded: () => setImagesReady(true),
+    onProgress: (loaded, total) => setLoadingProgress(loaded),
+    fallbackEmojis
+  })
 
   useEffect(() => {
-    if (gameConfig?.cards) {
+    if (gameConfig?.cards && imagesReady) {
       initializeCards(gameConfig.cards)
     }
-  }, [gameConfig])
+  }, [gameConfig, imagesReady])
 
   useEffect(() => {
     if (gameStarted && !gameComplete) {
@@ -194,6 +212,18 @@ export default function MatchingCardPlayer({ gameConfig, childId, onComplete, on
   const theme = gameConfig?.theme || 'default'
   const primaryColor = gameConfig?.ui_customization?.primary_color || '#3b82f6'
 
+  // Show loading screen while images are loading
+  if (!imagesReady) {
+    return (
+      <GameLoadingScreen 
+        progress={loadingProgress}
+        total={imageUrls.length}
+        gameTitle="Matching Cards Game"
+        theme={theme}
+      />
+    )
+  }
+
   return (
     <div 
       className="min-h-screen p-4"
@@ -274,29 +304,20 @@ export default function MatchingCardPlayer({ gameConfig, childId, onComplete, on
                   <div className="text-center">
                     {/* Enhanced card display with AI-generated content */}
                     <div 
-                      className="w-16 h-16 rounded-lg mb-2 flex items-center justify-center text-2xl relative overflow-hidden"
-                      style={{ backgroundColor: primaryColor + '40' }}
+                      className="w-16 h-16 rounded-lg mb-2 relative overflow-hidden"
+                      style={{ backgroundColor: primaryColor + '20' }}
                     >
-                      {/* Try to load real image, fallback to emoji */}
-                      <img
+                      <SmartImage
                         src={card.image_url}
                         alt={card.label}
-                        className="w-full h-full object-cover rounded-lg"
-                        onError={(e) => {
-                          // Fallback to emoji if image fails to load
-                          const target = e.target as HTMLImageElement
-                          target.style.display = 'none'
-                          target.nextElementSibling!.classList.remove('hidden')
-                        }}
-                      />
-                      <div className="hidden text-3xl">
-                        {card.ai_generation?.fallback_emoji || 
+                        className="w-full h-full rounded-lg"
+                        fallbackEmoji={card.ai_generation?.fallback_emoji || 
                          (theme === 'animals' ? '🐾' : 
                           theme === 'family' ? '👨‍👩‍👧‍👦' :
                           theme === 'toys' ? '🧸' :
                           theme === 'food' ? '🍎' :
                           theme === 'characters' ? '🦸' : '⭐')}
-                      </div>
+                      />
                     </div>
                     <div className="text-xs font-bold text-gray-800 px-1 text-center leading-tight">
                       {card.label}

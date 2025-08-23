@@ -20,21 +20,58 @@ export default function PlayTab({ childId }: PlayTabProps) {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    loadGameData()
+    if (childId) {
+      loadGameData()
+    }
   }, [childId])
 
   async function loadGameData() {
+    if (!childId) {
+      console.error('No childId provided')
+      setLoading(false)
+      return
+    }
+    
     try {
       setLoading(true)
       
-      // Load available molds and personalized games
+      // Load available molds and personalized games using child-specific APIs
       const [moldsResponse, personalizedResponse] = await Promise.all([
-        fetch('/api/molds'),
-        fetch(`/api/personalized-molds?child_id=${childId}`)
+        fetch('/api/child-molds'),
+        fetch(`/api/child-personalized-molds?child_id=${childId}`)
       ])
 
-      const moldsData = await moldsResponse.json()
-      const personalizedData = await personalizedResponse.json()
+      // Check if responses are JSON before parsing
+      let moldsData, personalizedData
+      
+      if (moldsResponse.ok) {
+        const moldsText = await moldsResponse.text()
+        try {
+          moldsData = JSON.parse(moldsText)
+        } catch (e) {
+          console.error('Failed to parse molds JSON:', e)
+          moldsData = []
+        }
+      } else {
+        console.error('Molds API failed:', moldsResponse.status, moldsResponse.statusText)
+        moldsData = []
+      }
+
+      if (personalizedResponse.ok) {
+        const personalizedText = await personalizedResponse.text()
+        try {
+          personalizedData = JSON.parse(personalizedText)
+        } catch (e) {
+          console.error('Failed to parse personalized JSON:', e)
+          personalizedData = []
+        }
+      } else {
+        console.error('Personalized API failed:', personalizedResponse.status, personalizedResponse.statusText)
+        personalizedData = []
+      }
+
+      console.log('Molds data:', moldsData)
+      console.log('Personalized data:', personalizedData)
 
       setAvailableMolds(Array.isArray(moldsData) ? moldsData : [])
       setPersonalizedGames(Array.isArray(personalizedData) ? personalizedData : [])
@@ -47,11 +84,31 @@ export default function PlayTab({ childId }: PlayTabProps) {
     }
   }
 
-  function handlePersonalizationComplete() {
-    // Refresh personalized games and return to dashboard
-    loadGameData()
-    setViewMode('dashboard')
+  async function deletePersonalizedGame(gameId: string) {
+    try {
+      const response = await fetch(`/api/personalized-molds/${gameId}`, {
+        method: 'DELETE'
+      })
+      
+      if (response.ok) {
+        // Refresh the game data
+        await loadGameData()
+      } else {
+        console.error('Failed to delete game')
+      }
+    } catch (error) {
+      console.error('Error deleting game:', error)
+    }
+  }
+
+  function handlePersonalizationComplete(personalizedMoldId: string) {
+    // Immediately play the newly created personalized game
+    setSelectedPersonalizedGame(personalizedMoldId)
+    setViewMode('play-personalized')
     setSelectedMold(null)
+    
+    // Also refresh the game data for the dashboard
+    loadGameData()
   }
 
   function handleGameComplete() {
@@ -73,7 +130,7 @@ export default function PlayTab({ childId }: PlayTabProps) {
         moldId={selectedMold.id}
         childId={childId}
         onComplete={(personalizedMoldId: string) => {
-          handlePersonalizationComplete()
+          handlePersonalizationComplete(personalizedMoldId)
         }}
       />
     )
@@ -133,11 +190,7 @@ export default function PlayTab({ childId }: PlayTabProps) {
                   {personalizedGames.map((game) => (
                     <div
                       key={game.id}
-                      className="bg-green-50 border-3 border-green-200 rounded-lg p-4 hover:bg-green-100 transition-colors cursor-pointer"
-                      onClick={() => {
-                        setSelectedPersonalizedGame(game.id)
-                        setViewMode('play-personalized')
-                      }}
+                      className="bg-green-50 border-3 border-green-200 rounded-lg p-4 hover:bg-green-100 transition-colors"
                     >
                       <h3 className="font-bold text-green-800 mb-2">{game.title}</h3>
                       <div className="text-sm text-gray-600 mb-2">
@@ -146,9 +199,28 @@ export default function PlayTab({ childId }: PlayTabProps) {
                       <div className="text-sm text-gray-600 mb-3">
                         Type: {game.config?.game_type?.replace('_', ' ') || 'Game'}
                       </div>
-                      <button className="w-full px-4 py-2 bg-green-500 text-white font-bold rounded-lg border-2 border-green-600 hover:bg-green-600 transform hover:scale-105 transition-all">
-                        Play Now! 🎮
-                      </button>
+                      <div className="flex gap-2">
+                        <button 
+                          onClick={() => {
+                            setSelectedPersonalizedGame(game.id)
+                            setViewMode('play-personalized')
+                          }}
+                          className="flex-1 px-4 py-2 bg-green-500 text-white font-bold rounded-lg border-2 border-green-600 hover:bg-green-600 transform hover:scale-105 transition-all"
+                        >
+                          Play Now! 🎮
+                        </button>
+                        <button 
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            if (confirm('Are you sure you want to delete this game?')) {
+                              deletePersonalizedGame(game.id)
+                            }
+                          }}
+                          className="px-3 py-2 bg-red-500 text-white font-bold rounded-lg border-2 border-red-600 hover:bg-red-600 transform hover:scale-105 transition-all"
+                        >
+                          🗑️
+                        </button>
+                      </div>
                     </div>
                   ))}
                 </div>

@@ -58,9 +58,11 @@ export default function ChildDashboard() {
   }
 
   const renderTabContent = () => {
+    const childId = childProfile?.id
+    
     switch (activeTab) {
       case "play":
-        return <PlayTab />
+        return <PlayTab childId={childId} />
       case "mystuff":
         return <MyStuffTab />
       case "freeplay":
@@ -68,7 +70,7 @@ export default function ChildDashboard() {
       case "educatormenu":
         return <EducatorMenuTab onBackToChild={handleBackToChild} />
       default:
-        return <PlayTab />
+        return <PlayTab childId={childId} />
     }
   }
 

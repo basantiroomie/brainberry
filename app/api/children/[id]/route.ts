@@ -3,8 +3,9 @@ import { createSupabaseServerClient } from '@/lib/supabase-server'
 import { childCreateSchema } from '@/lib/schemas'
 import { requireEducator } from '@/lib/supabase-server'
 
-export async function GET(_req: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
+    const { id } = await params
     const supabase = await createSupabaseServerClient()
     
     const { data: child, error } = await supabase
@@ -13,7 +14,7 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
         *,
         assignments:MoldAssignment(*)
       `)
-      .eq('id', params.id)
+      .eq('id', id)
       .single()
     
     if (error) {
@@ -28,7 +29,7 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
   }
 }
 
-export async function PUT(req: NextRequest, { params }: { params: { id: string } }) {
+export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { user } = await requireEducator()
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -37,6 +38,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
     const parsed = childCreateSchema.safeParse(json)
     if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 })
     
+    const { id } = await params
     const data = parsed.data
     const supabase = await createSupabaseServerClient()
     
@@ -48,7 +50,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
         diagnosis: data.diagnosis,
         notes: data.notes
       })
-      .eq('id', params.id)
+      .eq('id', id)
       .select()
       .single()
     
@@ -64,17 +66,18 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
   }
 }
 
-export async function DELETE(_req: NextRequest, { params }: { params: { id: string } }) {
+export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { user } = await requireEducator()
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     
+    const { id } = await params
     const supabase = await createSupabaseServerClient()
     
     const { error } = await supabase
       .from('ChildProfile')
       .delete()
-      .eq('id', params.id)
+      .eq('id', id)
     
     if (error) {
       console.error('Database error:', error)

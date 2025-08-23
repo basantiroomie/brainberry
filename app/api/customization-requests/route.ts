@@ -1,17 +1,32 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase-server'
+import { generatePersonalizedContentWithGemini } from '@/lib/gemini-ai'
 
 // Submit a customization request for a child to personalize a mold
 export async function POST(req: NextRequest) {
   try {
+    console.log('Customization request received')
     const supabase = await createSupabaseServerClient()
-    const body = await req.json()
+    
+    let body;
+    try {
+      body = await req.json()
+    } catch (parseError) {
+      console.error('JSON parse error:', parseError)
+      return NextResponse.json({ error: 'Invalid JSON in request body' }, { status: 400 })
+    }
+    
     const { child_id, mold_id, prompt, target_elements } = body
 
+    console.log('Request data:', { child_id, mold_id, prompt, target_elements })
+
     if (!child_id || !mold_id || !prompt) {
+      console.log('Missing required fields')
       return NextResponse.json({ error: 'child_id, mold_id, and prompt are required' }, { status: 400 })
     }
 
+    console.log('Attempting to insert customization request')
+    
     // Create the customization request
     const { data: request, error: requestError } = await supabase
       .from('MoldCustomizationRequest')
@@ -25,13 +40,21 @@ export async function POST(req: NextRequest) {
       .select()
       .single()
 
+    console.log('Insert result:', { data: request, error: requestError })
+
     if (requestError) {
       console.error('Create customization request error:', requestError)
-      return NextResponse.json({ error: 'Failed to create request' }, { status: 500 })
+      return NextResponse.json({ 
+        error: 'Failed to create request', 
+        details: requestError.message,
+        code: requestError.code 
+      }, { status: 500 })
     }
 
-    // Trigger AI generation (simplified mock for now)
-    processCustomizationRequest(request.id, prompt, target_elements)
+    console.log('Request created successfully, triggering Gemini AI generation')
+    
+    // Trigger real AI generation with Gemini
+    processCustomizationRequestWithGemini(request.id, prompt, target_elements)
 
     return NextResponse.json({ 
       request_id: request.id, 
@@ -40,7 +63,7 @@ export async function POST(req: NextRequest) {
     })
 
   } catch (error) {
-    console.error('Customization request error:', error)
+    console.error('Customization request catch error:', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }
@@ -85,111 +108,111 @@ export async function GET(req: NextRequest) {
   }
 }
 
-// Mock AI processing function (replace with actual AI integration)
-async function processCustomizationRequest(requestId: string, prompt: string, targetElements: any) {
+// Real AI processing with Gemini (replaces mock function)
+async function processCustomizationRequestWithGemini(requestId: string, prompt: string, targetElements: any) {
   try {
-    // Simulate AI processing delay
+    console.log(`Starting Gemini AI processing for request ${requestId}`)
+    
+    // Use setTimeout to avoid blocking the initial response
     setTimeout(async () => {
-      const supabase = await createSupabaseServerClient()
-      
-      // Get the mold information to determine generation strategy
-      const { data: request } = await supabase
-        .from('MoldCustomizationRequest')
-        .select(`
-          child_id, 
-          mold_id,
-          GameMold!inner(structure_type, experience_type, rules, name)
-        `)
-        .eq('id', requestId)
-        .single()
+      try {
+        const supabase = await createSupabaseServerClient()
+        
+        // Get the mold information to determine generation strategy
+        const { data: request } = await supabase
+          .from('MoldCustomizationRequest')
+          .select(`
+            child_id, 
+            mold_id,
+            GameMold!inner(structure_type, experience_type, rules, name)
+          `)
+          .eq('id', requestId)
+          .single()
 
-      if (!request || !request.GameMold) {
-        throw new Error('Request or mold not found')
-      }
+        if (!request || !request.GameMold) {
+          throw new Error('Request or mold not found')
+        }
 
-      // Extract mold data (Supabase returns related data as array even for single relations)
-      const moldData = Array.isArray(request.GameMold) ? request.GameMold[0] : request.GameMold
+        // Extract mold data
+        const moldData = Array.isArray(request.GameMold) ? request.GameMold[0] : request.GameMold
+        
+        console.log(`Generating content for mold: ${moldData.name} (${moldData.experience_type})`)
 
-      // Generate content based on mold type
-      const mockGeneratedContent = await generatePersonalizedContentByMoldType(
-        moldData,
-        prompt,
-        targetElements
-      )
-      
-      // Update request with generated content
-      await supabase
-        .from('MoldCustomizationRequest')
-        .update({
-          status: 'complete',
-          result: mockGeneratedContent,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', requestId)
-
-      // Create personalized mold instance
-      if (request) {
+        // Generate content using real Gemini AI
+        const geminiGeneratedContent = await generatePersonalizedContentWithGemini(
+          moldData,
+          prompt,
+          targetElements
+        )
+        
+        console.log(`Gemini AI generation completed for request ${requestId}`)
+        
+        // Update request with generated content
         await supabase
+          .from('MoldCustomizationRequest')
+          .update({
+            status: 'complete',
+            result: geminiGeneratedContent,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', requestId)
+
+        // Create personalized mold instance
+        const moldTitle = `${geminiGeneratedContent.theme || 'My'} ${moldData.name}`
+        console.log(`Creating personalized mold: ${moldTitle}`)
+        
+        const { data: personalizedMold, error: moldError } = await supabase
           .from('PersonalizedMold')
           .insert({
             child_id: request.child_id,
             mold_id: request.mold_id,
-            title: `My ${extractTheme(prompt)} ${moldData.name}`,
-            config: mockGeneratedContent
+            title: moldTitle,
+            config: geminiGeneratedContent
           })
-      }
+          .select()
+          .single()
+          
+        if (moldError) {
+          throw new Error(`Failed to create personalized mold: ${moldError.message}`)
+        }
+        
+        // Update the customization request with the personalized mold ID
+        await supabase
+          .from('MoldCustomizationRequest')
+          .update({
+            personalization_id: personalizedMold.id,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', requestId)
+          
+        console.log(`Successfully created personalized mold for request ${requestId}`)
+        
+        return personalizedMold.id
 
-    }, 3000) // 3 second delay to simulate AI processing
+      } catch (processingError) {
+        console.error('Gemini AI processing error:', processingError)
+        
+        // Update request status to failed
+        const supabase = await createSupabaseServerClient()
+        await supabase
+          .from('MoldCustomizationRequest')
+          .update({
+            status: 'failed',
+            error: processingError instanceof Error ? processingError.message : 'AI generation failed',
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', requestId)
+      }
+    }, 2000) // 2 second delay to let the UI show "generating" status
 
   } catch (error) {
-    console.error('AI processing error:', error)
-    // Update request status to failed
-    const supabase = await createSupabaseServerClient()
-    await supabase
-      .from('MoldCustomizationRequest')
-      .update({
-        status: 'failed',
-        error: error instanceof Error ? error.message : 'Unknown error',
-        updated_at: new Date().toISOString()
-      })
-      .eq('id', requestId)
+    console.error('Failed to start Gemini AI processing:', error)
+    throw error
   }
 }
 
-function generateMockPersonalizedContent(prompt: string, targetElements: any) {
-  // Extract theme from prompt
-  const theme = extractTheme(prompt)
-  
-  // Generate mock personalized card game content
-  const personalizedCards = [
-    { pair_id: 1, image_url: `/assets/generated/${theme}/image1.png`, label: `${theme} 1` },
-    { pair_id: 2, image_url: `/assets/generated/${theme}/image2.png`, label: `${theme} 2` },
-    { pair_id: 3, image_url: `/assets/generated/${theme}/image3.png`, label: `${theme} 3` },
-    { pair_id: 4, image_url: `/assets/generated/${theme}/image4.png`, label: `${theme} 4` },
-    { pair_id: 5, image_url: `/assets/generated/${theme}/image5.png`, label: `${theme} 5` },
-    { pair_id: 6, image_url: `/assets/generated/${theme}/image6.png`, label: `${theme} 6` },
-    { pair_id: 7, image_url: `/assets/generated/${theme}/image7.png`, label: `${theme} 7` },
-    { pair_id: 8, image_url: `/assets/generated/${theme}/image8.png`, label: `${theme} 8` }
-  ]
-
-  return {
-    game_type: 'matching_cards',
-    theme: theme,
-    personalized_prompt: prompt,
-    cards: personalizedCards,
-    background_music: `/assets/generated/${theme}/bg-music.mp3`,
-    success_sounds: {
-      match: `/assets/generated/${theme}/match-sound.mp3`,
-      victory: `/assets/generated/${theme}/victory-sound.mp3`
-    },
-    ui_customization: {
-      primary_color: getThemeColor(theme),
-      card_back_design: `/assets/generated/${theme}/card-back.png`,
-      success_message: `Great job with your ${theme} game!`
-    },
-    generated_at: new Date().toISOString()
-  }
-}
+// Note: All mock AI functions have been removed and replaced with real Gemini AI integration
+// The system now uses Google's Gemini 2.0 Flash model for content generation
 
 // Polymorphic generation function that handles different mold types
 async function generatePersonalizedContentByMoldType(

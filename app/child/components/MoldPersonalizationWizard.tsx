@@ -15,6 +15,7 @@ export default function MoldPersonalizationWizard({ moldId, childId, onComplete 
   const [requestId, setRequestId] = useState<string | null>(null)
   const [status, setStatus] = useState<'idle' | 'submitting' | 'generating' | 'complete' | 'error'>('idle')
   const [generatedContent, setGeneratedContent] = useState<any>(null)
+  const [personalizedMoldId, setPersonalizedMoldId] = useState<string | null>(null)
 
   const promptSuggestions = [
     "My favorite animals like cats, dogs, and elephants",
@@ -79,13 +80,13 @@ export default function MoldPersonalizationWizard({ moldId, childId, onComplete 
           setStatus('complete')
           setStep(4)
           
-          // Get the personalized mold that was created
-          const moldsResponse = await fetch(`/api/personalized-molds?child_id=${childId}`)
-          const molds = await moldsResponse.json()
-          const latestMold = molds[0] // Most recent
-          
-          if (latestMold) {
-            onComplete(latestMold.id)
+          // Store the personalization_id from the customization request
+          if (data.personalization_id) {
+            setPersonalizedMoldId(data.personalization_id)
+          } else {
+            console.error('No personalization_id found in completed request')
+            // Log the full response for debugging
+            console.log('Full response data:', data)
           }
           
         } else if (data.status === 'failed') {
@@ -271,8 +272,10 @@ export default function MoldPersonalizationWizard({ moldId, childId, onComplete 
             
             <button
               onClick={() => {
-                // This will be handled by the parent component
-                window.location.href = `/molds/${moldId}/play`
+                // Pass the personalized mold ID to parent component
+                if (generatedContent) {
+                  onComplete(personalizedMoldId || '')
+                }
               }}
               className="px-8 py-4 bg-chart-1 text-white border-4 border-black shadow-brutal-xl hover:shadow-brutal font-bold text-xl flex items-center space-x-3 mx-auto transform hover:scale-105 transition-all"
             >

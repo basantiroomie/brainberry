@@ -2,6 +2,8 @@
 
 import { useState, useEffect } from 'react'
 import { ArrowLeft, RotateCcw, Volume2, VolumeX } from 'lucide-react'
+import { useImagePreloader, SmartImage } from '@/components/ImagePreloader'
+import GameLoadingScreen from '@/components/GameLoadingScreen'
 
 interface SortingGamePlayerProps {
   gameConfig: any
@@ -12,16 +14,23 @@ interface SortingGamePlayerProps {
 
 interface Item {
   id: string
+  name?: string
+  label?: string
   image_url: string
-  label: string
   category_id: number
+  description?: string
   placed: boolean
+  ai_generation?: {
+    fallback_emoji?: string
+    gemini_generated?: boolean
+  }
 }
 
 interface Category {
   id: number
   name: string
   color: string
+  description?: string
   items: Item[]
 }
 
@@ -33,12 +42,63 @@ export default function SortingGamePlayer({ gameConfig, childId, onComplete, onB
   const [gameComplete, setGameComplete] = useState(false)
   const [soundEnabled, setSoundEnabled] = useState(true)
   const [gameStarted, setGameStarted] = useState(false)
+  const [imagesReady, setImagesReady] = useState(false)
+  const [loadingProgress, setLoadingProgress] = useState(0)
+
+  // Extract image URLs for preloading
+  const imageUrls = gameConfig?.categories?.flatMap((cat: any) => 
+    cat.items?.map((item: any) => item.image_url) || []
+  ) || []
+  
+  const fallbackEmojis = gameConfig?.categories?.flatMap((cat: any) => 
+    cat.items?.map((item: any) => item.ai_generation?.fallback_emoji || '⭐') || []
+  ) || []
+
+  // Preload images
+  const { allLoaded } = useImagePreloader({
+    images: imageUrls,
+    onAllLoaded: () => setImagesReady(true),
+    onProgress: (loaded, total) => setLoadingProgress(loaded),
+    fallbackEmojis
+  })
+
+  // Sound effects
+  const playSound = (type: 'correct' | 'wrong' | 'complete') => {
+    if (!soundEnabled) return
+    
+    // Create audio context for simple beeps
+    const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)()
+    const oscillator = audioContext.createOscillator()
+    const gainNode = audioContext.createGain()
+    
+    oscillator.connect(gainNode)
+    gainNode.connect(audioContext.destination)
+    
+    // Different frequencies for different sounds
+    switch (type) {
+      case 'correct':
+        oscillator.frequency.setValueAtTime(800, audioContext.currentTime) // High pitch
+        break
+      case 'wrong':
+        oscillator.frequency.setValueAtTime(200, audioContext.currentTime) // Low pitch
+        break
+      case 'complete':
+        oscillator.frequency.setValueAtTime(1000, audioContext.currentTime) // Very high pitch
+        break
+    }
+    
+    gainNode.gain.setValueAtTime(0.1, audioContext.currentTime)
+    gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.3)
+    
+    oscillator.start(audioContext.currentTime)
+    oscillator.stop(audioContext.currentTime + 0.3)
+  }
 
   useEffect(() => {
-    if (gameConfig?.categories) {
+    if (gameConfig?.categories && imagesReady) {
       initializeSortingGame()
     }
-  }, [gameConfig])
+  }, [gameConfig, imagesReady])
 
   function initializeSortingGame() {
     // Set up categories
@@ -70,39 +130,48 @@ export default function SortingGamePlayer({ gameConfig, childId, onComplete, onB
     setGameStarted(false)
   }
 
-  function handleDragStart(item: Item) {
+  function handleDragStart(e: React.DragEvent, item: Item) {
+    e.dataTransfer.setData('text/plain', item.id)
+    e.dataTransfer.effectAllowed = 'move'
     setDraggedItem(item)
   }
 
   function handleDragOver(e: React.DragEvent) {
     e.preventDefault()
+    e.dataTransfer.dropEffect = 'move'
   }
 
   function handleDrop(e: React.DragEvent, categoryId: number) {
     e.preventDefault()
     
-    if (!draggedItem) return
+    const itemId = e.dataTransfer.getData('text/plain')
+    const item = draggedItem || unplacedItems.find(i => i.id === itemId)
+    
+    if (!item) return
     if (!gameStarted) setGameStarted(true)
 
-    const isCorrectCategory = draggedItem.category_id === categoryId
+    const isCorrectCategory = item.category_id === categoryId
 
     if (isCorrectCategory) {
       // Correct placement
+      playSound('correct')
       setCategories(prev => prev.map(cat => 
         cat.id === categoryId 
-          ? { ...cat, items: [...cat.items, { ...draggedItem, placed: true }] }
+          ? { ...cat, items: [...cat.items, { ...item, placed: true }] }
           : cat
       ))
-      setUnplacedItems(prev => prev.filter(item => item.id !== draggedItem.id))
+      setUnplacedItems(prev => prev.filter(unplacedItem => unplacedItem.id !== item.id))
       setScore(prev => prev + 10)
 
       // Check if game is complete
       if (unplacedItems.length === 1) { // -1 because we just removed one
+        playSound('complete')
         setGameComplete(true)
         onComplete?.()
       }
     } else {
       // Wrong placement - show feedback but don't place
+      playSound('wrong')
       // TODO: Add visual feedback for wrong placement
     }
 
@@ -121,6 +190,18 @@ export default function SortingGamePlayer({ gameConfig, childId, onComplete, onB
 
   const theme = gameConfig?.theme || 'default'
 
+  // Show loading screen while images are loading
+  if (!imagesReady) {
+    return (
+      <GameLoadingScreen 
+        progress={loadingProgress}
+        total={imageUrls.length}
+        gameTitle="Sorting Game"
+        theme={theme}
+      />
+    )
+  }
+
   return (
     <div className="min-h-screen bg-purple-100 p-4">
       {/* Header */}
@@ -134,7 +215,7 @@ export default function SortingGamePlayer({ gameConfig, childId, onComplete, onB
         </button>
 
         <h1 className="text-2xl font-bold text-center text-purple-800">
-          Sort Your {theme}! 🗂️
+          {gameConfig?.theme || 'Sort Your Items!'} 🗂️
         </h1>
 
         <button
@@ -156,10 +237,10 @@ export default function SortingGamePlayer({ gameConfig, childId, onComplete, onB
       {!gameStarted && (
         <div className="text-center mb-6 p-4 bg-white rounded-lg border-4 border-purple-300 shadow-lg max-w-md mx-auto">
           <p className="text-lg font-bold text-purple-800 mb-2">
-            Drag and drop items into the right categories! 📦
+            {gameConfig?.instructions || 'Drag and drop items into the right categories! 📦'}
           </p>
           <p className="text-sm text-gray-600">
-            Match each {theme} item with its correct group
+            {gameConfig?.theme ? `Enjoy your ${gameConfig.theme}!` : 'Match each item with its correct group'}
           </p>
         </div>
       )}
@@ -186,19 +267,24 @@ export default function SortingGamePlayer({ gameConfig, childId, onComplete, onB
                   key={item.id}
                   className="bg-green-100 border-2 border-green-500 rounded-lg p-2 text-center"
                 >
-                  <div className="text-2xl mb-1">
-                    {theme === 'animals' ? '🐾' : 
-                     theme === 'food' ? '🍎' :
-                     theme === 'toys' ? '🧸' : '⭐'}
+                  <div className="mb-1">
+                    <div className="w-12 h-12 mx-auto rounded">
+                      <SmartImage
+                        src={item.image_url}
+                        alt={item.name || item.label || 'Game item'}
+                        className="w-full h-full rounded"
+                        fallbackEmoji={item.ai_generation?.fallback_emoji || '⭐'}
+                      />
+                    </div>
                   </div>
-                  <div className="text-xs font-bold text-gray-800">{item.label}</div>
+                  <div className="text-xs font-bold text-gray-800">{item.name || item.label}</div>
                 </div>
               ))}
             </div>
             
             {category.items.length === 0 && (
               <div className="text-center text-gray-400 py-8">
-                Drop {theme} items here
+                {category.description || `Drop items here`}
               </div>
             )}
           </div>
@@ -217,16 +303,21 @@ export default function SortingGamePlayer({ gameConfig, childId, onComplete, onB
               <div
                 key={item.id}
                 draggable
-                onDragStart={() => handleDragStart(item)}
+                onDragStart={(e) => handleDragStart(e, item)}
                 onClick={() => handleItemClick(item)}
                 className="bg-yellow-100 border-4 border-yellow-300 rounded-lg p-3 text-center cursor-grab active:cursor-grabbing hover:bg-yellow-200 transform hover:scale-105 transition-all"
               >
-                <div className="text-2xl mb-1">
-                  {theme === 'animals' ? '🐾' : 
-                   theme === 'food' ? '🍎' :
-                   theme === 'toys' ? '🧸' : '⭐'}
+                <div className="mb-1">
+                  <div className="w-12 h-12 mx-auto rounded">
+                    <SmartImage
+                      src={item.image_url}
+                      alt={item.name || item.label || 'Game item'}
+                      className="w-full h-full rounded"
+                      fallbackEmoji={item.ai_generation?.fallback_emoji || '⭐'}
+                    />
+                  </div>
                 </div>
-                <div className="text-xs font-bold text-gray-800">{item.label}</div>
+                <div className="text-xs font-bold text-gray-800">{item.name || item.label}</div>
               </div>
             ))}
           </div>
@@ -240,7 +331,7 @@ export default function SortingGamePlayer({ gameConfig, childId, onComplete, onB
             🎉 Perfect Sorting! 🎉
           </h2>
           <p className="text-lg text-gray-800 mb-4">
-            {gameConfig?.success_message || `You sorted all the ${theme} perfectly!`}
+            {gameConfig?.ui_customization?.success_message || `You sorted all the items perfectly!`}
           </p>
           <div className="text-sm text-gray-600 mb-4">
             Final Score: {score} points
