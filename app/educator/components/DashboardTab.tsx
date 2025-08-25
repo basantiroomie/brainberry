@@ -18,10 +18,24 @@ export default function DashboardTab() {
             fetch('/api/assignments'),
             fetch('/api/sessions')
           ])
-          if (cRes.ok) setRealChildren(await cRes.json())
-          if (aRes.ok) setRealAssignments(await aRes.json())
-          if (sRes.ok) setRealSessions(await sRes.json())
-        } catch { }
+          if (cRes.ok) {
+            const childrenData = await cRes.json()
+            setRealChildren(Array.isArray(childrenData) ? childrenData : (childrenData?.data || []))
+          }
+          if (aRes.ok) {
+            const assignmentsData = await aRes.json()
+            setRealAssignments(Array.isArray(assignmentsData) ? assignmentsData : (assignmentsData?.data || []))
+          }
+          if (sRes.ok) {
+            const sessionsData = await sRes.json()
+            setRealSessions(Array.isArray(sessionsData) ? sessionsData : (sessionsData?.data || []))
+          }
+        } catch (error) {
+          // Set empty arrays on error
+          setRealChildren([])
+          setRealAssignments([])
+          setRealSessions([])
+        }
       })()
     }
   }, [useMock])

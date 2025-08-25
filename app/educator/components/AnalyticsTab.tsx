@@ -54,7 +54,7 @@ export default function AnalyticsTab() {
     if (children[0]) {
       for (let i=0;i<children[0].timeline.length;i++) {
         const day = children[0].timeline[i].day
-        const dayEntries = children.map(c=>c.timeline[i])
+        const dayEntries = Array.isArray(children) ? children.map(c=>c.timeline[i]) : []
         const sessions = dayEntries.reduce((a,b)=>a+b.sessions,0)
         const duration = dayEntries.reduce((a,b)=>a+b.duration,0)
         const avgCompletion = Math.round(dayEntries.reduce((a,b)=>a+b.avgCompletion,0)/children.length)
@@ -79,13 +79,15 @@ export default function AnalyticsTab() {
   }
 
   function deriveInsights(data: any) {
-    if(!data || !data.skills) return null
+    if(!data || !data.skills || !Array.isArray(data.skills)) {
+      return { strengths: [], focus: [], momentum: null }
+    }
     const skillsSorted = [...data.skills].sort((a:any,b:any)=>b.value-a.value)
     const strengths = skillsSorted.slice(0,3)
     const focus = skillsSorted.slice(-3).reverse()
     // Engagement momentum: compare last third vs first third of timeline sessions or engagement
     let momentum: string | null = null
-    if (data.timeline && data.timeline.length >= 6) {
+    if (data.timeline && Array.isArray(data.timeline) && data.timeline.length >= 6) {
       const third = Math.floor(data.timeline.length/3)
       const first = data.timeline.slice(0,third)
       const last = data.timeline.slice(-third)
@@ -102,10 +104,18 @@ export default function AnalyticsTab() {
       // children set when dataset generated
       return
     }
-    const res = await fetch('/api/children')
-    if (res.ok) {
-      const c = await res.json()
-      setChildren(c)
+    try {
+      const res = await fetch('/api/children')
+      if (res.ok) {
+        const c = await res.json()
+        // Ensure we always set an array
+        setChildren(Array.isArray(c) ? c : (c?.data || []))
+      } else {
+        setChildren([])
+      }
+    } catch (error) {
+      console.error('Error loading children:', error)
+      setChildren([])
     }
   }
   async function loadSummary() {
@@ -184,7 +194,7 @@ export default function AnalyticsTab() {
               <label className="block font-bold mb-2 text-sm">Child:</label>
               <select value={selectedChild} onChange={e=>setSelectedChild(e.target.value)} className="border-2 border-black p-3 font-bold">
                 <option value="">All Children</option>
-                {children.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                {Array.isArray(children) && children.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
               </select>
             </div>
             <div>
@@ -319,13 +329,13 @@ export default function AnalyticsTab() {
               <div>
                 <div className="mb-1">Top Strengths</div>
                 <ul className="space-y-1">
-                  {insights.strengths.map((s:any)=>(<li key={s.skill} className="flex justify-between bg-gray-50 border px-2 py-1"><span>{s.skill}</span><span className="text-chart-2">{s.value}%</span></li>))}
+                  {Array.isArray(insights.strengths) && insights.strengths.map((s:any)=>(<li key={s.skill} className="flex justify-between bg-gray-50 border px-2 py-1"><span>{s.skill}</span><span className="text-chart-2">{s.value}%</span></li>))}
                 </ul>
               </div>
               <div>
                 <div className="mb-1">Focus Areas</div>
                 <ul className="space-y-1">
-                  {insights.focus.map((s:any)=>(<li key={s.skill} className="flex justify-between bg-gray-50 border px-2 py-1"><span>{s.skill}</span><span className="text-red-600">{s.value}%</span></li>))}
+                  {Array.isArray(insights.focus) && insights.focus.map((s:any)=>(<li key={s.skill} className="flex justify-between bg-gray-50 border px-2 py-1"><span>{s.skill}</span><span className="text-red-600">{s.value}%</span></li>))}
                 </ul>
               </div>
               <div className="flex items-center justify-between bg-gray-100 p-2 border">
