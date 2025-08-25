@@ -1,5 +1,23 @@
 import { z } from 'zod'
 
+// Avatar System Schemas (defined early as they're referenced by other schemas)
+export const avatarPermissionsSchema = z.object({
+  can_customize: z.boolean().default(true),
+  can_chat: z.boolean().default(true),
+  chat_time_limit_minutes: z.number().int().positive().default(30)
+})
+
+export const readyPlayerMeConfigSchema = z.object({
+  id: z.string(),
+  assets: z.record(z.string()), // category -> asset_id mapping
+  morphTargets: z.record(z.number()).optional(),
+  metadata: z.object({
+    created_from_photo: z.boolean(),
+    last_customized: z.string(),
+    customization_count: z.number().int().min(0)
+  })
+})
+
 // Educator Account Schema
 export const educatorAccountSchema = z.object({
   id: z.string().uuid(),
@@ -27,6 +45,9 @@ export const childProfileSchema = z.object({
   notes: z.string().optional(),
   access_code: z.string().max(6),
   educator_id: z.string().uuid(),
+  avatar_url: z.string().url().optional(),
+  avatar_headshot_url: z.string().url().optional(),
+  avatar_permissions: avatarPermissionsSchema.optional(),
   created_at: z.string(),
   updated_at: z.string()
 })
@@ -167,3 +188,62 @@ export type MoldAssignmentCreate = z.infer<typeof moldAssignmentCreateSchema>
 
 export type GameSession = z.infer<typeof gameSessionSchema>
 export type GameSessionCreate = z.infer<typeof gameSessionCreateSchema>
+
+
+export const createAvatarRequestSchema = z.object({
+  childId: z.string().uuid(),
+  photo: z.instanceof(File)
+})
+
+export const updateAvatarRequestSchema = z.object({
+  childId: z.string().uuid(),
+  avatarConfig: readyPlayerMeConfigSchema
+})
+
+export const avatarResponseSchema = z.object({
+  success: z.boolean(),
+  avatarUrl: z.string().url().optional(),
+  headshotUrl: z.string().url().optional(),
+  error: z.string().optional()
+})
+
+export const ttsConfigSchema = z.object({
+  engine: z.enum(['speechSynthesis', 'elevenlabs']),
+  preferredVoices: z.array(z.string()),
+  fallbackVoice: z.string(),
+  rate: z.number().min(0.1).max(2.0).default(0.9),
+  pitch: z.number().min(0.1).max(2.0).default(1.1),
+  volume: z.number().min(0).max(1).default(0.8),
+  voiceFilters: z.object({
+    excludeRobotic: z.boolean().default(true),
+    preferNeural: z.boolean().default(true),
+    preferLocal: z.boolean().default(true)
+  }).optional()
+})
+
+export const elevenLabsConfigSchema = z.object({
+  apiKey: z.string(),
+  voiceId: z.string(),
+  model: z.string().default('eleven_monolingual_v1'),
+  stability: z.number().min(0).max(1).default(0.5),
+  similarity_boost: z.number().min(0).max(1).default(0.5)
+})
+
+// File upload validation for avatar photos
+export const avatarPhotoUploadSchema = z.object({
+  file: z.instanceof(File)
+    .refine((file) => file.size <= 10 * 1024 * 1024, 'File size must be less than 10MB')
+    .refine(
+      (file) => ['image/jpeg', 'image/png', 'image/jpg'].includes(file.type),
+      'File must be a JPEG or PNG image'
+    )
+})
+
+// Avatar type exports
+export type AvatarPermissions = z.infer<typeof avatarPermissionsSchema>
+export type ReadyPlayerMeConfig = z.infer<typeof readyPlayerMeConfigSchema>
+export type CreateAvatarRequest = z.infer<typeof createAvatarRequestSchema>
+export type UpdateAvatarRequest = z.infer<typeof updateAvatarRequestSchema>
+export type AvatarResponse = z.infer<typeof avatarResponseSchema>
+export type TTSConfig = z.infer<typeof ttsConfigSchema>
+export type ElevenLabsConfig = z.infer<typeof elevenLabsConfigSchema>

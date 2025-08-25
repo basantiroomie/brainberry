@@ -13,8 +13,15 @@ export interface ChildProfile {
   age?: number
   diagnosis?: string
   notes?: string
-  access_code: string
-  educator_id: string
+  accessCode: string
+  educatorId: string
+  avatar_url?: string
+  avatar_headshot_url?: string
+  avatar_permissions?: {
+    can_customize: boolean
+    can_chat: boolean
+    chat_time_limit_minutes: number
+  }
   created_at: string
   updated_at: string
 }
