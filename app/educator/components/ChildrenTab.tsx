@@ -156,7 +156,7 @@ export default function ChildrenTab() {
   }
 
   if (selectedChild) {
-    const child = children.find(c => c.id === selectedChild)
+    const child = Array.isArray(children) ? children.find(c => c.id === selectedChild) : undefined
     return (
       <div className="space-y-6">
         {/* Child Header */}
@@ -369,7 +369,7 @@ export default function ChildrenTab() {
       {/* Children List */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {loading && <div className="col-span-2 text-center text-sm font-bold text-gray-500">Loading...</div>}
-        {children.map(child => (
+        {Array.isArray(children) && children.map(child => (
           <div key={child.id} className="bg-white border-4 border-black shadow-brutal-xl p-6 hover:shadow-brutal-2xl transition-all">
             <div className="flex items-center space-x-4 mb-4">
               <div className="text-white rounded-full w-16 h-16 flex items-center justify-center bg-chart-2">
@@ -390,7 +390,7 @@ export default function ChildrenTab() {
             </div>
           </div>
         ))}
-        {!loading && children.length===0 && <div className="col-span-2 text-center text-sm font-bold text-gray-500">No children yet – add one above.</div>}
+        {!loading && Array.isArray(children) && children.length===0 && <div className="col-span-2 text-center text-sm font-bold text-gray-500">No children yet – add one above.</div>}
       </div>
 
       {assignModal && (
