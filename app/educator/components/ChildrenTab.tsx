@@ -4,7 +4,7 @@ import { useEffect, useState } from "react"
 import { toast } from 'sonner'
 import { useMockData } from './MockDataContext'
 
-interface Child { id: string; name: string; age: number; diagnosis: string; notes?: string | null; access_code?: string | null }
+interface Child { id: string; name: string; age: number; diagnosis: string; notes?: string | null; access_code?: string | null; educator_id?: string }
 interface Assignment { id: string; moldId: string; childId: string; status: string; progress: number; mold: { id: string; name: string; difficulty: string }; }
 interface MoldLite { id: string; name: string; difficulty: string; primaryObjective: string; meta?: any }
 
@@ -32,6 +32,17 @@ export default function ChildrenTab() {
 
   const { useMock, dataset, addChild, addAssignment, updateAssignmentProgress } = useMockData()
 
+  // Debug logging
+  useEffect(() => {
+    console.log('ChildrenTab state debug:', {
+      useMock,
+      childrenCount: children.length,
+      children: children,
+      loading,
+      selectedChild
+    })
+  }, [useMock, children, loading, selectedChild])
+
   // Generate access code only once when component mounts
   useEffect(() => {
     if (!newChild.accessCode) {
@@ -40,13 +51,30 @@ export default function ChildrenTab() {
   }, [newChild.accessCode])
 
   async function fetchChildren() {
-    if (useMock) { setChildren((dataset?.children||[]) as any); return }
+    if (useMock) { 
+      setChildren((dataset?.children||[]) as any); 
+      return 
+    }
+    
     setLoading(true)
     try {
       const res = await fetch('/api/children')
-      if (res.ok) setChildren(await res.json())
-      else toast.error('Failed to load children')
-    } finally { setLoading(false) }
+      if (res.ok) {
+        const response = await res.json()
+        // Handle wrapped response structure
+        const childrenData = response.success ? response.data : response
+        console.log('Fetched children data:', childrenData)
+        setChildren(childrenData || [])
+      } else {
+        console.error('Failed to load children:', res.status)
+        toast.error('Failed to load children')
+      }
+    } catch (error) {
+      console.error('Error fetching children:', error)
+      toast.error('Error loading children')
+    } finally { 
+      setLoading(false) 
+    }
   }
 
   async function deleteChild(childId: string) {
@@ -390,7 +418,28 @@ export default function ChildrenTab() {
             </div>
           </div>
         ))}
-        {!loading && Array.isArray(children) && children.length===0 && <div className="col-span-2 text-center text-sm font-bold text-gray-500">No children yet – add one above.</div>}
+        {!loading && Array.isArray(children) && children.length===0 && (
+          <div className="col-span-2 text-center space-y-4 p-8">
+            <div className="text-lg font-bold text-gray-700">No children found</div>
+            <div className="text-sm text-gray-600">
+              {useMock ? (
+                "Mock mode is enabled but no mock children are available."
+              ) : (
+                <div className="space-y-2">
+                  <p>Either:</p>
+                  <ul className="text-left inline-block space-y-1">
+                    <li>• You haven't created any children yet</li>
+                    <li>• You need to be authenticated as an educator</li>
+                    <li>• The database connection isn't working properly</li>
+                  </ul>
+                  <p className="text-xs text-gray-500 mt-4">
+                    Check the browser console for debugging information.
+                  </p>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
       </div>
 
       {assignModal && (

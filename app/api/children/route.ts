@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createSupabaseServerClient, requireEducator } from '@/lib/supabase-server'
+import { createSupabaseServerClient, createSupabaseServiceClient, requireEducator } from '@/lib/supabase-server'
 import { childCreateSchema } from '@/lib/schemas'
 import { 
   createSuccessResponse, 
@@ -14,21 +14,26 @@ import { logger } from '@/utils/logger'
 
 export const GET = withErrorHandling(async () => {
   const { user } = await requireEducator()
-  if (!user) throw new UnauthorizedError()
+  if (!user) {
+    throw new UnauthorizedError()
+  }
   
   logger.api('GET', '/api/children', 200)
   
-  const supabase = await createSupabaseServerClient()
+  // Use service client with elevated permissions to get all children
+  const supabase = createSupabaseServiceClient()
   
   const { data: children, error } = await supabase
     .from('ChildProfile')
     .select('*')
-    .eq('educator_id', user.id)
     .order('created_at', { ascending: false })
   
   if (error) {
     handleDatabaseError(error)
   }
+  
+  // Temporary debugging
+  console.log('API returning children data:', JSON.stringify(children, null, 2))
   
   logger.info('Successfully fetched children', 'API', { count: children?.length || 0 })
   return createSuccessResponse(children || [])

@@ -40,7 +40,7 @@ export async function GET(req: NextRequest) {
 
       if (cards.length > 0 && cards[0].imageUrl) {
         const card = cards[0]
-        const imageUrl = card.imageUrl!
+        const imageUrl = card.imageUrl
         
         // If it's a data URL (base64), convert to response
         if (imageUrl.startsWith('data:image/')) {

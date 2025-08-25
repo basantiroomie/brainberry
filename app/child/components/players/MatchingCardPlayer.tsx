@@ -180,11 +180,11 @@ export default function MatchingCardPlayer({ gameConfig, childId, onComplete, on
   function playSound(soundType: 'match' | 'victory' | 'flip') {
     // In a real implementation, you would play actual audio files
     // For now, we'll just log the sound action
-    console.log(`Playing ${soundType} sound for ${theme} theme`)
+    logger.debug(`Playing ${soundType} sound for ${theme} theme`, 'GAME_AUDIO')
     
     // Example of how to play real sounds:
     // const audio = new Audio(gameConfig?.success_sounds?.[soundType])
-    // audio.play().catch(console.error)
+    // audio.play().catch((error) => logger.warn('Audio playback failed', error, 'GAME_AUDIO'))
   }
 
   function resetGame() {

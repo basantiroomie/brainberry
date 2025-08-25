@@ -13,8 +13,8 @@ export interface ChildProfile {
   age?: number
   diagnosis?: string
   notes?: string
-  accessCode: string
-  educatorId: string
+  access_code: string
+  educator_id: string
   created_at: string
   updated_at: string
 }

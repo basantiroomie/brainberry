@@ -1,6 +1,7 @@
 import { cookies } from 'next/headers'
 import { createServerClient } from '@supabase/ssr'
 import { createClient } from '@supabase/supabase-js'
+import { logger } from '../utils/logger'
 
 export async function createSupabaseServerClient() {
   const cookieStore = await cookies()
@@ -30,10 +31,10 @@ export async function requireEducator() {
   const supabase = await createSupabaseServerClient()
   const { data: { user }, error } = await supabase.auth.getUser()
   
-  console.log('Auth check - User:', user?.id, 'Error:', error)
+  logger.debug('Auth check', 'SUPABASE', { userId: user?.id, hasError: !!error })
   
-  if (error || !user) {
-    console.log('Authentication failed - no user or error')
+  if (!user || error) {
+    logger.warn('Authentication failed - no user or error', undefined, 'SUPABASE')
     return { user: null }
   }
   return { user }
