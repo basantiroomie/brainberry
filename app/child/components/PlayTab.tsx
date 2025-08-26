@@ -1,16 +1,17 @@
 "use client"
 
 import { useState, useEffect } from 'react'
-import { Gamepad, Sparkles, ArrowLeft } from 'lucide-react'
+import { Gamepad, Sparkles, ArrowLeft, Palette } from 'lucide-react'
 import MoldPersonalizationWizard from './MoldPersonalizationWizard'
 import PolymorphicGamePlayer from './PolymorphicGamePlayer'
+import CanvasColoringGame from '../Games/CanvasColoringGame'
 import { imageCache } from '@/lib/image-cache'
 
 interface PlayTabProps {
   childId: string
 }
 
-type ViewMode = 'dashboard' | 'personalize' | 'play-personalized' | 'expression-game'
+type ViewMode = 'dashboard' | 'personalize' | 'play-personalized' | 'expression-game' | 'canvas'
 
 export default function PlayTab({ childId }: { childId: string }) {
   const [viewMode, setViewMode] = useState<ViewMode>('dashboard')
@@ -177,6 +178,9 @@ export default function PlayTab({ childId }: { childId: string }) {
   }
 
   // Render different views based on mode
+  if (viewMode === 'canvas') {
+    return <CanvasColoringGame onBack={handleBackToDashboard} />
+  }
   if (viewMode === 'expression-game' && selectedMold) {
     const ExpressionGame = require('../Games/ExpressionGame').default
     return <ExpressionGame onBack={handleBackToDashboard} />
@@ -204,67 +208,95 @@ export default function PlayTab({ childId }: { childId: string }) {
     )
   }
 
+  // Helper function to get game icon
+  function getGameIcon(gameType: string) {
+    switch (gameType?.toLowerCase()) {
+      case 'matching':
+      case 'memory':
+        return '🧠'
+      case 'sorting':
+        return '📦'
+      case 'expression':
+        return '😊'
+      case 'puzzle':
+        return '🧩'
+      case 'math':
+        return '🔢'
+      case 'reading':
+        return '📚'
+      default:
+        return '🎮'
+    }
+  }
+
+  function getMoldIcon(category: string) {
+    switch (category?.toLowerCase()) {
+      case 'memory':
+        return '🧠'
+      case 'creativity':
+        return '🎨'
+      case 'problem solving':
+        return '🧩'
+      case 'language':
+        return '📝'
+      case 'math':
+        return '🔢'
+      case 'emotional':
+        return '😊'
+      default:
+        return '⭐'
+    }
+  }
+
   // Dashboard view
   return (
-    <div className="p-6 bg-gradient-to-br from-blue-100 to-purple-100 min-h-screen">
-      <div className="max-w-6xl mx-auto">
-        {/* Header */}
-        <div className="text-center mb-8">
-          <h1 className="text-4xl font-bold text-gray-800 mb-4">
-            🎮 Your Gaming World! 🎮
-          </h1>
-          <p className="text-lg text-gray-600">
-            Play your personalized games or create new ones!
-          </p>
-        </div>
-
-        {loading ? (
-          <div className="text-center py-12">
-            <div className="animate-spin rounded-full h-16 w-16 border-4 border-blue-500 border-t-transparent mx-auto mb-4"></div>
-            <p className="text-xl font-bold text-gray-600">Loading your games... 🎲</p>
+    <div className="space-y-8 p-6">
+      {/* Header */}
+      <div className="text-center mb-8">
+        <div className="inline-block transform -rotate-2 mb-4">
+          <div className="bg-chart-2 text-white px-8 py-4 border-4 border-black shadow-brutal-xl font-bold text-4xl transform hover:rotate-1 transition-transform">
+             GAME WORLD! 
           </div>
-        ) : (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-            {/* Your Personalized Games */}
-            <div className="bg-white rounded-lg border-4 border-green-300 shadow-lg p-6">
-              <h2 className="text-2xl font-bold text-green-800 mb-4 flex items-center gap-2">
-                <Gamepad size={28} />
-                Your Personalized Games
-              </h2>
-              
-              {personalizedGames.length === 0 ? (
-                <div className="text-center py-8">
-                  <div className="text-4xl mb-4">🎯</div>
-                  <p className="text-gray-600 mb-4">
-                    You haven't created any personalized games yet!
-                  </p>
-                  <p className="text-sm text-gray-500">
-                    Choose a game template below to make it your own.
-                  </p>
-                </div>
-              ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {personalizedGames.map((game) => (
-                    <div
-                      key={game.id}
-                      className="bg-green-50 border-3 border-green-200 rounded-lg p-4 hover:bg-green-100 transition-colors"
-                    >
-                      <h3 className="font-bold text-green-800 mb-2">{game.title}</h3>
-                      <div className="text-sm text-gray-600 mb-2">
-                        Theme: {game.config?.theme || 'Custom'}
+        </div>
+      </div>
+
+      {loading ? (
+        <div className="text-center py-12">
+          <div className="animate-spin rounded-full h-16 w-16 border-4 border-blue-500 border-t-transparent mx-auto mb-4"></div>
+          <p className="text-xl font-bold text-gray-600">Loading your games... 🎲</p>
+        </div>
+      ) : (
+        <>
+          {/* Your Personalized Games Section */}
+          {personalizedGames.length > 0 && (
+            <div>
+              <h2 className="text-2xl font-bold mb-6 text-center">My Games</h2>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {personalizedGames.map((game) => (
+                  <div
+                    key={game.id}
+                    className="bg-white border-4 border-black shadow-brutal-xl p-6"
+                  >
+                    <div className="text-center">
+                      <div className="bg-chart-1 text-white rounded-full w-16 h-16 flex items-center justify-center mx-auto mb-4">
+                        <span className="text-2xl">{getGameIcon(game.config?.game_type)}</span>
                       </div>
-                      <div className="text-sm text-gray-600 mb-3">
-                        Type: {game.config?.game_type?.replace('_', ' ') || 'Game'}
+                      <h3 className="text-xl font-bold mb-2">{game.title}</h3>
+                      <p className="text-gray-600 mb-4">Ready to play!</p>
+                      
+                      <div className="w-24 h-24 bg-gray-200 border-2 border-black mx-auto mb-4 flex items-center justify-center">
+                        <span className="text-3xl">{getGameIcon(game.config?.game_type)}</span>
                       </div>
+                      
                       <div className="flex gap-2">
                         <button 
                           onClick={() => {
                             setSelectedPersonalizedGame(game.id)
                             setViewMode('play-personalized')
                           }}
-                          className="flex-1 px-4 py-2 bg-green-500 text-white font-bold rounded-lg border-2 border-green-600 hover:bg-green-600 transform hover:scale-105 transition-all"
+                          className="flex-1 bg-chart-1 text-white px-4 py-2 border-2 border-black shadow-brutal hover:shadow-brutal-lg transition-all font-bold"
                         >
-                          Play Now! 🎮
+                          PLAY NOW
                         </button>
                         <button 
                           onClick={(e) => {
@@ -273,48 +305,67 @@ export default function PlayTab({ childId }: { childId: string }) {
                               deletePersonalizedGame(game.id)
                             }
                           }}
-                          className="px-3 py-2 bg-red-500 text-white font-bold rounded-lg border-2 border-red-600 hover:bg-red-600 transform hover:scale-105 transition-all"
+                          className="bg-red-500 text-white px-3 py-2 border-2 border-black shadow-brutal hover:shadow-brutal-lg transition-all font-bold"
                         >
                           🗑️
                         </button>
                       </div>
                     </div>
-                  ))}
-                </div>
-              )}
+                  </div>
+                ))}
+              </div>
             </div>
+          )}
 
-            {/* Available Game Templates */}
-            <div className="bg-white rounded-lg border-4 border-purple-300 shadow-lg p-6">
-              <h2 className="text-2xl font-bold text-purple-800 mb-4 flex items-center gap-2">
-                <Sparkles size={28} />
-                Make It Mine!
-              </h2>
-              
-              {/* DEBUG: Available molds: {JSON.stringify(availableMolds)} */}
+          {/* All Games Section - Combined Fun Games and More Games */}
+          <div>
+            <h2 className="text-2xl font-bold mb-6 text-center">All Games</h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {/* Canvas Coloring Game */}
+              <div className="bg-white border-4 border-black shadow-brutal-xl p-6">
+                <div className="text-center">
+                  <div className="bg-chart-4 text-white rounded-full w-16 h-16 flex items-center justify-center mx-auto mb-4">
+                    <Palette className="h-8 w-8" />
+                  </div>
+                  <h3 className="text-xl font-bold mb-2">Canvas Coloring</h3>
+                  <p className="text-gray-600 mb-4">Turn pictures into coloring pages!</p>
+                  
+                  <div className="w-24 h-24 bg-gray-200 border-2 border-black mx-auto mb-4 flex items-center justify-center">
+                    <span className="text-3xl">🎨</span>
+                  </div>
+                  
+                  <button 
+                    onClick={() => setViewMode('canvas')}
+                    className="w-full bg-chart-4 text-white px-4 py-2 border-2 border-black shadow-brutal hover:shadow-brutal-lg transition-all font-bold"
+                  >
+                    PLAY NOW
+                  </button>
+                </div>
+              </div>
+
+              {/* Available Game Templates */}
               {availableMolds.length === 0 ? (
-                <div className="text-center py-8">
+                <div className="col-span-full text-center py-8">
                   <div className="text-4xl mb-4">🔧</div>
                   <p className="text-gray-600">
-                    No game templates available yet.
+                    No more game templates available yet.
                   </p>
                 </div>
               ) : (
-                <div className="grid grid-cols-1 gap-4">
-                  {availableMolds.map((mold) => (
-                    <div
-                      key={mold.id}
-                      className="bg-purple-50 border-3 border-purple-200 rounded-lg p-4"
-                    >
-                      <h3 className="font-bold text-purple-800 mb-2">{mold.name}</h3>
-                      <div className="text-sm text-gray-600 mb-2">
-                        Category: {mold.category || 'Fun Game'}
+                availableMolds.map((mold) => (
+                  <div
+                    key={mold.id}
+                    className="bg-white border-4 border-black shadow-brutal-xl p-6"
+                  >
+                    <div className="text-center">
+                      <div className="bg-chart-2 text-white rounded-full w-16 h-16 flex items-center justify-center mx-auto mb-4">
+                        <span className="text-2xl">{getMoldIcon(mold.category)}</span>
                       </div>
-                      <div className="text-sm text-gray-600 mb-2">
-                        Type: {mold.experience_type?.replace('_', ' ') || 'Interactive'}
-                      </div>
-                      <div className="text-sm text-gray-600 mb-3">
-                        Ages: {mold.age_min || 3}-{mold.age_max || 12}
+                      <h3 className="text-xl font-bold mb-2">{mold.name}</h3>
+                      <p className="text-gray-600 mb-4">Create your own version!</p>
+                      
+                      <div className="w-24 h-24 bg-gray-200 border-2 border-black mx-auto mb-4 flex items-center justify-center">
+                        <span className="text-3xl">{getMoldIcon(mold.category)}</span>
                       </div>
                       
                       <button
@@ -322,38 +373,34 @@ export default function PlayTab({ childId }: { childId: string }) {
                           setSelectedMold(mold)
                           setViewMode(mold.personalizationComponent === 'ExpressionGame' ? 'expression-game' : 'personalize')
                         }}
-                        className="w-full px-4 py-2 bg-purple-500 text-white font-bold rounded-lg border-2 border-purple-600 hover:bg-purple-600 transform hover:scale-105 transition-all flex items-center justify-center gap-2"
+                        className="w-full bg-chart-2 text-white px-4 py-2 border-2 border-black shadow-brutal hover:shadow-brutal-lg transition-all font-bold"
                       >
-                        <Sparkles size={16} />
-                        Make It Mine!
-                        {/* DEBUG: Show personalizationComponent */}
-                        <span style={{ fontSize: 10, marginLeft: 8, color: '#888' }}>{mold.personalizationComponent}</span>
+                        <Sparkles className="inline-block mr-2" size={16} />
+                        MAKE IT MINE
                       </button>
                     </div>
-                  ))}
-                </div>
+                  </div>
+                ))
               )}
             </div>
           </div>
-        )}
 
-        {/* Fun Stats */}
-        <div className="mt-8 text-center">
-          <div className="bg-white rounded-lg border-4 border-yellow-300 shadow-lg p-6 inline-block">
-            <h3 className="text-xl font-bold text-yellow-800 mb-2">Your Gaming Stats 📊</h3>
-            <div className="flex gap-6 text-center">
-              <div>
-                <div className="text-2xl font-bold text-blue-600">{personalizedGames.length}</div>
-                <div className="text-sm text-gray-600">Personalized Games</div>
+          {/* Progress Summary */}
+          <div className="bg-white border-4 border-black shadow-brutal-xl p-6">
+            <h2 className="text-2xl font-bold mb-4 text-center">Your Gaming Stats</h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="text-center p-4 bg-chart-1 text-white border-2 border-black shadow-brutal">
+                <div className="text-3xl font-bold mb-2">{personalizedGames.length}</div>
+                <div>Personalized Games</div>
               </div>
-              <div>
-                <div className="text-2xl font-bold text-green-600">{availableMolds.length}</div>
-                <div className="text-sm text-gray-600">Templates Available</div>
+              <div className="text-center p-4 bg-chart-2 text-white border-2 border-black shadow-brutal">
+                <div className="text-3xl font-bold mb-2">{availableMolds.length}</div>
+                <div>Templates Available</div>
               </div>
             </div>
           </div>
-        </div>
-      </div>
+        </>
+      )}
     </div>
   )
 }

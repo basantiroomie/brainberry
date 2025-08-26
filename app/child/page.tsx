@@ -82,7 +82,6 @@ export default function ChildDashboard() {
           <div className="flex justify-between items-center h-16">
             <div className="flex items-center space-x-2">
               <BrandLogo variant="child" />
-              <span className="text-sm text-gray-500">| Child Zone</span>
               {childProfile && (
                 <span className="text-sm font-medium text-main">Welcome, {childProfile.name}!</span>
               )}

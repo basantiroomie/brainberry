@@ -344,21 +344,21 @@ export default function ExpressionGame({ onBack }: ExpressionGameProps) {
 
   const renderLoadingPhase = () => (
     <div className="flex flex-col items-center space-y-6">
-      <h2 className="text-3xl font-bold text-purple-800 text-center">
+      <h2 className="text-3xl font-bold text-chart-3 text-center">
         Creating Your Game
       </h2>
       
       <div className="w-80">
-        <div className="bg-gray-200 rounded-full h-4 overflow-hidden">
+        <div className="bg-gray-200 border-2 border-black h-6 overflow-hidden">
           <div 
-            className="bg-gradient-to-r from-purple-500 to-pink-500 h-full transition-all duration-500"
+            className="bg-chart-1 h-full transition-all duration-500"
             style={{ width: `${loadingProgress}%` }}
           />
         </div>
-        <p className="text-center mt-4 text-gray-600">{loadingMessage}</p>
+        <p className="text-center mt-4 text-gray-600 font-bold">{loadingMessage}</p>
       </div>
 
-      <div className="animate-spin w-12 h-12 border-4 border-purple-200 border-t-purple-600 rounded-full" />
+      <div className="animate-spin w-12 h-12 border-4 border-gray-300 border-t-chart-3 rounded-full" />
     </div>
   )
 
@@ -377,9 +377,9 @@ export default function ExpressionGame({ onBack }: ExpressionGameProps) {
           </p>
           <button
             onClick={restartGame}
-            className="bg-red-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-red-700 transition-colors"
+            className="bg-red-500 text-white px-6 py-3 border-2 border-black shadow-brutal hover:shadow-brutal-lg transition-all font-bold"
           >
-            Try Again
+            TRY AGAIN
           </button>
         </div>
       )
@@ -387,53 +387,60 @@ export default function ExpressionGame({ onBack }: ExpressionGameProps) {
 
     return (
       <div className="flex flex-col items-center space-y-6">
-        <h2 className="text-3xl font-bold text-purple-800 text-center">
+        <h2 className="text-3xl font-bold text-chart-3 text-center">
           Make This Expression!
         </h2>
         
-        <div className="text-center">
-          <div className="w-80 h-80 mx-auto mb-4 bg-gray-100 rounded-lg overflow-hidden shadow-lg">
-            <img
-              src={currentExpression.imageUrl}
-              alt={`${currentExpression.emotion} expression`}
-              className="w-full h-full object-contain"
-            />
+        {/* Side by side layout for photo and camera */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-center">
+          {/* Expression Photo */}
+          <div className="text-center">
+            <div className="w-80 h-80 mx-auto mb-4 bg-gray-100 border-4 border-black shadow-brutal-xl overflow-hidden">
+              <img
+                src={currentExpression.imageUrl}
+                alt={`${currentExpression.emotion} expression`}
+                className="w-full h-full object-contain"
+              />
+            </div>
+            <h3 className="text-2xl font-bold capitalize text-chart-2">
+              {currentExpression.emotion}
+            </h3>
+            <p className="text-lg text-gray-600 font-bold mt-2">
+              Copy this expression!
+            </p>
           </div>
-          <h3 className="text-2xl font-bold capitalize text-purple-700">
-            {currentExpression.emotion}
-          </h3>
-        </div>
 
-        <div className="relative">
-          <video
-            ref={videoRef}
-            autoPlay
-            muted
-            playsInline
-            className="w-80 h-60 bg-gray-200 rounded-lg object-cover"
-          />
-          <canvas
-            ref={canvasRef}
-            className="absolute top-0 left-0 w-full h-full"
-          />
-        </div>
-
-        <div className="text-center">
-          <p className="text-md text-gray-500">
-            You are making <span className="font-semibold text-purple-600 capitalize">{currentDetectedExpression}</span> expression currently
-          </p>
+          {/* Camera Feed */}
+          <div className="text-center">
+            <div className="relative mx-auto w-80 h-60">
+              <video
+                ref={videoRef}
+                autoPlay
+                muted
+                playsInline
+                className="w-full h-full bg-gray-200 border-4 border-black shadow-brutal object-cover"
+              />
+              <canvas
+                ref={canvasRef}
+                className="absolute top-0 left-0 w-full h-full"
+              />
+            </div>
+            <p className="text-md text-gray-600 font-bold mt-2">
+              You are making <span className="font-bold text-chart-3 capitalize">{currentDetectedExpression}</span> expression
+            </p>
+          </div>
         </div>
 
         {expressions[currentExpressionIndex]?.detected && (
           <div className="text-center">
             <div className="text-6xl mb-2">🎉</div>
-            <p className="text-2xl font-bold text-green-600">Great job!</p>
+            <p className="text-2xl font-bold text-chart-1">Great job!</p>
           </div>
         )}
 
         {!expressions[currentExpressionIndex]?.detected && (
           <div className="text-center">
-            <p className="text-lg text-gray-600">
+            <p className="text-lg text-gray-600 font-bold">
               Make the expression and hold it!
             </p>
           </div>
@@ -443,11 +450,11 @@ export default function ExpressionGame({ onBack }: ExpressionGameProps) {
           {expressions.map((_, index) => (
             <div
               key={index}
-              className={`w-3 h-3 rounded-full ${
+              className={`w-4 h-4 border-2 border-black ${
                 index === currentExpressionIndex
-                  ? 'bg-purple-600'
+                  ? 'bg-chart-3'
                   : expressions[index]?.detected
-                  ? 'bg-green-500'
+                  ? 'bg-chart-1'
                   : 'bg-gray-300'
               }`}
             />
@@ -465,11 +472,11 @@ export default function ExpressionGame({ onBack }: ExpressionGameProps) {
 
     return (
       <div className="flex flex-col items-center space-y-6">
-        <h2 className="text-3xl font-bold text-purple-800 text-center">
+        <h2 className="text-3xl font-bold text-chart-3 text-center">
           What Expression Is This?
         </h2>
         
-        <div className="w-80 h-80 mx-auto bg-gray-100 rounded-lg overflow-hidden shadow-lg">
+        <div className="w-80 h-80 mx-auto bg-gray-100 border-4 border-black shadow-brutal-xl overflow-hidden">
           <img
             src={currentQuestion.imageUrl}
             alt="Expression to identify"
@@ -483,12 +490,12 @@ export default function ExpressionGame({ onBack }: ExpressionGameProps) {
               key={emotion}
               onClick={() => handleQuizAnswer(emotion)}
               disabled={currentQuestion.selectedEmotion !== undefined}
-              className={`px-6 py-4 rounded-lg font-semibold text-lg transition-colors ${
+              className={`px-6 py-4 border-2 border-black shadow-brutal font-bold text-lg transition-all ${
                 currentQuestion.selectedEmotion === emotion
                   ? emotion === currentQuestion.correctEmotion
-                    ? 'bg-green-500 text-white'
+                    ? 'bg-chart-1 text-white'
                     : 'bg-red-500 text-white'
-                  : 'bg-gray-200 hover:bg-gray-300 text-gray-800'
+                  : 'bg-white hover:shadow-brutal-lg text-gray-800'
               }`}
             >
               {emotion.charAt(0).toUpperCase() + emotion.slice(1)}
@@ -500,11 +507,11 @@ export default function ExpressionGame({ onBack }: ExpressionGameProps) {
           {quizQuestions.map((_, index) => (
             <div
               key={index}
-              className={`w-3 h-3 rounded-full ${
+              className={`w-4 h-4 border-2 border-black ${
                 index === currentQuizIndex
-                  ? 'bg-purple-600'
+                  ? 'bg-chart-3'
                   : index < currentQuizIndex
-                  ? 'bg-green-500'
+                  ? 'bg-chart-1'
                   : 'bg-gray-300'
               }`}
             />
@@ -516,16 +523,18 @@ export default function ExpressionGame({ onBack }: ExpressionGameProps) {
 
   const renderCompletePhase = () => (
     <div className="flex flex-col items-center space-y-6">
-      <Trophy size={80} className="text-yellow-500" />
-      <h2 className="text-4xl font-bold text-purple-800 text-center">
+      <div className="bg-chart-5 text-white rounded-full w-20 h-20 flex items-center justify-center border-4 border-black shadow-brutal-xl">
+        <Trophy size={40} />
+      </div>
+      <h2 className="text-4xl font-bold text-chart-3 text-center">
         Congratulations!
       </h2>
       
       <div className="text-center">
-        <p className="text-2xl font-semibold text-purple-600 mb-2">
+        <p className="text-2xl font-bold text-chart-2 mb-2">
           You scored {score} out of {quizQuestions.length}!
         </p>
-        <p className="text-lg text-gray-600">
+        <p className="text-lg text-gray-600 font-bold">
           {score === quizQuestions.length 
             ? "Perfect! You're an expression expert!" 
             : score >= quizQuestions.length / 2
@@ -537,45 +546,42 @@ export default function ExpressionGame({ onBack }: ExpressionGameProps) {
       <div className="flex space-x-4">
         <button
           onClick={restartGame}
-          className="flex items-center space-x-2 bg-purple-600 text-white px-6 py-3 rounded-full font-semibold hover:bg-purple-700 transition-colors"
+          className="bg-chart-3 text-white px-6 py-3 border-2 border-black shadow-brutal hover:shadow-brutal-lg transition-all font-bold"
         >
-          <RotateCcw size={20} />
-          <span>Play Again</span>
+          🔄 PLAY AGAIN
         </button>
         
         <button
           onClick={onBack}
-          className="flex items-center space-x-2 bg-gray-500 text-white px-6 py-3 rounded-full font-semibold hover:bg-gray-600 transition-colors"
+          className="bg-gray-500 text-white px-6 py-3 border-2 border-black shadow-brutal hover:shadow-brutal-lg transition-all font-bold"
         >
-          <ArrowLeft size={20} />
-          <span>Back to Games</span>
+          ← BACK TO GAMES
         </button>
       </div>
     </div>
   )
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-100 via-purple-50 to-pink-100 p-4">
+    <div className="space-y-8 p-6">
       <div className="max-w-4xl mx-auto">
         {/* Header */}
-        <div className="flex items-center justify-between mb-8">
+        <div className="flex items-center gap-4 mb-8">
           <button
             onClick={onBack}
-            className="flex items-center space-x-2 text-purple-600 hover:text-purple-700 font-semibold"
+            className="bg-gray-500 text-white px-4 py-2 border-2 border-black shadow-brutal hover:shadow-brutal-lg transition-all font-bold"
           >
-            <ArrowLeft size={24} />
-            <span>Back</span>
+            ← BACK
           </button>
           
-          <h1 className="text-4xl font-bold text-center text-purple-800">
-            Expression Game
-          </h1>
-          
-          <div className="w-20" /> {/* Spacer */}
+          <div className="inline-block transform -rotate-1">
+            <div className="bg-chart-3 text-white px-8 py-4 border-4 border-black shadow-brutal-xl font-bold text-3xl">
+              😊 EXPRESSION GAME! 😊
+            </div>
+          </div>
         </div>
 
         {/* Game Content */}
-        <div className="bg-white rounded-xl shadow-xl p-8">
+        <div className="bg-white border-4 border-black shadow-brutal-xl p-8">
           {phase === 'loading' && renderLoadingPhase()}
           {phase === 'expression' && renderExpressionPhase()}
           {phase === 'quiz' && renderQuizPhase()}

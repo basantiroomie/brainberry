@@ -258,20 +258,19 @@ export default function CanvasColoringGame({ onBack }: CanvasColoringGameProps) 
       <div className="min-h-screen bg-background p-6">
         <div className="max-w-6xl mx-auto">
           {/* Header */}
-          <div className="flex items-center justify-between mb-8">
+          <div className="relative flex items-center justify-center mb-8">
             <button
               onClick={onBack}
-              className="flex items-center space-x-2 bg-gray-500 text-white px-4 py-2 border-2 border-black shadow-brutal hover:shadow-brutal-lg transition-all font-bold"
+              className="absolute left-0 flex items-center space-x-2 bg-gray-500 text-white px-4 py-2 border-2 border-black shadow-brutal hover:shadow-brutal-lg transition-all font-bold"
             >
               <ArrowLeft className="h-4 w-4" />
               <span>BACK</span>
             </button>
-            <h1 className="text-4xl font-bold text-chart-3">🎨 Canvas Coloring 🎨</h1>
-            <div></div>
-          </div>
-
-          <div className="text-center mb-8">
-            <p className="text-lg text-gray-700">Choose how you want to create your coloring page!</p>
+            <div className="inline-block transform -rotate-1">
+              <div className="bg-chart-4 text-white px-8 py-4 border-4 border-black shadow-brutal-xl font-bold text-3xl">
+                CANVAS COLORING
+              </div>
+            </div>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-2xl mx-auto mb-12">
@@ -316,7 +315,7 @@ export default function CanvasColoringGame({ onBack }: CanvasColoringGameProps) 
           {/* Previously Colored Canvases */}
           {savedCanvases.length > 0 && (
             <div className="bg-white border-4 border-black shadow-brutal-xl p-6">
-              <h2 className="text-2xl font-bold mb-6 text-center">🖼️ Your Amazing Artwork! 🖼️</h2>
+              <h2 className="text-2xl font-bold mb-6 text-center">Your Amazing Artwork!</h2>
               <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
                 {savedCanvases.map((canvasData, index) => (
                   <div key={index} className="bg-white border-2 border-black shadow-brutal p-2 relative group">

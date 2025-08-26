@@ -1,7 +1,7 @@
-import { Crown, Palette, Trophy } from "lucide-react"
+import { Crown, Trophy, MessageCircle } from "lucide-react"
 import { useEffect, useState } from "react"
 import MyAvatarTab from "../Games/MyAvatarTab"
-import CanvasColoringGame from "../Games/CanvasColoringGame"
+import ChatAssistant from "./ChatAssistant"
 
 interface ChildProgress {
   completedAssignments: number
@@ -19,7 +19,7 @@ export default function MyStuffTab() {
   })
   const [childProfile, setChildProfile] = useState<any>(null)
   const [loading, setLoading] = useState(true)
-  const [activeSection, setActiveSection] = useState<'overview' | 'avatar' | 'themes' | 'trophies' | 'canvas'>('overview')
+  const [activeSection, setActiveSection] = useState<'overview' | 'avatar' | 'chat' | 'themes' | 'trophies'>('overview')
 
   useEffect(() => {
     const stored = sessionStorage.getItem('childProfile')
@@ -123,20 +123,21 @@ export default function MyStuffTab() {
     )
   }
 
-  // Show canvas coloring game section
-  if (activeSection === 'canvas') {
+  // Show chat section
+  if (activeSection === 'chat') {
     return (
-      <CanvasColoringGame 
-        onBack={() => setActiveSection('overview')}
-      />
+      <ChatAssistant onBack={() => setActiveSection('overview')} />
     )
   }
 
   return (
     <div className="space-y-8">
       <div className="text-center mb-8">
-        <h1 className="text-4xl font-bold text-chart-3 mb-2">MY AWESOME STUFF!</h1>
-        <p className="text-lg text-gray-700">Make everything just the way you like it!</p>
+        <div className="inline-block transform -rotate-2 mb-4">
+          <div className="bg-chart-3 text-white px-8 py-4 border-4 border-black shadow-brutal-xl font-bold text-4xl transform hover:rotate-1 transition-transform">
+             MY STUFF
+          </div>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -160,22 +161,22 @@ export default function MyStuffTab() {
           </div>
         </div>
 
-        {/* Canvas Coloring Game */}
+        {/* Chat Assistant */}
         <div className="bg-white border-4 border-black shadow-brutal-xl p-6">
           <div className="text-center">
-            <div className="bg-chart-4 text-white rounded-full w-16 h-16 flex items-center justify-center mx-auto mb-4">
-              <Palette className="h-8 w-8" />
+            <div className="bg-chart-5 text-white rounded-full w-16 h-16 flex items-center justify-center mx-auto mb-4">
+              <MessageCircle className="h-8 w-8" />
             </div>
-            <h3 className="text-xl font-bold mb-2">Canvas Coloring</h3>
-            <p className="text-gray-600 mb-4">Turn pictures into coloring pages!</p>
+            <h3 className="text-xl font-bold mb-2">Chat Assistant</h3>
+            <p className="text-gray-600 mb-4">Ask me anything!</p>
             <div className="w-24 h-24 bg-gray-200 border-2 border-black mx-auto mb-4 flex items-center justify-center">
-              <span className="text-2xl">🎨</span>
+              <span className="text-2xl">💬</span>
             </div>
             <button 
-              onClick={() => setActiveSection('canvas')}
-              className="bg-chart-4 text-white px-4 py-2 border-2 border-black shadow-brutal hover:shadow-brutal-lg transition-all font-bold"
+              onClick={() => setActiveSection('chat')}
+              className="bg-chart-5 text-white px-4 py-2 border-2 border-black shadow-brutal hover:shadow-brutal-lg transition-all font-bold"
             >
-              PLAY GAME
+              CHAT NOW
             </button>
           </div>
         </div>

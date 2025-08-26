@@ -4,8 +4,11 @@ export default function FreePlayTab() {
   return (
     <div className="space-y-8">
       <div className="text-center mb-8">
-        <h1 className="text-4xl font-bold text-chart-4 mb-2">FREE PLAY TIME!</h1>
-        <p className="text-lg text-gray-700">Choose any game you want to play!</p>
+        <div className="inline-block transform -rotate-2 mb-4">
+          <div className="bg-chart-4 text-white px-8 py-4 border-4 border-black shadow-brutal-xl font-bold text-4xl transform hover:rotate-1 transition-transform">
+             MY STUFF
+          </div>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
