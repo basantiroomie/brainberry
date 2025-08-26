@@ -59,6 +59,76 @@ export interface GameMold {
   createdAt: string
   updatedAt: string
   version: number
+  personalizationComponent?: string // e.g. 'ExpressionGame', 'MoldPersonalizationWizard'
+}
+
+
+// Expression Game Mold (Personalized, Gemini-powered)
+export const EXPRESSION_GAME_MOLD: GameMold = {
+  personalizationComponent: 'ExpressionGame',
+  id: 'expression_game',
+  name: 'Expression Game',
+  category: 'Emotions & Social Skills',
+  structureType: 'linear',
+  experienceType: 'puzzle',
+  primaryObjective: 'Practice and identify facial expressions by mimicking and matching emotions.',
+  rules: 'The child takes a photo, Gemini generates 4 emotion images (happy, sad, angry, surprised). The child mimics each emotion, detected in real-time using face-api.js. After all, a quiz matches images to emotions.',
+  scenes: [
+    {
+      id: 'capture',
+      title: 'Take Your Photo',
+      narrative: 'Smile for the camera! We will use your photo to create fun expression challenges.',
+      instructions: 'Look at the camera and press the button to take your photo.',
+      assets: [],
+    },
+    {
+      id: 'loading',
+      title: 'Creating Your Expressions',
+      narrative: 'Gemini is generating personalized images for you...',
+      instructions: 'Please wait while your game is prepared.',
+      assets: [],
+    },
+    {
+      id: 'expression',
+      title: 'Mimic the Emotion',
+      narrative: 'Try to make the same face as the image shown!',
+      instructions: 'Hold the expression until the game detects it.',
+      assets: [],
+    },
+    {
+      id: 'quiz',
+      title: 'Quiz: Match the Emotion',
+      narrative: 'Can you identify the emotions?',
+      instructions: 'Connect each image to its correct emotion.',
+      assets: [],
+    },
+    {
+      id: 'complete',
+      title: 'Congratulations!',
+      narrative: 'You completed the Expression Game!',
+      instructions: 'Play again or try another game.',
+      assets: [],
+    }
+  ],
+  customization: {
+    lockStructure: true,
+    allowThemes: false,
+    allowPacing: false,
+    allowRewards: true,
+    allowAvatars: false,
+    notes: 'Images and flow are personalized using Gemini AI and child webcam input.'
+  },
+  meta: {
+    ageRange: { min: 3, max: 12 },
+    difficulty: 'Easy',
+    learnerProfiles: ['ASD', 'ADHD', 'HYBRID'],
+    executiveFunctionTargets: ['emotion recognition', 'self-awareness'],
+    sensoryPreferences: ['low-audio', 'high-contrast'],
+    skillTargets: ['facial expression', 'emotion identification', 'social skills']
+  },
+  createdAt: new Date().toISOString(),
+  updatedAt: new Date().toISOString(),
+  version: 1
 }
 
 const STORAGE_KEY = 'brainberry_game_molds_v1'
