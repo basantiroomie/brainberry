@@ -76,106 +76,115 @@ class AvatarViewerErrorBoundary extends React.Component<
   }
 }
 
-// GLB Avatar component for displaying Ready Player Me avatars
-const GLBAvatar: React.FC<{
-  modelSrc: string
+// Internal component that always calls useGLTF
+const GLTFModel: React.FC<{
+  url: string
   onLoaded?: (model: Object3D) => void
   onError?: (error: any) => void
-}> = ({ modelSrc, onLoaded, onError }) => {
+}> = ({ url, onLoaded, onError }) => {
   const meshRef = useRef<any>(null)
-  const [loadError, setLoadError] = useState<any>(null)
-  const [isLoaded, setIsLoaded] = useState(false)
   
-  // Validate URL first
-  React.useEffect(() => {
-    if (!modelSrc || typeof modelSrc !== 'string') {
-      const error = new Error(`Invalid avatar URL: ${modelSrc}`)
-      console.error('GLB loading failed:', error)
-      setLoadError(error)
-      onError?.(error)
-      return
-    }
+  // Always call useGLTF hook - this is required by React hooks rules
+  const gltf = useGLTF(url)
 
-    // Reset states when URL changes
-    setLoadError(null)
-    setIsLoaded(false)
-  }, [modelSrc, onError])
-
-  // Use useGLTF hook with error boundary
-  let gltf: any = null
-  
-  try {
-    if (modelSrc && !loadError) {
-      // Preload the model to catch errors early
-      useGLTF.preload(modelSrc)
-      gltf = useGLTF(modelSrc)
-    }
-  } catch (error) {
-    console.error('useGLTF hook error:', {
-      error: error instanceof Error ? error.message : error,
-      url: modelSrc,
-      stack: error instanceof Error ? error.stack : undefined
-    })
-    
-    React.useEffect(() => {
-      setLoadError(error)
-      onError?.(error)
-    }, [error])
-  }
-
-  // Handle successful loading
-  React.useEffect(() => {
-    if (gltf?.scene && !isLoaded && !loadError) {
+  useEffect(() => {
+    if (gltf?.scene) {
       console.log('GLB avatar loaded successfully:', {
-        url: modelSrc,
+        url,
         scene: gltf.scene,
         animations: gltf.animations?.length || 0
       })
-      setIsLoaded(true)
       onLoaded?.(gltf.scene)
     }
-  }, [gltf, onLoaded, isLoaded, loadError, modelSrc])
+  }, [gltf, url, onLoaded])
 
-  // Handle loading errors from useGLTF - check for various error conditions
-  React.useEffect(() => {
+  useEffect(() => {
+    // Check for loading errors
     if (gltf) {
-      // Check for explicit error property
       if (gltf.error) {
         console.error('GLB loading failed with error property:', gltf.error)
-        setLoadError(gltf.error)
         onError?.(gltf.error)
         return
       }
       
-      // Check if the gltf object indicates a failed load
       if (gltf.scene === undefined && gltf.nodes === undefined) {
         const error = new Error('GLB file failed to load - no scene or nodes found')
         console.error('GLB loading failed:', error)
-        setLoadError(error)
         onError?.(error)
         return
       }
     }
   }, [gltf, onError])
 
-  // If there's an error, return null
-  if (loadError) {
-    return null
-  }
-
-  // If no scene yet, return null (loading)
   if (!gltf?.scene) {
     return null
   }
 
   // Clone the scene to avoid issues with multiple instances
   const scene = gltf.scene.clone()
-  
-  // Scale and position the avatar appropriately
   scene.scale.setScalar(1)
   scene.position.set(0, 0, 0)
 
   return <primitive ref={meshRef} object={scene} />
+}
+
+// GLB Avatar component for displaying Ready Player Me avatars
+const GLBAvatar: React.FC<{
+  modelSrc: string
+  onLoaded?: (model: Object3D) => void
+  onError?: (error: any) => void
+}> = ({ modelSrc, onLoaded, onError }) => {
+  const [loadError, setLoadError] = useState<string | null>(null)
+
+  // Memoize callbacks to prevent dependency array changes
+  const handleLoaded = useCallback((model: Object3D) => {
+    setLoadError(null)
+    onLoaded?.(model)
+  }, [onLoaded])
+
+  const handleError = useCallback((error: any) => {
+    console.error('useGLTF hook error:', {
+      error: error instanceof Error ? error.message : error,
+      url: modelSrc,
+      stack: error instanceof Error ? error.stack : undefined
+    })
+    setLoadError(error instanceof Error ? error.message : 'Failed to load model')
+    onError?.(error)
+  }, [modelSrc, onError])
+
+  // Validate URL
+  useEffect(() => {
+    if (!modelSrc || typeof modelSrc !== 'string') {
+      const error = new Error(`Invalid avatar URL: ${modelSrc}`)
+      console.error('GLB loading failed:', error)
+      setLoadError(error.message)
+      handleError(error)
+      return
+    }
+
+    // Reset error when URL changes
+    setLoadError(null)
+  }, [modelSrc, handleError])
+
+  // If there's an error or invalid URL, return null
+  if (loadError || !modelSrc || typeof modelSrc !== 'string') {
+    return null
+  }
+
+  // Preload the model
+  try {
+    useGLTF.preload(modelSrc)
+  } catch (error) {
+    console.warn('Failed to preload GLB:', modelSrc, error)
+  }
+
+  return (
+    <GLTFModel
+      url={modelSrc}
+      onLoaded={handleLoaded}
+      onError={handleError}
+    />
+  )
 }
 
 const AvatarScene: React.FC<{
@@ -240,7 +249,7 @@ const AvatarScene: React.FC<{
   }, [onModelError])
 
   // Set up a timeout for loading and validate URL
-  React.useEffect(() => {
+  useEffect(() => {
     setIsLoading(true)
     setLoadError(null)
     
@@ -260,12 +269,14 @@ const AvatarScene: React.FC<{
       return
     }
 
+    let timeoutId: NodeJS.Timeout
+
     // Test network connectivity to the avatar URL
     const testConnectivity = async () => {
       try {
         // Try a HEAD request first to check if the resource exists
         const controller = new AbortController()
-        const timeoutId = setTimeout(() => controller.abort(), 5000) // 5 second timeout for connectivity test
+        const connectivityTimeoutId = setTimeout(() => controller.abort(), 5000) // 5 second timeout for connectivity test
         
         const response = await fetch(avatarUrl, { 
           method: 'HEAD',
@@ -274,7 +285,7 @@ const AvatarScene: React.FC<{
           signal: controller.signal
         })
         
-        clearTimeout(timeoutId)
+        clearTimeout(connectivityTimeoutId)
         
         if (!response.ok) {
           throw new Error(`Avatar not found: ${response.status} ${response.statusText}`)
@@ -303,16 +314,18 @@ const AvatarScene: React.FC<{
     
     testConnectivity()
     
-    const timeout = setTimeout(() => {
-      if (isLoading) {
-        console.warn('Avatar loading timeout for URL:', avatarUrl)
-        setIsLoading(false)
-        setLoadError('Loading timeout - please check your internet connection')
-      }
+    timeoutId = setTimeout(() => {
+      console.warn('Avatar loading timeout for URL:', avatarUrl)
+      setIsLoading(false)
+      setLoadError('Loading timeout - please check your internet connection')
     }, 20000) // 20 second timeout (increased for slow connections)
 
-    return () => clearTimeout(timeout)
-  }, [avatarUrl, isLoading])
+    return () => {
+      if (timeoutId) {
+        clearTimeout(timeoutId)
+      }
+    }
+  }, [avatarUrl])
 
   return (
     <>
@@ -419,7 +432,7 @@ export const AvatarViewer: React.FC<AvatarViewerProps> = ({
   className = ''
 }) => {
   // Debug logging
-  React.useEffect(() => {
+  useEffect(() => {
     console.log('AvatarViewer received URL:', {
       avatarUrl,
       type: typeof avatarUrl,
