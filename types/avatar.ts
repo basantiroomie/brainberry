@@ -8,6 +8,7 @@ export interface AvatarViewerProps {
   enableAnimations?: boolean
   cameraMode?: 'full' | 'headshot'
   onModelLoad?: (model: Object3D) => void
+  onModelError?: (error: any) => void
   className?: string
   style?: React.CSSProperties
 }

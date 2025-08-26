@@ -6,6 +6,15 @@ import { OrbitControls, Environment, useGLTF } from '@react-three/drei'
 import { Object3D } from 'three'
 import { AvatarViewerProps } from '@/types/avatar'
 
+// Preload function to handle errors better
+const preloadGLTF = (url: string) => {
+  try {
+    useGLTF.preload(url)
+  } catch (error) {
+    console.warn('Failed to preload GLB:', url, error)
+  }
+}
+
 // AvatarViewerProps is now imported from types/avatar.ts
 
 interface AvatarViewerErrorBoundaryState {
@@ -24,7 +33,12 @@ class AvatarViewerErrorBoundary extends React.Component<
   }
 
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
-    console.error('AvatarViewer 3D Error:', error, errorInfo)
+    console.error('AvatarViewer 3D Error:', {
+      error: error.message || error,
+      stack: error.stack,
+      errorInfo,
+      timestamp: new Date().toISOString()
+    })
   }
 
   render() {
@@ -69,35 +83,88 @@ const GLBAvatar: React.FC<{
   onError?: (error: any) => void
 }> = ({ modelSrc, onLoaded, onError }) => {
   const meshRef = useRef<any>(null)
+  const [loadError, setLoadError] = useState<any>(null)
+  const [isLoaded, setIsLoaded] = useState(false)
   
-  // Use useGLTF hook to load the GLB model
+  // Validate URL first
+  React.useEffect(() => {
+    if (!modelSrc || typeof modelSrc !== 'string') {
+      const error = new Error(`Invalid avatar URL: ${modelSrc}`)
+      console.error('GLB loading failed:', error)
+      setLoadError(error)
+      onError?.(error)
+      return
+    }
+
+    // Reset states when URL changes
+    setLoadError(null)
+    setIsLoaded(false)
+  }, [modelSrc, onError])
+
+  // Use useGLTF hook with error boundary
   let gltf: any = null
-  let loadError: any = null
   
   try {
-    gltf = useGLTF(modelSrc)
+    if (modelSrc && !loadError) {
+      // Preload the model to catch errors early
+      useGLTF.preload(modelSrc)
+      gltf = useGLTF(modelSrc)
+    }
   } catch (error) {
-    loadError = error
+    console.error('useGLTF hook error:', {
+      error: error instanceof Error ? error.message : error,
+      url: modelSrc,
+      stack: error instanceof Error ? error.stack : undefined
+    })
+    
+    React.useEffect(() => {
+      setLoadError(error)
+      onError?.(error)
+    }, [error])
   }
 
   // Handle successful loading
   React.useEffect(() => {
-    if (gltf?.scene && onLoaded) {
-      console.log('GLB avatar loaded successfully:', gltf)
-      onLoaded(gltf.scene)
+    if (gltf?.scene && !isLoaded && !loadError) {
+      console.log('GLB avatar loaded successfully:', {
+        url: modelSrc,
+        scene: gltf.scene,
+        animations: gltf.animations?.length || 0
+      })
+      setIsLoaded(true)
+      onLoaded?.(gltf.scene)
     }
-  }, [gltf, onLoaded])
+  }, [gltf, onLoaded, isLoaded, loadError, modelSrc])
 
-  // Handle loading errors
+  // Handle loading errors from useGLTF - check for various error conditions
   React.useEffect(() => {
-    if (loadError && onError) {
-      console.error('GLB loading failed:', loadError)
-      onError(loadError)
+    if (gltf) {
+      // Check for explicit error property
+      if (gltf.error) {
+        console.error('GLB loading failed with error property:', gltf.error)
+        setLoadError(gltf.error)
+        onError?.(gltf.error)
+        return
+      }
+      
+      // Check if the gltf object indicates a failed load
+      if (gltf.scene === undefined && gltf.nodes === undefined) {
+        const error = new Error('GLB file failed to load - no scene or nodes found')
+        console.error('GLB loading failed:', error)
+        setLoadError(error)
+        onError?.(error)
+        return
+      }
     }
-  }, [loadError, onError])
+  }, [gltf, onError])
 
-  // If there's an error or no scene, return null
-  if (loadError || !gltf?.scene) {
+  // If there's an error, return null
+  if (loadError) {
+    return null
+  }
+
+  // If no scene yet, return null (loading)
+  if (!gltf?.scene) {
     return null
   }
 
@@ -117,7 +184,8 @@ const AvatarScene: React.FC<{
   enableAnimations: boolean
   cameraMode: 'full' | 'headshot'
   onModelLoad?: (model: Object3D) => void
-}> = ({ avatarUrl, enableControls, enableAnimations, cameraMode, onModelLoad }) => {
+  onModelError?: (error: any) => void
+}> = ({ avatarUrl, enableControls, enableAnimations, cameraMode, onModelLoad, onModelError }) => {
   const [isLoading, setIsLoading] = useState(true)
   const [loadError, setLoadError] = useState<string | null>(null)
 
@@ -151,24 +219,100 @@ const AvatarScene: React.FC<{
   const handleModelError = useCallback((error: any) => {
     console.error('Avatar model loading error:', error)
     setIsLoading(false)
-    setLoadError('Failed to load avatar model')
-  }, [])
+    
+    // Provide more detailed error messages
+    let errorMessage = 'Failed to load avatar model'
+    
+    if (error?.message) {
+      errorMessage = error.message
+    } else if (typeof error === 'string') {
+      errorMessage = error
+    } else if (error?.status) {
+      errorMessage = `Network error: ${error.status}`
+    }
+    
+    setLoadError(errorMessage)
+    
+    // Call the external error handler if provided
+    if (onModelError) {
+      onModelError(error)
+    }
+  }, [onModelError])
 
-  // Set up a timeout for loading
+  // Set up a timeout for loading and validate URL
   React.useEffect(() => {
     setIsLoading(true)
     setLoadError(null)
     
+    // Validate avatar URL
+    if (!avatarUrl || typeof avatarUrl !== 'string') {
+      console.error('Invalid avatar URL provided:', avatarUrl)
+      setIsLoading(false)
+      setLoadError('Invalid avatar URL')
+      return
+    }
+
+    // Check if URL is accessible
+    if (!avatarUrl.startsWith('http') && !avatarUrl.startsWith('/')) {
+      console.error('Avatar URL must be a valid HTTP URL or relative path:', avatarUrl)
+      setIsLoading(false)
+      setLoadError('Invalid avatar URL format')
+      return
+    }
+
+    // Test network connectivity to the avatar URL
+    const testConnectivity = async () => {
+      try {
+        // Try a HEAD request first to check if the resource exists
+        const controller = new AbortController()
+        const timeoutId = setTimeout(() => controller.abort(), 5000) // 5 second timeout for connectivity test
+        
+        const response = await fetch(avatarUrl, { 
+          method: 'HEAD',
+          mode: 'cors',
+          cache: 'no-cache',
+          signal: controller.signal
+        })
+        
+        clearTimeout(timeoutId)
+        
+        if (!response.ok) {
+          throw new Error(`Avatar not found: ${response.status} ${response.statusText}`)
+        }
+        
+        console.log('Avatar URL is accessible:', {
+          url: avatarUrl,
+          status: response.status,
+          contentType: response.headers.get('content-type'),
+          contentLength: response.headers.get('content-length')
+        })
+        
+      } catch (error) {
+        console.warn('Avatar connectivity test failed:', {
+          url: avatarUrl,
+          error: error instanceof Error ? error.message : error,
+          name: error instanceof Error ? error.name : 'Unknown',
+          isAbortError: error instanceof Error && error.name === 'AbortError',
+          isCorsError: error instanceof Error && error.message.includes('CORS'),
+          isNetworkError: error instanceof Error && error.message.includes('network')
+        })
+        // Don't fail immediately - the useGLTF hook might still work
+        // This is just for debugging
+      }
+    }
+    
+    testConnectivity()
+    
     const timeout = setTimeout(() => {
       if (isLoading) {
-        console.warn('Avatar loading timeout')
+        console.warn('Avatar loading timeout for URL:', avatarUrl)
         setIsLoading(false)
-        setLoadError('Loading timeout')
+        setLoadError('Loading timeout - please check your internet connection')
       }
-    }, 15000) // 15 second timeout
+    }, 20000) // 20 second timeout (increased for slow connections)
 
     return () => clearTimeout(timeout)
-  }, [avatarUrl])
+  }, [avatarUrl, isLoading])
 
   return (
     <>
@@ -271,13 +415,40 @@ export const AvatarViewer: React.FC<AvatarViewerProps> = ({
   enableAnimations = true,
   cameraMode = 'full',
   onModelLoad,
+  onModelError,
   className = ''
 }) => {
+  // Debug logging
+  React.useEffect(() => {
+    console.log('AvatarViewer received URL:', {
+      avatarUrl,
+      type: typeof avatarUrl,
+      length: avatarUrl?.length,
+      isValid: avatarUrl && typeof avatarUrl === 'string' && avatarUrl.length > 0
+    })
+  }, [avatarUrl])
+
   // If no avatar URL is provided, show fallback
   if (!avatarUrl) {
+    console.warn('AvatarViewer: No avatar URL provided')
     return (
       <div className={`w-full h-full ${className}`}>
         <NoAvatarFallback />
+      </div>
+    )
+  }
+
+  // Validate URL format
+  if (typeof avatarUrl !== 'string' || avatarUrl.trim().length === 0) {
+    console.error('AvatarViewer: Invalid avatar URL format:', avatarUrl)
+    return (
+      <div className={`w-full h-full ${className}`}>
+        <div className="flex items-center justify-center w-full h-full bg-red-50 rounded-lg">
+          <div className="text-center p-4">
+            <p className="text-sm text-red-600 font-bold">Invalid Avatar URL</p>
+            <p className="text-xs text-red-500 mt-1">URL: {String(avatarUrl)}</p>
+          </div>
+        </div>
       </div>
     )
   }
@@ -317,6 +488,7 @@ export const AvatarViewer: React.FC<AvatarViewerProps> = ({
               enableAnimations={enableAnimations}
               cameraMode={cameraMode}
               onModelLoad={onModelLoad}
+              onModelError={onModelError}
             />
           </Suspense>
         </Canvas>

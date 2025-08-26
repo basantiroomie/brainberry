@@ -1,5 +1,6 @@
 import { Crown, Palette, Trophy } from "lucide-react"
 import { useEffect, useState } from "react"
+import MyAvatarTab from "./MyAvatarTab"
 
 interface ChildProgress {
   completedAssignments: number
@@ -17,6 +18,7 @@ export default function MyStuffTab() {
   })
   const [childProfile, setChildProfile] = useState<any>(null)
   const [loading, setLoading] = useState(true)
+  const [activeSection, setActiveSection] = useState<'overview' | 'avatar' | 'themes' | 'trophies'>('overview')
 
   useEffect(() => {
     const stored = sessionStorage.getItem('childProfile')
@@ -110,6 +112,16 @@ export default function MyStuffTab() {
     )
   }
 
+  // Show avatar customization section
+  if (activeSection === 'avatar') {
+    return (
+      <MyAvatarTab 
+        childId={childProfile?.id} 
+        onBack={() => setActiveSection('overview')}
+      />
+    )
+  }
+
   return (
     <div className="space-y-8">
       <div className="text-center mb-8">
@@ -129,7 +141,10 @@ export default function MyStuffTab() {
             <div className="w-24 h-24 bg-gray-200 border-2 border-black mx-auto mb-4 flex items-center justify-center">
               <span className="text-2xl">🦸</span>
             </div>
-            <button className="bg-chart-3 text-white px-4 py-2 border-2 border-black shadow-brutal hover:shadow-brutal-lg transition-all font-bold">
+            <button 
+              onClick={() => setActiveSection('avatar')}
+              className="bg-chart-3 text-white px-4 py-2 border-2 border-black shadow-brutal hover:shadow-brutal-lg transition-all font-bold"
+            >
               CUSTOMIZE
             </button>
           </div>

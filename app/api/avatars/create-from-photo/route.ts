@@ -1,56 +1,123 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createSupabaseServerClient, requireEducator } from '@/lib/supabase-server'
-import { 
-  createSuccessResponse, 
-  handleApiError, 
-  withErrorHandling,
-  UnauthorizedError,
-  ValidationException,
-  handleDatabaseError
-} from '@/utils/validation'
+import { createSupabaseServiceClient, requireEducator } from '@/lib/supabase-server'
 import { logger } from '@/utils/logger'
 
-// File upload validation
-function validatePhotoUpload(file: File): void {
-  // Check file size (max 10MB)
-  if (file.size > 10 * 1024 * 1024) {
-    throw new ValidationException([
-      { field: 'photo', message: 'File size must be less than 10MB' }
-    ])
-  }
+// A publicly available, neutral base template ID from Ready Player Me
+const MALE_TEMPLATE_ID = '645cd1eff23d0562d3f9d290'
 
-  // Check file type (JPEG/PNG only)
-  if (!['image/jpeg', 'image/png', 'image/jpg'].includes(file.type)) {
-    throw new ValidationException([
-      { field: 'photo', message: 'File must be a JPEG or PNG image' }
-    ])
-  }
-}
-
-// Ready Player Me API integration
-async function createAvatarFromPhoto(photoUrl: string): Promise<string> {
-  const apiKey = process.env.RPM_API_KEY
-  if (!apiKey) {
-    throw new Error('Ready Player Me API key not configured')
-  }
-
-  // Validate API key format
-  if (!apiKey.startsWith('sk_live_') && !apiKey.startsWith('sk_test_')) {
-    throw new Error('Invalid Ready Player Me API key format')
-  }
-
-  logger.info('Creating avatar from photo', 'RPM_API', { 
-    photoUrl: photoUrl.substring(0, 50) + '...',
-    apiKeyPrefix: apiKey.substring(0, 8) + '...'
-  })
-
+export async function POST(req: NextRequest) {
   try {
-    // Step 1: Create anonymous user
+    // 1. Authenticate the Educator
+    const { user } = await requireEducator()
+    if (!user) {
+      logger.warn('Unauthorized avatar creation attempt', 'API')
+      return NextResponse.json({ error: 'Unauthorized. Please log in.' }, { status: 401 })
+    }
+
+    // Try to parse as JSON first, then fall back to FormData
+    let childId: string
+    let photoBuffer: ArrayBuffer
+    let photoType: string
+
+    const contentType = req.headers.get('content-type') || ''
+    
+    if (contentType.includes('application/json')) {
+      // Handle JSON request with base64 image
+      const body = await req.json()
+      childId = body.childId
+      
+      if (!body.imageData || !body.imageData.startsWith('data:image/')) {
+        return NextResponse.json({ error: 'Invalid image data format' }, { status: 400 })
+      }
+      
+      // Parse data URL
+      const [header, base64Data] = body.imageData.split(',')
+      const mimeMatch = header.match(/data:image\/([^;]+)/)
+      photoType = mimeMatch ? `image/${mimeMatch[1]}` : 'image/jpeg'
+      
+      // Convert base64 to buffer
+      photoBuffer = Buffer.from(base64Data, 'base64')
+      
+    } else if (contentType.includes('multipart/form-data')) {
+      // Handle FormData request
+      try {
+        const formData = await req.formData()
+        childId = formData.get('childId') as string
+        const photo = formData.get('photo') as File
+        
+        if (!photo) {
+          return NextResponse.json({ error: 'Photo file is required' }, { status: 400 })
+        }
+        
+        photoBuffer = await photo.arrayBuffer()
+        photoType = photo.type
+        
+        // Validate file size and type
+        if (photoBuffer.byteLength > 10 * 1024 * 1024) {
+          return NextResponse.json({ error: 'File size must be less than 10MB' }, { status: 400 })
+        }
+        
+      } catch (parseError) {
+        logger.error('FormData parsing failed', parseError, 'API')
+        return NextResponse.json({ 
+          error: 'Invalid form data. Please try uploading the image again.' 
+        }, { status: 400 })
+      }
+    } else {
+      return NextResponse.json({ 
+        error: 'Content-Type must be application/json or multipart/form-data' 
+      }, { status: 400 })
+    }
+
+    if (!childId || !photoBuffer) {
+      return NextResponse.json({ error: 'childId and photo are required' }, { status: 400 })
+    }
+
+    if (!['image/jpeg', 'image/png', 'image/jpg'].includes(photoType)) {
+      return NextResponse.json({ error: 'File must be a JPEG or PNG image' }, { status: 400 })
+    }
+
+    logger.info('Avatar creation request received', 'API', { 
+      childId, 
+      photoSize: photoBuffer.byteLength, 
+      photoType,
+      educatorId: user.id 
+    })
+
+    const supabase = createSupabaseServiceClient()
+    const rpmApiKey = process.env.RPM_API_KEY
+    if (!rpmApiKey) {
+      throw new Error('Avatar service is not configured on the server.')
+    }
+
+    // Validate child exists
+    const { data: child, error: childError } = await supabase
+      .from('ChildProfile')
+      .select('id, name, educator_id')
+      .eq('id', childId)
+      .single()
+
+    if (childError || !child) {
+      logger.warn('Child not found', 'API', { 
+        childId, 
+        educatorId: user.id,
+        error: childError 
+      })
+      return NextResponse.json({ error: 'Child not found' }, { status: 404 })
+    }
+
+    logger.info('Starting avatar creation process', 'API', { childId, educatorId: user.id })
+
+    // --- START OF THE CORRECTED WORKFLOW ---
+    // This follows the working approach from test-photo-to-avatar.js
+
+    // Step 1: Create Anonymous User to get user token
+    logger.info('Creating anonymous user for avatar creation', 'API')
     const userResponse = await fetch('https://api.readyplayer.me/v1/users', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`
+        'Authorization': `Bearer ${rpmApiKey}`
       },
       body: JSON.stringify({
         data: {
@@ -58,46 +125,25 @@ async function createAvatarFromPhoto(photoUrl: string): Promise<string> {
           requestToken: true
         }
       })
-    })
+    });
 
     if (!userResponse.ok) {
-      const errorData = await userResponse.text()
-      logger.error('User creation failed', new Error(errorData), 'RPM_API')
-      throw new Error('Failed to create Ready Player Me user')
+      const errorBody = await userResponse.json();
+      logger.error('RPM User Creation Failed', errorBody, 'API');
+      throw new Error('Failed to initialize avatar creation session.');
     }
 
-    const userData = await userResponse.json()
-    const userToken = userData.data.token
-    const userId = userData.data.id
+    const userData = await userResponse.json();
+    const userToken = userData.data.token;
+    const userId = userData.data.id;
+    logger.info(`Anonymous user created: ${userId}`, 'API');
 
-    logger.info('Anonymous user created', 'RPM_API', { userId })
-
-    // Step 2: Get a template to create avatar from
-    const templatesResponse = await fetch('https://api.readyplayer.me/v2/avatars/templates', {
-      headers: {
-        'Authorization': `Bearer ${userToken}`
-      }
-    })
-
-    if (!templatesResponse.ok) {
-      throw new Error('Failed to fetch avatar templates')
-    }
-
-    const templatesData = await templatesResponse.json()
-    const maleTemplate = templatesData.data.find((t: any) => t.gender === 'male')
-    
-    if (!maleTemplate) {
-      throw new Error('No suitable avatar template found')
-    }
-
-    logger.info('Using avatar template', 'RPM_API', { templateId: maleTemplate.id })
-
-    // Step 3: Create avatar from template
-    const avatarResponse = await fetch(`https://api.readyplayer.me/v2/avatars/templates/${maleTemplate.id}`, {
+    // Step 2: Create Draft Avatar from Template
+    const createDraftResponse = await fetch(`https://api.readyplayer.me/v2/avatars/templates/${MALE_TEMPLATE_ID}`, {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${userToken}`,
-        'Content-Type': 'application/json'
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${userToken}`
       },
       body: JSON.stringify({
         data: {
@@ -105,211 +151,83 @@ async function createAvatarFromPhoto(photoUrl: string): Promise<string> {
           bodyType: 'fullbody'
         }
       })
-    })
+    });
 
-    if (!avatarResponse.ok) {
-      const errorData = await avatarResponse.text()
-      logger.error('Avatar creation failed', new Error(errorData), 'RPM_API')
-      throw new Error('Failed to create avatar from template')
+    if (!createDraftResponse.ok) {
+      const errorBody = await createDraftResponse.json();
+      logger.error('RPM Draft Creation Failed', errorBody, 'API');
+      throw new Error('Failed to create draft avatar.');
     }
 
-    const avatarData = await avatarResponse.json()
-    const avatarId = avatarData.data.id
+    const draftAvatarData = await createDraftResponse.json();
+    const avatarId = draftAvatarData.data.id;
+    logger.info(`Draft avatar created: ${avatarId}`, 'API');
 
-    logger.info('Template avatar created', 'RPM_API', { avatarId })
-
-    // Step 4: Update avatar with photo (this applies the face from the photo)
-    const updateResponse = await fetch(`https://api.readyplayer.me/v2/avatars/${avatarId}`, {
+    // Step 3: Update Avatar with Photo
+    const base64Photo = Buffer.from(photoBuffer).toString('base64');
+    const photoDataUrl = `data:${photoType};base64,${base64Photo}`;
+        
+    const updateWithPhotoResponse = await fetch(`https://api.readyplayer.me/v2/avatars/${avatarId}`, {
       method: 'PATCH',
       headers: {
-        'Authorization': `Bearer ${userToken}`,
-        'Content-Type': 'application/json'
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${userToken}`
       },
       body: JSON.stringify({
         data: {
           type: 'photo',
-          image: photoUrl
+          image: photoDataUrl
         }
       })
-    })
+    });
 
-    if (updateResponse.ok) {
-      logger.info('Avatar updated with photo', 'RPM_API', { avatarId })
+    if (!updateWithPhotoResponse.ok) {
+      const errorBody = await updateWithPhotoResponse.json();
+      logger.error('RPM Photo Update Failed', errorBody, 'API');
+      // Continue with template avatar if photo update fails
+      logger.warn('Photo update failed, using template avatar', 'API');
     } else {
-      logger.warn('Photo update failed, using template avatar', 'RPM_API', { avatarId })
+      logger.info(`Photo applied successfully to avatar ${avatarId}`, 'API');
     }
-
-    // Step 5: Save avatar permanently
-    const saveResponse = await fetch(`https://api.readyplayer.me/v2/avatars/${avatarId}`, {
+     
+    // Step 4: Save Avatar Permanently
+    const saveFinalResponse = await fetch(`https://api.readyplayer.me/v2/avatars/${avatarId}`, {
       method: 'PUT',
       headers: {
         'Authorization': `Bearer ${userToken}`
       }
-    })
+    });
 
-    if (!saveResponse.ok) {
-      logger.warn('Avatar save failed, but avatar is still accessible', 'RPM_API')
+    if (!saveFinalResponse.ok) {
+      const errorBody = await saveFinalResponse.json();
+      logger.error('RPM Final Save Failed', errorBody, 'API');
+      throw new Error('Failed to save the final avatar.');
+    }
+        
+    // The final avatar URL follows the CDN pattern
+    const finalAvatarUrl = `https://models.readyplayer.me/${avatarId}.glb`;
+    logger.info(`Avatar saved permanently. URL: ${finalAvatarUrl}`, 'API');
+
+    // --- END OF THE CORRECTED WORKFLOW ---
+
+    // Step 5: Update the ChildProfile in your database with the FINAL URL
+    const { error: dbError } = await supabase
+      .from('ChildProfile')
+      .update({ avatar_url: finalAvatarUrl })
+      .eq('id', childId)
+
+    if (dbError) {
+      logger.error('Database update failed', dbError, 'API');
+      throw new Error('Failed to save the avatar to the child profile.');
     }
 
-    // Return the CDN URL for the avatar
-    const avatarUrl = `https://models.readyplayer.me/${avatarId}.glb`
-    
-    logger.info('Avatar created successfully', 'RPM_API', { 
-      avatarUrl: avatarUrl.substring(0, 50) + '...' 
-    })
-
-    return avatarUrl
+    logger.info(`Database updated for child ${childId}`, 'API');
+    return NextResponse.json({ success: true, avatarUrl: finalAvatarUrl });
 
   } catch (error) {
-    logger.error('Avatar creation process failed', error, 'RPM_API')
-    
-    if (error instanceof Error) {
-      if (error.message.includes('401')) {
-        throw new Error('Ready Player Me API key is invalid or expired. Please check your API key in the RPM Studio dashboard.')
-      } else if (error.message.includes('400')) {
-        throw new Error('Invalid request to Ready Player Me API. Please check the photo URL format.')
-      } else if (error.message.includes('429')) {
-        throw new Error('Ready Player Me API rate limit exceeded. Please try again later.')
-      }
-    }
-    
-    throw new Error(`Avatar creation failed: ${error instanceof Error ? error.message : 'Unknown error'}`)
+    logger.error('Avatar creation process failed', error, 'API')
+    return NextResponse.json({
+      error: error instanceof Error ? error.message : 'An unknown server error occurred.',
+    }, { status: 500 })
   }
 }
-
-export const POST = withErrorHandling(async (req: NextRequest) => {
-  // Authenticate educator
-  const { user } = await requireEducator()
-  if (!user) {
-    throw new UnauthorizedError('Only educators can create avatars')
-  }
-
-  logger.info('Avatar creation request started', 'API', { educatorId: user.id })
-
-  try {
-    // Parse FormData
-    const formData = await req.formData()
-    const childId = formData.get('childId') as string
-    const photo = formData.get('photo') as File
-
-    // Validate required fields
-    if (!childId) {
-      throw new ValidationException([
-        { field: 'childId', message: 'Child ID is required' }
-      ])
-    }
-
-    if (!photo) {
-      throw new ValidationException([
-        { field: 'photo', message: 'Photo file is required' }
-      ])
-    }
-
-    // Validate photo upload
-    validatePhotoUpload(photo)
-
-    // Validate child exists and belongs to educator
-    const supabase = await createSupabaseServerClient()
-    
-    const { data: child, error: childError } = await supabase
-      .from('ChildProfile')
-      .select('id, name, educator_id')
-      .eq('id', childId)
-      .eq('educator_id', user.id)
-      .single()
-
-    if (childError || !child) {
-      logger.warn('Child not found or access denied', 'API', { 
-        childId, 
-        educatorId: user.id,
-        error: childError 
-      })
-      throw new ValidationException([
-        { field: 'childId', message: 'Child not found or access denied' }
-      ])
-    }
-
-    // Upload photo to Supabase Storage
-    const fileName = `${childId}-${Date.now()}.${photo.type.split('/')[1]}`
-    const { data: uploadData, error: uploadError } = await supabase.storage
-      .from('avatar-photos')
-      .upload(fileName, photo, {
-        cacheControl: '3600',
-        upsert: false
-      })
-
-    if (uploadError) {
-      logger.error('Photo upload failed', uploadError, 'STORAGE')
-      throw new Error('Failed to upload photo')
-    }
-
-    // Get public URL for the uploaded photo
-    const { data: { publicUrl } } = supabase.storage
-      .from('avatar-photos')
-      .getPublicUrl(uploadData.path)
-
-    logger.info('Photo uploaded successfully', 'API', { 
-      fileName, 
-      publicUrl: publicUrl.substring(0, 50) + '...' 
-    })
-
-    // Create avatar using Ready Player Me API
-    const avatarUrl = await createAvatarFromPhoto(publicUrl)
-    
-    logger.info('Avatar created successfully', 'API', { 
-      avatarUrl: avatarUrl.substring(0, 50) + '...' 
-    })
-
-    // Update child profile with avatar URL
-    // Note: avatar_url column may not exist yet if migration hasn't been applied
-    try {
-      const { data: updatedChild, error: updateError } = await supabase
-        .from('ChildProfile')
-        .update({ 
-          avatar_url: avatarUrl,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', childId)
-        .select()
-        .single()
-
-      if (updateError) {
-        // If column doesn't exist, log warning but continue
-        if (updateError.message?.includes('avatar_url') || updateError.code === '42703') {
-          logger.warn('Avatar URL column does not exist yet - migration needed', 'DATABASE', updateError)
-          // Return success but note that database update failed
-          return createSuccessResponse({
-            success: true,
-            avatarUrl,
-            childId,
-            childName: child.name,
-            warning: 'Avatar created but database not updated - migration needed'
-          }, 201)
-        } else {
-          logger.error('Failed to update child profile with avatar', updateError, 'DATABASE')
-          handleDatabaseError(updateError)
-        }
-      }
-    } catch (dbError) {
-      logger.warn('Database update failed - possibly missing avatar columns', 'DATABASE', dbError)
-      // Continue with success response since avatar was created
-    }
-
-    logger.info('Avatar creation completed successfully', 'API', { 
-      childId, 
-      childName: child.name,
-      educatorId: user.id 
-    })
-
-    return createSuccessResponse({
-      success: true,
-      avatarUrl,
-      childId,
-      childName: child.name
-    }, 201)
-
-  } catch (error) {
-    logger.error('Avatar creation failed', error, 'API')
-    throw error
-  }
-})

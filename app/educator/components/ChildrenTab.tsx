@@ -1,10 +1,26 @@
 "use client"
-import { Users, User, Plus, BarChart3, Settings, Palette, Loader2, Link2, CheckCircle2 } from "lucide-react"
-import { useEffect, useState } from "react"
+import { Users, User, Plus, BarChart3, Settings, Palette, Loader2, Link2, CheckCircle2, Upload, Camera, X, RotateCcw } from "lucide-react"
+import { useEffect, useState, useRef } from "react"
 import { toast } from 'sonner'
 import { useMockData } from './MockDataContext'
+import { AvatarViewer } from '@/components/AvatarViewer'
 
-interface Child { id: string; name: string; age: number; diagnosis: string; notes?: string | null; access_code?: string | null; educator_id?: string }
+interface Child { 
+  id: string; 
+  name: string; 
+  age: number; 
+  diagnosis: string; 
+  notes?: string | null; 
+  access_code?: string | null; 
+  educator_id?: string;
+  avatar_url?: string | null;
+  avatar_headshot_url?: string | null;
+  avatar_permissions?: {
+    can_customize: boolean;
+    can_chat: boolean;
+    chat_time_limit_minutes: number;
+  } | null;
+}
 interface Assignment { id: string; moldId: string; childId: string; status: string; progress: number; mold: { id: string; name: string; difficulty: string }; }
 interface MoldLite { id: string; name: string; difficulty: string; primaryObjective: string; meta?: any }
 
@@ -29,6 +45,11 @@ export default function ChildrenTab() {
   const [newChild, setNewChild] = useState({ name: '', age: '', diagnosis: 'HYBRID', accessCode: '' })
   const [assignModal, setAssignModal] = useState(false)
   const [assignMoldId, setAssignMoldId] = useState('')
+  
+  // Avatar management state
+  const [avatarUploading, setAvatarUploading] = useState(false)
+  const [dragActive, setDragActive] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   const { useMock, dataset, addChild, addAssignment, updateAssignmentProgress } = useMockData()
 
@@ -183,6 +204,137 @@ export default function ChildrenTab() {
     if (res.ok) { toast.success('Progress updated'); fetchAssignments(a.childId) } else toast.error('Update failed')
   }
 
+  // Avatar management functions
+  async function handleAvatarUpload(file: File, childId: string) {
+    if (!file) return
+    
+    // Validate file type and size
+    if (!file.type.match(/^image\/(jpeg|jpg|png)$/)) {
+      toast.error('Please upload a JPEG or PNG image')
+      return
+    }
+    
+    if (file.size > 10 * 1024 * 1024) { // 10MB limit
+      toast.error('File size must be less than 10MB')
+      return
+    }
+
+    if (useMock) {
+      toast.success('Avatar created (mock mode)')
+      // Update the child in the local state with a mock avatar URL
+      setChildren(children.map(child => 
+        child.id === childId 
+          ? { 
+              ...child, 
+              avatar_url: 'https://models.readyplayer.me/68ad29be1b10d8c48a4e516d.glb', // Use a known working avatar
+              avatar_headshot_url: 'https://models.readyplayer.me/68ad29be1b10d8c48a4e516d.glb' // For now, use same URL
+            }
+          : child
+      ))
+      return
+    }
+
+    setAvatarUploading(true)
+    try {
+      const formData = new FormData()
+      formData.append('photo', file)
+      formData.append('childId', childId)
+
+      const response = await fetch('/api/avatars/create-from-photo', {
+        method: 'POST',
+        body: formData
+      })
+
+      const result = await response.json()
+
+      if (response.ok && result.success) {
+        toast.success('Avatar created successfully!')
+        // Refresh children data to get updated avatar URLs
+        fetchChildren()
+      } else {
+        toast.error(result.error || 'Failed to create avatar')
+      }
+    } catch (error) {
+      console.error('Avatar upload error:', error)
+      toast.error('Error uploading avatar')
+    } finally {
+      setAvatarUploading(false)
+    }
+  }
+
+  function handleDragEnter(e: React.DragEvent) {
+    e.preventDefault()
+    e.stopPropagation()
+    setDragActive(true)
+  }
+
+  function handleDragLeave(e: React.DragEvent) {
+    e.preventDefault()
+    e.stopPropagation()
+    setDragActive(false)
+  }
+
+  function handleDragOver(e: React.DragEvent) {
+    e.preventDefault()
+    e.stopPropagation()
+  }
+
+  function handleDrop(e: React.DragEvent, childId: string) {
+    e.preventDefault()
+    e.stopPropagation()
+    setDragActive(false)
+
+    const files = Array.from(e.dataTransfer.files)
+    if (files.length > 0) {
+      handleAvatarUpload(files[0], childId)
+    }
+  }
+
+  function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>, childId: string) {
+    const files = e.target.files
+    if (files && files.length > 0) {
+      handleAvatarUpload(files[0], childId)
+    }
+    // Reset the input
+    if (fileInputRef.current) {
+      fileInputRef.current.value = ''
+    }
+  }
+
+  async function removeAvatar(childId: string) {
+    if (!confirm('Are you sure you want to remove this avatar?')) {
+      return
+    }
+
+    if (useMock) {
+      toast.success('Avatar removed (mock mode)')
+      setChildren(children.map(child => 
+        child.id === childId 
+          ? { ...child, avatar_url: undefined, avatar_headshot_url: undefined }
+          : child
+      ))
+      return
+    }
+
+    try {
+      const response = await fetch('/api/avatars/remove', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ childId })
+      })
+
+      if (response.ok) {
+        toast.success('Avatar removed successfully')
+        fetchChildren()
+      } else {
+        toast.error('Failed to remove avatar')
+      }
+    } catch (error) {
+      console.error('Avatar removal error:', error)
+      toast.error('Error removing avatar')
+    }
+  }
+
   if (selectedChild) {
     const child = Array.isArray(children) ? children.find(c => c.id === selectedChild) : undefined
     return (
@@ -191,12 +343,28 @@ export default function ChildrenTab() {
         <div className="bg-white border-4 border-black shadow-brutal-xl p-6">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center space-x-4">
-              <div className="bg-chart-2 text-white rounded-full w-16 h-16 flex items-center justify-center">
-                <User className="h-8 w-8" />
+              {/* Avatar or placeholder in header */}
+              <div className="w-16 h-16 rounded-full overflow-hidden border-2 border-black bg-gray-100">
+                {child?.avatar_headshot_url ? (
+                  <img 
+                    src={child.avatar_headshot_url} 
+                    alt={`${child.name}'s avatar`}
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  <div className="bg-chart-2 text-white rounded-full w-full h-full flex items-center justify-center">
+                    <User className="h-8 w-8" />
+                  </div>
+                )}
               </div>
               <div>
                 <h1 className="text-3xl font-bold">{child?.name} ({child?.age} years old)</h1>
                 <p className="text-gray-600 text-sm">Diagnosis: {child?.diagnosis}</p>
+                {child?.avatar_url && (
+                  <div className="mt-1 bg-green-500 text-white px-2 py-1 border border-black inline-block">
+                    <span className="text-xs font-bold">🎭 Avatar Active</span>
+                  </div>
+                )}
               </div>
             </div>
             <button
@@ -209,7 +377,7 @@ export default function ChildrenTab() {
 
           {/* Sub-tabs */}
           <div className="flex space-x-2">
-            {["overview", "assignments", "progress", "settings"].map((tab) => (
+            {["overview", "assignments", "avatar", "progress", "settings"].map((tab) => (
               <button
                 key={tab}
                 onClick={() => setChildSubTab(tab)}
@@ -265,6 +433,159 @@ export default function ChildrenTab() {
                   </div>
                 ))}
                 {assignments.length===0 && <div className="p-4 border-2 border-dashed border-black text-center text-xs font-bold text-gray-500">None yet</div>}
+              </div>
+            </div>
+          )}
+
+          {childSubTab === "avatar" && (
+            <div className="space-y-6">
+              <h2 className="text-2xl font-bold">Avatar Management</h2>
+              
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {/* Avatar Display */}
+                <div className="space-y-4">
+                  <h3 className="text-lg font-bold">Current Avatar</h3>
+                  <div className="bg-gray-50 border-2 border-black shadow-brutal p-4 h-80">
+                    {child?.avatar_url && typeof child.avatar_url === 'string' && child.avatar_url.trim() !== '' ? (
+                      <AvatarViewer
+                        avatarUrl={child.avatar_url}
+                        cameraMode="headshot"
+                        enableControls={true}
+                        className="w-full h-full"
+                      />
+                    ) : (
+                      <div className="flex items-center justify-center w-full h-full">
+                        <div className="text-center">
+                          <User className="w-16 h-16 mx-auto mb-4 text-gray-400" />
+                          <p className="text-gray-600 font-bold">No avatar created yet</p>
+                          <p className="text-sm text-gray-500 mt-1">Upload a photo to create an avatar</p>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                  
+                  {child?.avatar_url && (
+                    <div className="flex space-x-2">
+                      <button
+                        onClick={() => removeAvatar(child.id)}
+                        className="bg-red-500 text-white px-4 py-2 border-2 border-black shadow-brutal hover:shadow-brutal-lg font-bold text-sm flex items-center space-x-2"
+                      >
+                        <X className="h-4 w-4" />
+                        <span>REMOVE AVATAR</span>
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                {/* Upload Interface */}
+                <div className="space-y-4">
+                  <h3 className="text-lg font-bold">
+                    {child?.avatar_url ? 'Replace Avatar' : 'Create Avatar'}
+                  </h3>
+                  
+                  {/* Drag and Drop Area */}
+                  <div
+                    className={`border-4 border-dashed p-8 text-center transition-all ${
+                      dragActive 
+                        ? 'border-chart-2 bg-chart-2/10' 
+                        : 'border-gray-300 hover:border-gray-400'
+                    } ${avatarUploading ? 'opacity-50 pointer-events-none' : ''}`}
+                    onDragEnter={handleDragEnter}
+                    onDragLeave={handleDragLeave}
+                    onDragOver={handleDragOver}
+                    onDrop={(e) => handleDrop(e, child?.id || '')}
+                  >
+                    {avatarUploading ? (
+                      <div className="space-y-4">
+                        <Loader2 className="w-12 h-12 mx-auto animate-spin text-chart-2" />
+                        <div>
+                          <p className="font-bold text-chart-2">Creating Avatar...</p>
+                          <p className="text-sm text-gray-600 mt-1">This may take a few moments</p>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="space-y-4">
+                        <Upload className="w-12 h-12 mx-auto text-gray-400" />
+                        <div>
+                          <p className="font-bold text-gray-700">
+                            Drag and drop a photo here, or click to browse
+                          </p>
+                          <p className="text-sm text-gray-500 mt-2">
+                            Supports JPEG and PNG files up to 10MB
+                          </p>
+                          <p className="text-xs text-gray-400 mt-1">
+                            Best results with clear front-facing photos
+                          </p>
+                        </div>
+                        <button
+                          onClick={() => fileInputRef.current?.click()}
+                          className="bg-chart-2 text-white px-6 py-3 border-2 border-black shadow-brutal hover:shadow-brutal-lg font-bold flex items-center space-x-2 mx-auto"
+                        >
+                          <Camera className="h-5 w-5" />
+                          <span>CHOOSE PHOTO</span>
+                        </button>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* File Input */}
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/jpeg,image/jpg,image/png"
+                    onChange={(e) => handleFileSelect(e, child?.id || '')}
+                    className="hidden"
+                  />
+
+                  {/* Avatar Permissions */}
+                  <div className="bg-gray-50 border-2 border-black shadow-brutal p-4">
+                    <h4 className="font-bold mb-3">Avatar Permissions</h4>
+                    <div className="space-y-2">
+                      <label className="flex items-center">
+                        <input 
+                          type="checkbox" 
+                          defaultChecked={child?.avatar_permissions?.can_customize ?? true}
+                          className="mr-2" 
+                        />
+                        <span className="text-sm font-bold">Allow avatar customization</span>
+                      </label>
+                      <label className="flex items-center">
+                        <input 
+                          type="checkbox" 
+                          defaultChecked={child?.avatar_permissions?.can_chat ?? true}
+                          className="mr-2" 
+                        />
+                        <span className="text-sm font-bold">Enable avatar chatbot</span>
+                      </label>
+                      <div className="flex items-center space-x-2">
+                        <span className="text-sm font-bold">Chat time limit:</span>
+                        <select 
+                          defaultValue={child?.avatar_permissions?.chat_time_limit_minutes ?? 30}
+                          className="border border-black px-2 py-1 text-sm"
+                        >
+                          <option value={15}>15 minutes</option>
+                          <option value={30}>30 minutes</option>
+                          <option value={45}>45 minutes</option>
+                          <option value={60}>60 minutes</option>
+                        </select>
+                      </div>
+                    </div>
+                    <button className="mt-3 bg-chart-1 text-white px-4 py-2 border-2 border-black shadow-brutal hover:shadow-brutal-lg font-bold text-sm">
+                      SAVE PERMISSIONS
+                    </button>
+                  </div>
+
+                  {/* Usage Guidelines */}
+                  <div className="bg-yellow-50 border-2 border-yellow-300 p-4">
+                    <h4 className="font-bold text-yellow-800 mb-2">📋 Photo Guidelines</h4>
+                    <ul className="text-sm text-yellow-700 space-y-1">
+                      <li>• Use clear, well-lit front-facing photos</li>
+                      <li>• Avoid sunglasses or face coverings</li>
+                      <li>• Single person in the photo works best</li>
+                      <li>• Higher resolution photos create better avatars</li>
+                    </ul>
+                  </div>
+                </div>
               </div>
             </div>
           )}
@@ -400,15 +721,34 @@ export default function ChildrenTab() {
         {Array.isArray(children) && children.map(child => (
           <div key={child.id} className="bg-white border-4 border-black shadow-brutal-xl p-6 hover:shadow-brutal-2xl transition-all">
             <div className="flex items-center space-x-4 mb-4">
-              <div className="text-white rounded-full w-16 h-16 flex items-center justify-center bg-chart-2">
-                <User className="h-8 w-8" />
+              {/* Avatar or placeholder */}
+              <div className="w-16 h-16 rounded-full overflow-hidden border-2 border-black bg-gray-100">
+                {child.avatar_headshot_url ? (
+                  <img 
+                    src={child.avatar_headshot_url} 
+                    alt={`${child.name}'s avatar`}
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  <div className="text-white rounded-full w-full h-full flex items-center justify-center bg-chart-2">
+                    <User className="h-8 w-8" />
+                  </div>
+                )}
               </div>
               <div className="flex-1">
                 <h3 className="text-xl font-bold">{child.name} (Age {child.age})</h3>
                 <p className="text-gray-600 text-xs">Diagnosis: {child.diagnosis}</p>
-                <div className="mt-2 bg-chart-4 text-white px-3 py-1 border border-black inline-block">
-                  <span className="text-xs font-bold">Code: </span>
-                  <span className="font-mono font-bold">{child.access_code}</span>
+                {/* Avatar status indicator */}
+                <div className="flex items-center space-x-2 mt-1">
+                  <div className="mt-1 bg-chart-4 text-white px-3 py-1 border border-black inline-block">
+                    <span className="text-xs font-bold">Code: </span>
+                    <span className="font-mono font-bold">{child.access_code}</span>
+                  </div>
+                  {child.avatar_url && (
+                    <div className="bg-green-500 text-white px-2 py-1 border border-black inline-block">
+                      <span className="text-xs font-bold">🎭 AVATAR</span>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
