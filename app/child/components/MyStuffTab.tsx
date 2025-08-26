@@ -1,6 +1,7 @@
 import { Crown, Palette, Trophy } from "lucide-react"
 import { useEffect, useState } from "react"
-import MyAvatarTab from "./MyAvatarTab"
+import MyAvatarTab from "../Games/MyAvatarTab"
+import CanvasColoringGame from "../Games/CanvasColoringGame"
 
 interface ChildProgress {
   completedAssignments: number
@@ -18,7 +19,7 @@ export default function MyStuffTab() {
   })
   const [childProfile, setChildProfile] = useState<any>(null)
   const [loading, setLoading] = useState(true)
-  const [activeSection, setActiveSection] = useState<'overview' | 'avatar' | 'themes' | 'trophies'>('overview')
+  const [activeSection, setActiveSection] = useState<'overview' | 'avatar' | 'themes' | 'trophies' | 'canvas'>('overview')
 
   useEffect(() => {
     const stored = sessionStorage.getItem('childProfile')
@@ -122,6 +123,15 @@ export default function MyStuffTab() {
     )
   }
 
+  // Show canvas coloring game section
+  if (activeSection === 'canvas') {
+    return (
+      <CanvasColoringGame 
+        onBack={() => setActiveSection('overview')}
+      />
+    )
+  }
+
   return (
     <div className="space-y-8">
       <div className="text-center mb-8">
@@ -150,23 +160,22 @@ export default function MyStuffTab() {
           </div>
         </div>
 
-        {/* World Theme */}
+        {/* Canvas Coloring Game */}
         <div className="bg-white border-4 border-black shadow-brutal-xl p-6">
           <div className="text-center">
             <div className="bg-chart-4 text-white rounded-full w-16 h-16 flex items-center justify-center mx-auto mb-4">
               <Palette className="h-8 w-8" />
             </div>
-            <h3 className="text-xl font-bold mb-2">World Theme</h3>
-            <p className="text-gray-600 mb-4">Change your world!</p>
-            <div className="space-y-2 mb-4">
-              {['dinosaur', 'space', 'castle'].map(theme => (
-                <div key={theme} className={`text-sm ${progress.unlockedThemes.includes(theme) ? 'font-bold' : 'text-gray-500'}`}>
-                  {getThemeEmoji(theme)} {getThemeName(theme)} {!progress.unlockedThemes.includes(theme) && '(Locked)'}
-                </div>
-              ))}
+            <h3 className="text-xl font-bold mb-2">Canvas Coloring</h3>
+            <p className="text-gray-600 mb-4">Turn pictures into coloring pages!</p>
+            <div className="w-24 h-24 bg-gray-200 border-2 border-black mx-auto mb-4 flex items-center justify-center">
+              <span className="text-2xl">🎨</span>
             </div>
-            <button className="bg-chart-4 text-white px-4 py-2 border-2 border-black shadow-brutal hover:shadow-brutal-lg transition-all font-bold">
-              SWITCH THEME
+            <button 
+              onClick={() => setActiveSection('canvas')}
+              className="bg-chart-4 text-white px-4 py-2 border-2 border-black shadow-brutal hover:shadow-brutal-lg transition-all font-bold"
+            >
+              PLAY GAME
             </button>
           </div>
         </div>
