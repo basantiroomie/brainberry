@@ -7,7 +7,6 @@ import { useState, useEffect } from "react"
 import { MockDataProvider, useMockData } from "./components/MockDataContext"
 import DashboardTab from "./components/DashboardTab"
 import ChildrenTab from "./components/ChildrenTab"
-import MoldLibraryTab from "./components/MoldLibraryTab"
 import AnalyticsTab from "./components/AnalyticsTab"
 import AccountSettingsTab from "./components/AccountSettingsTab"
 import { createSupabaseBrowserClient } from "@/lib/supabase-browser"
@@ -59,7 +58,7 @@ function EducatorDashboardInner() {
   const tabs = [
     { id: "dashboard", name: "DASHBOARD" },
     { id: "children", name: "CHILDREN" },
-    { id: "library", name: "MOLD LIBRARY" },
+    { id: "studio", name: "MOLD STUDIO" },
     { id: "analytics", name: "ANALYTICS" },
     { id: "settings", name: "ACCOUNT SETTINGS" }
   ]
@@ -70,8 +69,10 @@ function EducatorDashboardInner() {
         return <DashboardTab />
       case "children":
         return <ChildrenTab />
-      case "library":
-        return <MoldLibraryTab />
+      case "studio":
+        // Redirect to dedicated studio page
+        router.push('/educator/mold-studio')
+        return <div>Redirecting to Mold Studio...</div>
       case "analytics":
         return <AnalyticsTab />
       case "settings":
