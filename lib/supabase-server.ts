@@ -39,3 +39,29 @@ export async function requireEducator() {
   }
   return { user }
 }
+
+export async function requireChild(childId: string, accessCode: string) {
+  const supabase = createSupabaseServiceClient()
+  
+  const { data: child, error } = await supabase
+    .from('ChildProfile')
+    .select('id, name, access_code, avatar_url, avatar_permissions, educator_id')
+    .eq('id', childId)
+    .eq('access_code', accessCode)
+    .single()
+
+  if (error || !child) {
+    logger.warn('Child authentication failed', 'SUPABASE', { 
+      childId, 
+      error: error?.message 
+    })
+    return { child: null }
+  }
+
+  logger.debug('Child auth check successful', 'SUPABASE', { 
+    childId: child.id, 
+    childName: child.name 
+  })
+  
+  return { child }
+}

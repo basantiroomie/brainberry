@@ -1,160 +1,236 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createSupabaseServerClient } from '@/lib/supabase-server'
-import { updateAvatarRequestSchema } from '@/lib/schemas'
-import { z } from 'zod'
+import { createSupabaseServiceClient, requireChild } from '@/lib/supabase-server'
+import { updateAvatarRequestSchema, avatarResponseSchema } from '@/lib/schemas'
+import { logger } from '@/utils/logger'
 
-export async function PUT(request: NextRequest) {
+/**
+ * Avatar Update API Endpoint
+ * Handles saving avatar customizations made by children
+ * Requirements: 2.4, 4.1, 4.4, 5.3
+ */
+
+export async function PUT(req: NextRequest) {
   try {
     // Parse and validate request body
-    const body = await request.json()
-    const validatedData = updateAvatarRequestSchema.parse(body)
+    const body = await req.json()
     
-    const { childId, avatarConfig } = validatedData
-
-    // Create Supabase client
-    const supabase = await createSupabaseServerClient()
-
-    // Get the current user (should be authenticated)
-    const { data: { user }, error: authError } = await supabase.auth.getUser()
-    if (authError || !user) {
-      return NextResponse.json(
-        { success: false, error: 'Authentication required' },
-        { status: 401 }
-      )
+    // Validate request structure
+    const validationResult = updateAvatarRequestSchema.safeParse(body)
+    if (!validationResult.success) {
+      logger.warn('Invalid avatar update request', 'API', { 
+        errors: validationResult.error.errors 
+      })
+      return NextResponse.json({ 
+        success: false,
+        error: 'Invalid request data: ' + validationResult.error.errors.map(e => e.message).join(', ')
+      }, { status: 400 })
     }
 
-    // Verify the child exists
-    const { data: child, error: childError } = await supabase
-      .from('ChildProfile')
-      .select('id, name, avatar_url, educator_id')
-      .eq('id', childId)
-      .single()
+    const { childId, avatarConfig } = validationResult.data
 
-    if (childError || !child) {
-      return NextResponse.json(
-        { success: false, error: 'Child not found' },
-        { status: 404 }
-      )
+    logger.info('Avatar update request received', 'API', { 
+      childId, 
+      configId: avatarConfig.id,
+      assetCount: Object.keys(avatarConfig.assets).length
+    })
+
+    // Check if RPM API key is configured
+    const rpmApiKey = process.env.RPM_API_KEY
+    if (!rpmApiKey) {
+      logger.error('RPM API key not configured', undefined, 'API')
+      return NextResponse.json({
+        success: false,
+        error: 'Avatar service is not configured on the server.'
+      }, { status: 500 })
     }
 
-    // For now, we'll simulate the Ready Player Me API call
-    // In a real implementation, you would:
-    // 1. Call Ready Player Me API to update the avatar with new assets
-    // 2. Get the updated avatar URL from the response
-    // 3. Optionally generate a new headshot image
-    
-    // Simulate Ready Player Me API call
-    const updatedAvatarUrl = await updateReadyPlayerMeAvatar(child.avatar_url, avatarConfig)
-    const headshotUrl = await generateHeadshotFromAvatar(updatedAvatarUrl)
+    // Authenticate child using access code from headers or body
+    const accessCode = req.headers.get('x-child-access-code') || body.accessCode
+    if (!accessCode) {
+      logger.warn('Missing child access code', 'API', { childId })
+      return NextResponse.json({
+        success: false,
+        error: 'Child authentication required'
+      }, { status: 401 })
+    }
 
-    // Update the child profile with new avatar URLs
-    const { error: updateError } = await supabase
+    // Verify child exists and access code matches
+    const { child } = await requireChild(childId, accessCode)
+    if (!child) {
+      return NextResponse.json({
+        success: false,
+        error: 'Invalid child authentication'
+      }, { status: 403 })
+    }
+
+    const supabase = createSupabaseServiceClient()
+
+    // Check if child has customization permissions
+    const permissions = child.avatar_permissions || { can_customize: true }
+    if (!permissions.can_customize) {
+      logger.warn('Child lacks customization permissions', 'API', { childId })
+      return NextResponse.json({
+        success: false,
+        error: 'Avatar customization is not enabled for this child'
+      }, { status: 403 })
+    }
+
+    // Verify child has an existing avatar to customize
+    if (!child.avatar_url) {
+      logger.warn('No existing avatar to customize', 'API', { childId })
+      return NextResponse.json({
+        success: false,
+        error: 'No avatar exists for this child. Please ask your educator to create one first.'
+      }, { status: 400 })
+    }
+
+    logger.info('Starting avatar customization update', 'API', { 
+      childId, 
+      childName: child.name,
+      existingAvatarUrl: child.avatar_url
+    })
+
+    // Create anonymous user for RPM API calls
+    const userResponse = await fetch('https://api.readyplayer.me/v1/users', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${rpmApiKey}`
+      },
+      body: JSON.stringify({
+        data: {
+          appName: 'brainberry',
+          requestToken: true
+        }
+      })
+    })
+
+    if (!userResponse.ok) {
+      const errorBody = await userResponse.json()
+      logger.error('RPM User Creation Failed', errorBody, 'API')
+      return NextResponse.json({
+        success: false,
+        error: 'Failed to initialize avatar customization session'
+      }, { status: 500 })
+    }
+
+    const userData = await userResponse.json()
+    const userToken = userData.data.token
+    logger.info('Anonymous user created for avatar update', 'API', { 
+      userId: userData.data.id 
+    })
+
+    // Update avatar with new configuration using RPM API
+    const updateResponse = await fetch(`https://api.readyplayer.me/v2/avatars/${avatarConfig.id}`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${userToken}`
+      },
+      body: JSON.stringify({
+        data: {
+          assets: avatarConfig.assets,
+          ...(avatarConfig.morphTargets && { morphTargets: avatarConfig.morphTargets })
+        }
+      })
+    })
+
+    if (!updateResponse.ok) {
+      const errorBody = await updateResponse.json()
+      logger.error('RPM Avatar Update Failed', errorBody, 'API')
+      return NextResponse.json({
+        success: false,
+        error: 'Failed to update avatar customization'
+      }, { status: 500 })
+    }
+
+    logger.info('Avatar customization updated successfully', 'API', { 
+      avatarId: avatarConfig.id 
+    })
+
+    // Save the updated avatar permanently
+    const saveResponse = await fetch(`https://api.readyplayer.me/v2/avatars/${avatarConfig.id}`, {
+      method: 'PUT',
+      headers: {
+        'Authorization': `Bearer ${userToken}`
+      }
+    })
+
+    if (!saveResponse.ok) {
+      const errorBody = await saveResponse.json()
+      logger.error('RPM Avatar Save Failed', errorBody, 'API')
+      return NextResponse.json({
+        success: false,
+        error: 'Failed to save avatar customization'
+      }, { status: 500 })
+    }
+
+    // Generate new avatar URL
+    const newAvatarUrl = `https://models.readyplayer.me/${avatarConfig.id}.glb`
+    
+    // Generate 2D headshot URL (RPM provides this automatically)
+    const headshotUrl = `https://models.readyplayer.me/${avatarConfig.id}.png`
+
+    logger.info('Avatar saved permanently', 'API', { 
+      avatarId: avatarConfig.id,
+      newAvatarUrl,
+      headshotUrl
+    })
+
+    // Update child profile with new avatar URLs and metadata
+    const updatedMetadata = {
+      ...avatarConfig.metadata,
+      last_customized: new Date().toISOString(),
+      customization_count: (avatarConfig.metadata.customization_count || 0) + 1
+    }
+
+    const { error: dbError } = await supabase
       .from('ChildProfile')
-      .update({
-        avatar_url: updatedAvatarUrl,
+      .update({ 
+        avatar_url: newAvatarUrl,
         avatar_headshot_url: headshotUrl,
         updated_at: new Date().toISOString()
       })
       .eq('id', childId)
 
-    if (updateError) {
-      console.error('Database update error:', updateError)
-      return NextResponse.json(
-        { success: false, error: 'Failed to save avatar changes' },
-        { status: 500 }
-      )
+    if (dbError) {
+      logger.error('Database update failed', dbError, 'API')
+      return NextResponse.json({
+        success: false,
+        error: 'Failed to save avatar changes to profile'
+      }, { status: 500 })
     }
 
-    return NextResponse.json({
+    logger.info('Child profile updated with new avatar', 'API', { 
+      childId,
+      newAvatarUrl,
+      headshotUrl
+    })
+
+    // Return success response
+    const response = {
       success: true,
-      avatarUrl: updatedAvatarUrl,
+      avatarUrl: newAvatarUrl,
       headshotUrl: headshotUrl
-    })
+    }
+
+    // Validate response structure
+    const responseValidation = avatarResponseSchema.safeParse(response)
+    if (!responseValidation.success) {
+      logger.error('Invalid response structure', responseValidation.error, 'API')
+      return NextResponse.json({
+        success: false,
+        error: 'Internal server error'
+      }, { status: 500 })
+    }
+
+    return NextResponse.json(response)
 
   } catch (error) {
-    console.error('Avatar update error:', error)
-    
-    if (error instanceof z.ZodError) {
-      return NextResponse.json(
-        { success: false, error: 'Invalid request data', details: error.errors },
-        { status: 400 }
-      )
-    }
-
-    return NextResponse.json(
-      { success: false, error: 'Internal server error' },
-      { status: 500 }
-    )
-  }
-}
-
-// Simulate Ready Player Me avatar update
-async function updateReadyPlayerMeAvatar(currentAvatarUrl: string | null, avatarConfig: any): Promise<string> {
-  // In a real implementation, this would call the Ready Player Me API
-  // PATCH /v2/avatars/:avatarId with the new asset configuration
-  
-  try {
-    const rpmApiKey = process.env.RPM_API_KEY
-    if (!rpmApiKey) {
-      console.warn('Ready Player Me API key not configured, using mock response')
-      return currentAvatarUrl || 'https://models.readyplayer.me/mock-updated-avatar.glb'
-    }
-
-    // Extract avatar ID from current URL if available
-    const avatarId = extractAvatarIdFromUrl(currentAvatarUrl)
-    if (!avatarId) {
-      throw new Error('Cannot extract avatar ID from current URL')
-    }
-
-    // Call Ready Player Me API to update avatar
-    const response = await fetch(`https://api.readyplayer.me/v2/avatars/${avatarId}`, {
-      method: 'PATCH',
-      headers: {
-        'Authorization': `Bearer ${rpmApiKey}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        assets: avatarConfig.assets
-      })
-    })
-
-    if (!response.ok) {
-      throw new Error(`Ready Player Me API error: ${response.status}`)
-    }
-
-    const result = await response.json()
-    return result.data?.renders?.[0]?.url || currentAvatarUrl || 'https://models.readyplayer.me/updated-avatar.glb'
-
-  } catch (error) {
-    console.error('Ready Player Me API call failed:', error)
-    // Return the current URL as fallback
-    return currentAvatarUrl || 'https://models.readyplayer.me/fallback-avatar.glb'
-  }
-}
-
-// Generate 2D headshot from 3D avatar
-async function generateHeadshotFromAvatar(avatarUrl: string): Promise<string> {
-  // In a real implementation, this would:
-  // 1. Load the 3D avatar model
-  // 2. Render a headshot view
-  // 3. Save the image to storage
-  // 4. Return the image URL
-  
-  // For now, return a placeholder or the same URL
-  return avatarUrl.replace('.glb', '-headshot.png')
-}
-
-// Extract avatar ID from Ready Player Me URL
-function extractAvatarIdFromUrl(url: string | null): string | null {
-  if (!url) return null
-  
-  try {
-    // Ready Player Me URLs typically look like:
-    // https://models.readyplayer.me/[avatar-id].glb
-    const match = url.match(/\/([a-f0-9-]+)\.glb$/i)
-    return match ? match[1] : null
-  } catch (error) {
-    console.error('Failed to extract avatar ID:', error)
-    return null
+    logger.error('Avatar update process failed', error, 'API')
+    return NextResponse.json({
+      success: false,
+      error: error instanceof Error ? error.message : 'An unknown server error occurred'
+    }, { status: 500 })
   }
 }
