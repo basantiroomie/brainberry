@@ -6,7 +6,7 @@ export interface AvatarViewerProps {
   avatarUrl: string | null
   enableControls?: boolean
   enableAnimations?: boolean
-  cameraMode?: 'full' | 'headshot'
+  cameraMode?: 'full' | 'headshot' | 'profile'
   onModelLoad?: (model: Object3D) => void
   onModelError?: (error: any) => void
   className?: string

@@ -191,7 +191,7 @@ const AvatarScene: React.FC<{
   avatarUrl: string
   enableControls: boolean
   enableAnimations: boolean
-  cameraMode: 'full' | 'headshot'
+  cameraMode: 'full' | 'headshot' | 'profile'
   onModelLoad?: (model: Object3D) => void
   onModelError?: (error: any) => void
 }> = ({ avatarUrl, enableControls, enableAnimations, cameraMode, onModelLoad, onModelError }) => {
@@ -206,9 +206,14 @@ const AvatarScene: React.FC<{
       fov: 50
     },
     headshot: {
-      position: [0, 1.6, 1.5] as [number, number, number],
-      target: [0, 1.6, 0] as [number, number, number],
-      fov: 35
+      position: [0, 1.65, 0.8] as [number, number, number], // Closer to face, higher up
+      target: [0, 1.65, 0] as [number, number, number], // Focus on face level
+      fov: 25 // Tighter zoom for face-only view
+    },
+    profile: {
+      position: [0, 1.7, 0.6] as [number, number, number], // Very close to face
+      target: [0, 1.7, 0] as [number, number, number], // Focus on head/face area
+      fov: 20 // Very tight zoom for profile picture
     }
   }
 
@@ -356,8 +361,8 @@ const AvatarScene: React.FC<{
           enablePan={false}
           enableZoom={true}
           enableRotate={true}
-          minDistance={cameraMode === 'headshot' ? 0.8 : 1.5}
-          maxDistance={cameraMode === 'headshot' ? 2.5 : 5}
+          minDistance={cameraMode === 'profile' ? 0.5 : cameraMode === 'headshot' ? 0.8 : 1.5}
+          maxDistance={cameraMode === 'profile' ? 1.5 : cameraMode === 'headshot' ? 2.5 : 5}
           minPolarAngle={Math.PI / 6}
           maxPolarAngle={Math.PI - Math.PI / 6}
         />
@@ -474,6 +479,10 @@ export const AvatarViewer: React.FC<AvatarViewerProps> = ({
     headshot: {
       position: [0, 1.6, 1.5] as [number, number, number],
       fov: 35
+    },
+    profile: {
+      position: [0, 1.7, 0.6] as [number, number, number],
+      fov: 20
     }
   }
 
