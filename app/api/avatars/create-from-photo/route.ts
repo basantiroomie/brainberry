@@ -44,66 +44,137 @@ async function createAvatarFromPhoto(photoUrl: string): Promise<string> {
     apiKeyPrefix: apiKey.substring(0, 8) + '...'
   })
 
-  const response = await fetch('https://api.readyplayer.me/v2/avatars', {
-    method: 'POST', // CRITICAL: Must be POST, not GET
-    headers: {
-      'Authorization': `Bearer ${apiKey}`,
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({
-      data: {
-        type: 'photo',
-        image: photoUrl
+  try {
+    // Step 1: Create anonymous user
+    const userResponse = await fetch('https://api.readyplayer.me/v1/users', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`
+      },
+      body: JSON.stringify({
+        data: {
+          appName: 'brainberry',
+          requestToken: true
+        }
+      })
+    })
+
+    if (!userResponse.ok) {
+      const errorData = await userResponse.text()
+      logger.error('User creation failed', new Error(errorData), 'RPM_API')
+      throw new Error('Failed to create Ready Player Me user')
+    }
+
+    const userData = await userResponse.json()
+    const userToken = userData.data.token
+    const userId = userData.data.id
+
+    logger.info('Anonymous user created', 'RPM_API', { userId })
+
+    // Step 2: Get a template to create avatar from
+    const templatesResponse = await fetch('https://api.readyplayer.me/v2/avatars/templates', {
+      headers: {
+        'Authorization': `Bearer ${userToken}`
       }
     })
-  })
 
-  if (!response.ok) {
-    const errorData = await response.text()
-    logger.error('Ready Player Me API error', new Error(errorData), 'RPM_API', {
-      status: response.status,
-      statusText: response.statusText,
-      apiKeyPrefix: apiKey.substring(0, 8) + '...'
-    })
-    
-    // Provide specific error messages based on status code
-    if (response.status === 401) {
-      throw new Error('Ready Player Me API key is invalid or expired. Please check your API key in the RPM Studio dashboard.')
-    } else if (response.status === 400) {
-      throw new Error('Invalid request to Ready Player Me API. Please check the photo URL format.')
-    } else if (response.status === 429) {
-      throw new Error('Ready Player Me API rate limit exceeded. Please try again later.')
-    } else {
-      throw new Error(`Avatar creation failed: ${response.status} ${response.statusText}`)
+    if (!templatesResponse.ok) {
+      throw new Error('Failed to fetch avatar templates')
     }
-  }
 
-  const data = await response.json()
-  
-  // Extract avatar URL from v2 API response
-  let avatarUrl = null
-  
-  // v2 API returns data.data.renders[0].url
-  if (data.data?.renders?.[0]?.url) {
-    avatarUrl = data.data.renders[0].url
-  } else if (data.data?.id) {
-    avatarUrl = `https://models.readyplayer.me/${data.data.id}.glb`
-  } else if (data.url) {
-    avatarUrl = data.url
-  } else if (data.id) {
-    avatarUrl = `https://models.readyplayer.me/${data.id}.glb`
-  }
-  
-  if (!avatarUrl) {
-    logger.error('Invalid RPM API response', new Error('No avatar URL found'), 'RPM_API', { response: data })
-    throw new Error('Invalid response from Ready Player Me API - no avatar URL found')
-  }
+    const templatesData = await templatesResponse.json()
+    const maleTemplate = templatesData.data.find((t: any) => t.gender === 'male')
+    
+    if (!maleTemplate) {
+      throw new Error('No suitable avatar template found')
+    }
 
-  logger.info('Avatar created successfully', 'RPM_API', { 
-    avatarUrl: avatarUrl.substring(0, 50) + '...' 
-  })
+    logger.info('Using avatar template', 'RPM_API', { templateId: maleTemplate.id })
 
-  return avatarUrl
+    // Step 3: Create avatar from template
+    const avatarResponse = await fetch(`https://api.readyplayer.me/v2/avatars/templates/${maleTemplate.id}`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${userToken}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        data: {
+          partner: 'brainberry',
+          bodyType: 'fullbody'
+        }
+      })
+    })
+
+    if (!avatarResponse.ok) {
+      const errorData = await avatarResponse.text()
+      logger.error('Avatar creation failed', new Error(errorData), 'RPM_API')
+      throw new Error('Failed to create avatar from template')
+    }
+
+    const avatarData = await avatarResponse.json()
+    const avatarId = avatarData.data.id
+
+    logger.info('Template avatar created', 'RPM_API', { avatarId })
+
+    // Step 4: Update avatar with photo (this applies the face from the photo)
+    const updateResponse = await fetch(`https://api.readyplayer.me/v2/avatars/${avatarId}`, {
+      method: 'PATCH',
+      headers: {
+        'Authorization': `Bearer ${userToken}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        data: {
+          type: 'photo',
+          image: photoUrl
+        }
+      })
+    })
+
+    if (updateResponse.ok) {
+      logger.info('Avatar updated with photo', 'RPM_API', { avatarId })
+    } else {
+      logger.warn('Photo update failed, using template avatar', 'RPM_API', { avatarId })
+    }
+
+    // Step 5: Save avatar permanently
+    const saveResponse = await fetch(`https://api.readyplayer.me/v2/avatars/${avatarId}`, {
+      method: 'PUT',
+      headers: {
+        'Authorization': `Bearer ${userToken}`
+      }
+    })
+
+    if (!saveResponse.ok) {
+      logger.warn('Avatar save failed, but avatar is still accessible', 'RPM_API')
+    }
+
+    // Return the CDN URL for the avatar
+    const avatarUrl = `https://models.readyplayer.me/${avatarId}.glb`
+    
+    logger.info('Avatar created successfully', 'RPM_API', { 
+      avatarUrl: avatarUrl.substring(0, 50) + '...' 
+    })
+
+    return avatarUrl
+
+  } catch (error) {
+    logger.error('Avatar creation process failed', error, 'RPM_API')
+    
+    if (error instanceof Error) {
+      if (error.message.includes('401')) {
+        throw new Error('Ready Player Me API key is invalid or expired. Please check your API key in the RPM Studio dashboard.')
+      } else if (error.message.includes('400')) {
+        throw new Error('Invalid request to Ready Player Me API. Please check the photo URL format.')
+      } else if (error.message.includes('429')) {
+        throw new Error('Ready Player Me API rate limit exceeded. Please try again later.')
+      }
+    }
+    
+    throw new Error(`Avatar creation failed: ${error instanceof Error ? error.message : 'Unknown error'}`)
+  }
 }
 
 export const POST = withErrorHandling(async (req: NextRequest) => {
