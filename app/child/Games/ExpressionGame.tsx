@@ -1,0 +1,587 @@
+"use client"
+
+import { useState, useRef, useEffect, useCallback } from 'react'
+import { ArrowLeft, Play, RotateCcw, Trophy } from 'lucide-react'
+import * as faceapi from 'face-api.js'
+
+interface ExpressionGameProps {
+  onBack: () => void
+}
+
+type GamePhase = 'loading' | 'expression' | 'quiz' | 'complete'
+type Expression = 'happy' | 'sad' | 'angry' | 'surprised'
+
+interface ExpressionImage {
+  emotion: Expression
+  imageUrl: string
+  detected?: boolean
+}
+
+interface QuizQuestion {
+  imageUrl: string
+  correctEmotion: Expression
+  selectedEmotion?: Expression
+}
+
+export default function ExpressionGame({ onBack }: ExpressionGameProps) {
+  const [phase, setPhase] = useState<GamePhase>('loading')
+  const [expressions, setExpressions] = useState<ExpressionImage[]>([])
+  const [currentExpressionIndex, setCurrentExpressionIndex] = useState(0)
+  const [loadingProgress, setLoadingProgress] = useState(0)
+  const [loadingMessage, setLoadingMessage] = useState('Preparing your expression game...')
+  const [neutralBaseline, setNeutralBaseline] = useState<any>(null)
+  const [quizQuestions, setQuizQuestions] = useState<QuizQuestion[]>([])
+  const [currentQuizIndex, setCurrentQuizIndex] = useState(0)
+  const [score, setScore] = useState(0)
+  const [isDetecting, setIsDetecting] = useState(false)
+  const [faceApiLoaded, setFaceApiLoaded] = useState(false)
+  const [currentDetectedExpression, setCurrentDetectedExpression] = useState<string>('neutral')
+
+  const videoRef = useRef<HTMLVideoElement>(null)
+  const canvasRef = useRef<HTMLCanvasElement>(null)
+  const detectionIntervalRef = useRef<NodeJS.Timeout | null>(null)
+
+  // Initialize face-api.js models
+  useEffect(() => {
+    const loadModels = async () => {
+      try {
+        const MODEL_URL = '/models'
+        
+        await Promise.all([
+          faceapi.nets.ssdMobilenetv1.loadFromUri(MODEL_URL),
+          faceapi.nets.faceExpressionNet.loadFromUri(MODEL_URL),
+          faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL)
+        ])
+        
+        setFaceApiLoaded(true)
+      } catch (error) {
+        console.error('Error loading face-api models:', error)
+        setFaceApiLoaded(false)
+      }
+    }
+
+    loadModels()
+  }, [])
+
+  // Start webcam
+  const startWebcam = useCallback(async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { 
+          width: 640, 
+          height: 480,
+          facingMode: 'user'
+        }
+      })
+      
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream
+      }
+    } catch (error) {
+      console.error('Error accessing webcam:', error)
+    }
+  }, [])
+
+  // Stop webcam
+  const stopWebcam = useCallback(() => {
+    if (videoRef.current && videoRef.current.srcObject) {
+      const stream = videoRef.current.srcObject as MediaStream
+      stream.getTracks().forEach(track => track.stop())
+      videoRef.current.srcObject = null
+    }
+  }, [])
+
+  // Establish neutral facial expression baseline
+  const establishNeutralBaseline = useCallback(async () => {
+    if (!faceApiLoaded || !videoRef.current) return
+
+    try {
+      const detections = await faceapi
+        .detectSingleFace(videoRef.current)
+        .withFaceExpressions()
+
+      if (detections) {
+        setNeutralBaseline(detections.expressions)
+      }
+    } catch (error) {
+      console.error('Error establishing neutral baseline:', error)
+    }
+  }, [faceApiLoaded])
+
+  // Load static expression images
+  const loadExpressionImages = async () => {
+    try {
+      setLoadingMessage('Loading expression images...')
+      setLoadingProgress(50)
+
+      const response = await fetch('/api/generate-expression-images', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          emotions: ['happy', 'sad', 'angry', 'surprised']
+        })
+      })
+
+      if (!response.ok) {
+        throw new Error(`Failed to load images: ${response.status}`)
+      }
+
+      const data = await response.json()
+      
+      if (!data.success || !data.images) {
+        throw new Error('Invalid response from server')
+      }
+
+      const expressionImages: ExpressionImage[] = data.images.map((img: any) => ({
+        emotion: img.expression,
+        imageUrl: img.imageUrl,
+        detected: false
+      }))
+
+      setExpressions(expressionImages)
+      setQuizQuestions(expressionImages.map(img => ({
+        imageUrl: img.imageUrl,
+        correctEmotion: img.emotion
+      })))
+
+      setLoadingProgress(100)
+      setLoadingMessage('Ready to play!')
+
+      setTimeout(() => {
+        setPhase('expression')
+        startWebcam()
+      }, 1000)
+
+    } catch (error) {
+      console.error('Error loading expression images:', error)
+      setLoadingMessage(`Error: ${error instanceof Error ? error.message : 'Failed to load images'}`)
+    }
+  }
+
+  // Detect facial expressions in real-time
+  const detectExpression = useCallback(async () => {
+    if (!videoRef.current || !isDetecting || !faceApiLoaded) return
+
+    try {
+      const detections = await faceapi
+        .detectSingleFace(videoRef.current)
+        .withFaceExpressions()
+
+      if (detections) {
+        const currentExpressions = detections.expressions
+        const targetEmotion = expressions[currentExpressionIndex]?.emotion
+
+        // Find the strongest expression for display
+        const strongestExpression = Object.entries(currentExpressions)
+          .reduce((max, [emotion, value]) => 
+            (typeof value === 'number' && value > max.value) ? { emotion, value } : max, 
+            { emotion: 'neutral', value: 0 }
+          )
+        
+        setCurrentDetectedExpression(strongestExpression.emotion)
+
+        if (neutralBaseline) {
+          const expressionIntensity = calculateExpressionIntensity(
+            currentExpressions, 
+            neutralBaseline, 
+            targetEmotion
+          )
+
+          if (expressionIntensity > 0.4) {
+            handleExpressionDetected()
+          }
+        } else {
+          const emotionMap: Record<Expression, string> = {
+            happy: 'happy',
+            sad: 'sad', 
+            angry: 'angry',
+            surprised: 'surprised'
+          }
+          const targetKey = emotionMap[targetEmotion] as keyof typeof currentExpressions
+          const currentValue = typeof currentExpressions[targetKey] === 'number' ? currentExpressions[targetKey] : 0
+          
+          if (typeof currentValue === 'number' && currentValue > 0.5) {
+            handleExpressionDetected()
+          }
+        }
+      } else {
+        setCurrentDetectedExpression('no face detected')
+      }
+    } catch (error) {
+      console.error('Error detecting expression:', error)
+      setCurrentDetectedExpression('detection error')
+    }
+  }, [faceApiLoaded, isDetecting, expressions, currentExpressionIndex, neutralBaseline])
+
+  // Calculate expression intensity relative to baseline
+  const calculateExpressionIntensity = (
+    current: any, 
+    baseline: any, 
+    targetEmotion: Expression
+  ): number => {
+    const emotionMap: Record<Expression, string> = {
+      happy: 'happy',
+      sad: 'sad', 
+      angry: 'angry',
+      surprised: 'surprised'
+    }
+
+    const targetKey = emotionMap[targetEmotion]
+    const currentValue = current[targetKey] || 0
+    const baselineValue = baseline[targetKey] || 0
+
+    return Math.max(0, currentValue - baselineValue - 0.2)
+  }
+
+  // Handle expression detection
+  const handleExpressionDetected = () => {
+    setIsDetecting(false)
+    
+    // Mark current expression as detected
+    setExpressions(prev => prev.map((exp, index) => 
+      index === currentExpressionIndex 
+        ? { ...exp, detected: true }
+        : exp
+    ))
+
+    // Show success message
+    setTimeout(() => {
+      if (currentExpressionIndex < expressions.length - 1) {
+        setCurrentExpressionIndex(prev => prev + 1)
+        setTimeout(() => setIsDetecting(true), 1000)
+      } else {
+        // All expressions detected, move to quiz
+        stopWebcam()
+        setPhase('quiz')
+      }
+    }, 2000)
+  }
+
+  // Start expression detection phase
+  useEffect(() => {
+    if (phase === 'expression' && expressions.length > 0) {
+      // Wait a moment then start detecting
+      setTimeout(() => {
+        setIsDetecting(true)
+      }, 2000)
+    }
+  }, [phase, expressions])
+
+  // Run expression detection
+  useEffect(() => {
+    if (isDetecting && faceApiLoaded) {
+      detectionIntervalRef.current = setInterval(detectExpression, 100)
+    } else {
+      if (detectionIntervalRef.current) {
+        clearInterval(detectionIntervalRef.current)
+      }
+    }
+
+    return () => {
+      if (detectionIntervalRef.current) {
+        clearInterval(detectionIntervalRef.current)
+      }
+    }
+  }, [isDetecting, detectExpression, faceApiLoaded])
+
+  // Handle quiz answer selection
+  const handleQuizAnswer = (selectedEmotion: Expression) => {
+    const currentQuestion = quizQuestions[currentQuizIndex]
+    const isCorrect = selectedEmotion === currentQuestion.correctEmotion
+
+    if (isCorrect) {
+      setScore(prev => prev + 1)
+    }
+
+    setQuizQuestions(prev => prev.map((q, index) => 
+      index === currentQuizIndex 
+        ? { ...q, selectedEmotion }
+        : q
+    ))
+
+    setTimeout(() => {
+      if (currentQuizIndex < quizQuestions.length - 1) {
+        setCurrentQuizIndex(prev => prev + 1)
+      } else {
+        setPhase('complete')
+      }
+    }, 1000)
+  }
+
+  // Restart game
+  const restartGame = () => {
+    setExpressions([])
+    setCurrentExpressionIndex(0)
+    setQuizQuestions([])
+    setCurrentQuizIndex(0)
+    setScore(0)
+    setNeutralBaseline(null)
+    setIsDetecting(false)
+    setCurrentDetectedExpression('neutral')
+    setLoadingProgress(0)
+    setPhase('loading')
+  }
+
+  // Start the game immediately when component mounts
+  useEffect(() => {
+    if (phase === 'loading' && expressions.length === 0) {
+      loadExpressionImages()
+    }
+  }, [phase])
+
+  // Start webcam when in expression phase
+  useEffect(() => {
+    if (phase === 'expression') {
+      startWebcam()
+    }
+
+    return () => {
+      if (phase !== 'expression') {
+        stopWebcam()
+      }
+    }
+  }, [phase, startWebcam, stopWebcam])
+
+  const renderLoadingPhase = () => (
+    <div className="flex flex-col items-center space-y-6">
+      <h2 className="text-3xl font-bold text-purple-800 text-center">
+        Creating Your Game
+      </h2>
+      
+      <div className="w-80">
+        <div className="bg-gray-200 rounded-full h-4 overflow-hidden">
+          <div 
+            className="bg-gradient-to-r from-purple-500 to-pink-500 h-full transition-all duration-500"
+            style={{ width: `${loadingProgress}%` }}
+          />
+        </div>
+        <p className="text-center mt-4 text-gray-600">{loadingMessage}</p>
+      </div>
+
+      <div className="animate-spin w-12 h-12 border-4 border-purple-200 border-t-purple-600 rounded-full" />
+    </div>
+  )
+
+  const renderExpressionPhase = () => {
+    const currentExpression = expressions[currentExpressionIndex]
+    if (!currentExpression) return null
+
+    if (!faceApiLoaded) {
+      return (
+        <div className="flex flex-col items-center space-y-6">
+          <h2 className="text-3xl font-bold text-red-600 text-center">
+            Face Detection Error
+          </h2>
+          <p className="text-lg text-gray-600 text-center">
+            Failed to load face detection models. Please refresh the page and try again.
+          </p>
+          <button
+            onClick={restartGame}
+            className="bg-red-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-red-700 transition-colors"
+          >
+            Try Again
+          </button>
+        </div>
+      )
+    }
+
+    return (
+      <div className="flex flex-col items-center space-y-6">
+        <h2 className="text-3xl font-bold text-purple-800 text-center">
+          Make This Expression!
+        </h2>
+        
+        <div className="text-center">
+          <div className="w-80 h-80 mx-auto mb-4 bg-gray-100 rounded-lg overflow-hidden shadow-lg">
+            <img
+              src={currentExpression.imageUrl}
+              alt={`${currentExpression.emotion} expression`}
+              className="w-full h-full object-contain"
+            />
+          </div>
+          <h3 className="text-2xl font-bold capitalize text-purple-700">
+            {currentExpression.emotion}
+          </h3>
+        </div>
+
+        <div className="relative">
+          <video
+            ref={videoRef}
+            autoPlay
+            muted
+            playsInline
+            className="w-80 h-60 bg-gray-200 rounded-lg object-cover"
+          />
+          <canvas
+            ref={canvasRef}
+            className="absolute top-0 left-0 w-full h-full"
+          />
+        </div>
+
+        <div className="text-center">
+          <p className="text-md text-gray-500">
+            You are making <span className="font-semibold text-purple-600 capitalize">{currentDetectedExpression}</span> expression currently
+          </p>
+        </div>
+
+        {expressions[currentExpressionIndex]?.detected && (
+          <div className="text-center">
+            <div className="text-6xl mb-2">🎉</div>
+            <p className="text-2xl font-bold text-green-600">Great job!</p>
+          </div>
+        )}
+
+        {!expressions[currentExpressionIndex]?.detected && (
+          <div className="text-center">
+            <p className="text-lg text-gray-600">
+              Make the expression and hold it!
+            </p>
+          </div>
+        )}
+
+        <div className="flex space-x-2">
+          {expressions.map((_, index) => (
+            <div
+              key={index}
+              className={`w-3 h-3 rounded-full ${
+                index === currentExpressionIndex
+                  ? 'bg-purple-600'
+                  : expressions[index]?.detected
+                  ? 'bg-green-500'
+                  : 'bg-gray-300'
+              }`}
+            />
+          ))}
+        </div>
+      </div>
+    )
+  }
+
+  const renderQuizPhase = () => {
+    const currentQuestion = quizQuestions[currentQuizIndex]
+    if (!currentQuestion) return null
+
+    const emotions: Expression[] = ['happy', 'sad', 'angry', 'surprised']
+
+    return (
+      <div className="flex flex-col items-center space-y-6">
+        <h2 className="text-3xl font-bold text-purple-800 text-center">
+          What Expression Is This?
+        </h2>
+        
+        <div className="w-80 h-80 mx-auto bg-gray-100 rounded-lg overflow-hidden shadow-lg">
+          <img
+            src={currentQuestion.imageUrl}
+            alt="Expression to identify"
+            className="w-full h-full object-contain"
+          />
+        </div>
+
+        <div className="grid grid-cols-2 gap-4">
+          {emotions.map((emotion) => (
+            <button
+              key={emotion}
+              onClick={() => handleQuizAnswer(emotion)}
+              disabled={currentQuestion.selectedEmotion !== undefined}
+              className={`px-6 py-4 rounded-lg font-semibold text-lg transition-colors ${
+                currentQuestion.selectedEmotion === emotion
+                  ? emotion === currentQuestion.correctEmotion
+                    ? 'bg-green-500 text-white'
+                    : 'bg-red-500 text-white'
+                  : 'bg-gray-200 hover:bg-gray-300 text-gray-800'
+              }`}
+            >
+              {emotion.charAt(0).toUpperCase() + emotion.slice(1)}
+            </button>
+          ))}
+        </div>
+
+        <div className="flex space-x-2">
+          {quizQuestions.map((_, index) => (
+            <div
+              key={index}
+              className={`w-3 h-3 rounded-full ${
+                index === currentQuizIndex
+                  ? 'bg-purple-600'
+                  : index < currentQuizIndex
+                  ? 'bg-green-500'
+                  : 'bg-gray-300'
+              }`}
+            />
+          ))}
+        </div>
+      </div>
+    )
+  }
+
+  const renderCompletePhase = () => (
+    <div className="flex flex-col items-center space-y-6">
+      <Trophy size={80} className="text-yellow-500" />
+      <h2 className="text-4xl font-bold text-purple-800 text-center">
+        Congratulations!
+      </h2>
+      
+      <div className="text-center">
+        <p className="text-2xl font-semibold text-purple-600 mb-2">
+          You scored {score} out of {quizQuestions.length}!
+        </p>
+        <p className="text-lg text-gray-600">
+          {score === quizQuestions.length 
+            ? "Perfect! You're an expression expert!" 
+            : score >= quizQuestions.length / 2
+            ? "Great job! You did really well!"
+            : "Good try! Practice makes perfect!"}
+        </p>
+      </div>
+
+      <div className="flex space-x-4">
+        <button
+          onClick={restartGame}
+          className="flex items-center space-x-2 bg-purple-600 text-white px-6 py-3 rounded-full font-semibold hover:bg-purple-700 transition-colors"
+        >
+          <RotateCcw size={20} />
+          <span>Play Again</span>
+        </button>
+        
+        <button
+          onClick={onBack}
+          className="flex items-center space-x-2 bg-gray-500 text-white px-6 py-3 rounded-full font-semibold hover:bg-gray-600 transition-colors"
+        >
+          <ArrowLeft size={20} />
+          <span>Back to Games</span>
+        </button>
+      </div>
+    </div>
+  )
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-blue-100 via-purple-50 to-pink-100 p-4">
+      <div className="max-w-4xl mx-auto">
+        {/* Header */}
+        <div className="flex items-center justify-between mb-8">
+          <button
+            onClick={onBack}
+            className="flex items-center space-x-2 text-purple-600 hover:text-purple-700 font-semibold"
+          >
+            <ArrowLeft size={24} />
+            <span>Back</span>
+          </button>
+          
+          <h1 className="text-4xl font-bold text-center text-purple-800">
+            Expression Game
+          </h1>
+          
+          <div className="w-20" /> {/* Spacer */}
+        </div>
+
+        {/* Game Content */}
+        <div className="bg-white rounded-xl shadow-xl p-8">
+          {phase === 'loading' && renderLoadingPhase()}
+          {phase === 'expression' && renderExpressionPhase()}
+          {phase === 'quiz' && renderQuizPhase()}
+          {phase === 'complete' && renderCompletePhase()}
+        </div>
+      </div>
+    </div>
+  )
+}

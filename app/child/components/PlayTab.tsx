@@ -10,7 +10,7 @@ interface PlayTabProps {
   childId: string
 }
 
-type ViewMode = 'dashboard' | 'personalize' | 'play-personalized'
+type ViewMode = 'dashboard' | 'personalize' | 'play-personalized' | 'expression-game'
 
 export default function PlayTab({ childId }: { childId: string }) {
   const [viewMode, setViewMode] = useState<ViewMode>('dashboard')
@@ -53,40 +53,43 @@ export default function PlayTab({ childId }: { childId: string }) {
         fetch(`/api/child-personalized-molds?child_id=${childId}`)
       ])
 
-      // Check if responses are JSON before parsing
-      let moldsData, personalizedData
-      
+      // Parse and sanitize molds
+      let moldsData: any[] = []
       if (moldsResponse.ok) {
-        const moldsText = await moldsResponse.text()
         try {
-          moldsData = JSON.parse(moldsText)
+          const moldsJson = await moldsResponse.json()
+          moldsData = Array.isArray(moldsJson)
+            ? moldsJson.map(m => ({
+                ...m,
+                personalizationComponent: m.personalizationComponent || (m.id === 'expression_game' ? 'ExpressionGame' : 'MoldPersonalizationWizard'),
+                experience_type: m.experience_type || m.experienceType || 'interactive',
+              }) )
+            : []
         } catch (e) {
           console.error('Failed to parse molds JSON:', e)
-          moldsData = []
         }
       } else {
         console.error('Molds API failed:', moldsResponse.status, moldsResponse.statusText)
-        moldsData = []
       }
 
+      // Parse personalized games
+      let personalizedData: any[] = []
       if (personalizedResponse.ok) {
-        const personalizedText = await personalizedResponse.text()
         try {
-          personalizedData = JSON.parse(personalizedText)
+          const personalizedJson = await personalizedResponse.json()
+          personalizedData = Array.isArray(personalizedJson) ? personalizedJson : []
         } catch (e) {
           console.error('Failed to parse personalized JSON:', e)
-          personalizedData = []
         }
       } else {
         console.error('Personalized API failed:', personalizedResponse.status, personalizedResponse.statusText)
-        personalizedData = []
       }
 
       console.log('Molds data:', moldsData)
       console.log('Personalized data:', personalizedData)
 
-      setAvailableMolds(Array.isArray(moldsData) ? moldsData : [])
-      setPersonalizedGames(Array.isArray(personalizedData) ? personalizedData : [])
+      setAvailableMolds(moldsData)
+      setPersonalizedGames(personalizedData)
     } catch (error) {
       console.error('Error loading game data:', error)
       setAvailableMolds([])
@@ -174,6 +177,10 @@ export default function PlayTab({ childId }: { childId: string }) {
   }
 
   // Render different views based on mode
+  if (viewMode === 'expression-game' && selectedMold) {
+    const ExpressionGame = require('../Games/ExpressionGame').default
+    return <ExpressionGame onBack={handleBackToDashboard} />
+  }
   if (viewMode === 'personalize' && selectedMold) {
     return (
       <MoldPersonalizationWizard
@@ -182,10 +189,10 @@ export default function PlayTab({ childId }: { childId: string }) {
         onComplete={(personalizedMoldId: string) => {
           handlePersonalizationComplete(personalizedMoldId)
         }}
+        onBack={handleBackToDashboard}
       />
     )
   }
-
   if (viewMode === 'play-personalized' && selectedPersonalizedGame) {
     return (
       <PolymorphicGamePlayer
@@ -284,6 +291,7 @@ export default function PlayTab({ childId }: { childId: string }) {
                 Make It Mine!
               </h2>
               
+              {/* DEBUG: Available molds: {JSON.stringify(availableMolds)} */}
               {availableMolds.length === 0 ? (
                 <div className="text-center py-8">
                   <div className="text-4xl mb-4">🔧</div>
@@ -312,12 +320,14 @@ export default function PlayTab({ childId }: { childId: string }) {
                       <button
                         onClick={() => {
                           setSelectedMold(mold)
-                          setViewMode('personalize')
+                          setViewMode(mold.personalizationComponent === 'ExpressionGame' ? 'expression-game' : 'personalize')
                         }}
                         className="w-full px-4 py-2 bg-purple-500 text-white font-bold rounded-lg border-2 border-purple-600 hover:bg-purple-600 transform hover:scale-105 transition-all flex items-center justify-center gap-2"
                       >
                         <Sparkles size={16} />
                         Make It Mine!
+                        {/* DEBUG: Show personalizationComponent */}
+                        <span style={{ fontSize: 10, marginLeft: 8, color: '#888' }}>{mold.personalizationComponent}</span>
                       </button>
                     </div>
                   ))}

@@ -9,6 +9,25 @@ const nextConfig = {
   images: {
     unoptimized: true,
   },
+  webpack: (config, { isServer }) => {
+    // Fix for face-api.js and other Node.js modules in browser
+    if (!isServer) {
+      config.resolve.fallback = {
+        ...config.resolve.fallback,
+        fs: false,
+        path: false,
+        crypto: false,
+        stream: false,
+        buffer: false,
+        util: false,
+        url: false,
+        querystring: false,
+        encoding: false,
+      }
+    }
+    
+    return config
+  },
 }
 
 export default nextConfig

@@ -7,9 +7,10 @@ interface PersonalizationStepProps {
   moldId: string
   childId: string
   onComplete: (personalizedMoldId: string) => void
+  onBack?: () => void
 }
 
-export default function MoldPersonalizationWizard({ moldId, childId, onComplete }: PersonalizationStepProps) {
+export default function MoldPersonalizationWizard({ moldId, childId, onComplete, onBack }: PersonalizationStepProps) {
   const [step, setStep] = useState(1)
   const [prompt, setPrompt] = useState('')
   const [requestId, setRequestId] = useState<string | null>(null)
