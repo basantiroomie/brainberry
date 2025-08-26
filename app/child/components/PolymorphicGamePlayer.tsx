@@ -102,7 +102,7 @@ export default function PolymorphicGamePlayer({
           />
         )
       
-      case 'sorting_challenge':
+      case 'sorting':
         return (
           <SortingGamePlayer
             gameConfig={gameConfig}
@@ -124,7 +124,7 @@ export default function PolymorphicGamePlayer({
                 Game type "{gameConfig.game_type}" is not yet implemented 🚧
               </p>
               <p className="text-lg text-gray-600 mb-6">
-                Available games: Matching Cards, Sorting Challenge
+                Available games: Matching Cards, Sorting Game
               </p>
               <button
                 onClick={onBack}

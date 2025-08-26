@@ -2,7 +2,7 @@
 
 export interface GameConfig {
   id?: string
-  game_type: 'matching_cards' | 'sorting_challenge' | 'puzzle' | 'drawing' | 'storytelling'
+  game_type: 'matching_cards' | 'sorting' | 'puzzle' | 'drawing' | 'storytelling'
   title?: string
   theme: string
   difficulty: 'easy' | 'medium' | 'hard'
