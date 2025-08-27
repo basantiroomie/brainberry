@@ -3,7 +3,8 @@ import { useEffect, useState } from "react"
 import MyAvatarTab from "../Games/MyAvatarTab"
 import ChatAssistant from "./ChatAssistant"
 import AvatarChatbot from "./AvatarChatbot"
-import { AvatarViewer } from "@/components/AvatarViewer"
+import Enhanced3DAvatarChatbot from "@/components/Enhanced3DAvatarChatbot"
+import { SimpleAvatarViewer } from "@/components/SimpleAvatarViewer"
 import ChildAvatarDisplay from "./ChildAvatarDisplay"
 
 interface ChildProgress {
@@ -143,10 +144,9 @@ export default function MyStuffTab({ childProfile }: MyStuffTabProps) {
           
           {childProfile?.avatar_url ? (
             <div className="bg-gray-100 border-2 border-black rounded-lg overflow-hidden" style={{ height: '500px' }}>
-              <AvatarViewer
+              <SimpleAvatarViewer
                 avatarUrl={childProfile.avatar_url}
                 enableControls={true}
-                enableAnimations={true}
                 cameraMode="full"
                 className="w-full h-full"
               />
@@ -165,39 +165,51 @@ export default function MyStuffTab({ childProfile }: MyStuffTabProps) {
 
   // Show chat section
   if (activeSection === 'chat') {
-    // Use AvatarChatbot if child has an avatar, otherwise use regular ChatAssistant
-    if (childProfile?.avatar_url) {
-      return (
-        <div className="space-y-8">
-          <div className="flex items-center gap-4 mb-8">
-            <button 
-              onClick={() => setActiveSection('overview')}
-              className="bg-gray-500 text-white px-4 py-2 border-2 border-black shadow-brutal hover:shadow-brutal-lg transition-all font-bold"
-            >
-              <span className="inline-block mr-2">←</span>
-              BACK
-            </button>
-            <div className="inline-block transform -rotate-1">
-              <div className="bg-chart-5 text-white px-8 py-4 border-4 border-black shadow-brutal-xl font-bold text-3xl">
-                CHAT WITH YOUR AVATAR!
-              </div>
+    return (
+      <div className="space-y-8">
+        <div className="flex items-center gap-4 mb-8">
+          <button 
+            onClick={() => setActiveSection('overview')}
+            className="bg-gray-500 text-white px-4 py-2 border-2 border-black shadow-brutal hover:shadow-brutal-lg transition-all font-bold"
+          >
+            <span className="inline-block mr-2">←</span>
+            BACK
+          </button>
+          <div className="inline-block transform -rotate-1">
+            <div className="bg-chart-5 text-white px-8 py-4 border-4 border-black shadow-brutal-xl font-bold text-3xl">
+              {childProfile?.avatar_url ? 'CHAT WITH YOUR 3D AVATAR!' : 'CHAT ASSISTANT'}
             </div>
           </div>
-          
-          <div className="bg-white border-4 border-black shadow-brutal-xl overflow-hidden max-w-4xl mx-auto" style={{ height: '600px' }}>
-            <AvatarChatbot
+        </div>
+        
+        <div className="bg-white border-4 border-black shadow-brutal-xl overflow-hidden max-w-4xl mx-auto" style={{ height: '700px' }}>
+          {childProfile?.avatar_url ? (
+            <Enhanced3DAvatarChatbot
               avatarUrl={childProfile.avatar_url}
               childId={childProfile.id}
               accessCode={childProfile.access_code}
             />
-          </div>
+          ) : (
+            <div className="h-full flex flex-col">
+              <div className="flex-shrink-0 bg-gray-100 p-4 border-b">
+                <div className="text-center">
+                  <div className="text-gray-400 mb-2">
+                    <svg className="w-12 h-12 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                    </svg>
+                  </div>
+                  <p className="text-sm text-gray-600 font-medium">Text Chat Mode</p>
+                  <p className="text-xs text-gray-500">Ask your educator to create an avatar for 3D chat!</p>
+                </div>
+              </div>
+              <div className="flex-1">
+                <ChatAssistant onBack={() => setActiveSection('overview')} />
+              </div>
+            </div>
+          )}
         </div>
-      )
-    } else {
-      return (
-        <ChatAssistant onBack={() => setActiveSection('overview')} />
-      )
-    }
+      </div>
+    )
   }
 
   return (
@@ -224,6 +236,7 @@ export default function MyStuffTab({ childProfile }: MyStuffTabProps) {
                 avatarUrl={childProfile?.avatar_url}
                 headshotUrl={childProfile?.avatar_headshot_url}
                 childName={childProfile?.name || 'Your'}
+                childId={childProfile?.id}
                 size="large"
                 className="w-24 h-24"
               />
@@ -255,6 +268,7 @@ export default function MyStuffTab({ childProfile }: MyStuffTabProps) {
                   avatarUrl={childProfile.avatar_url}
                   headshotUrl={childProfile.avatar_headshot_url}
                   childName={childProfile.name || 'Your'}
+                  childId={childProfile.id}
                   size="large"
                   className="w-24 h-24"
                 />

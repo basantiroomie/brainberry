@@ -1,5 +1,5 @@
 "use client"
-import { Users, User, Plus, BarChart3, Settings, Palette, Loader2, Link2, CheckCircle2, Upload, Camera, X, RotateCcw, Code } from "lucide-react"
+import { Users, User, Plus, BarChart3, Settings, Palette, Loader2, Link2, CheckCircle2, X, RotateCcw, Code } from "lucide-react"
 import { useEffect, useState, useRef } from "react"
 import { toast } from 'sonner'
 import { useMockData } from './MockDataContext'
@@ -67,35 +67,87 @@ function AvatarCreatorModal({ isOpen, onClose, child, onAvatarSaved }: AvatarCre
     }
   }, [isOpen])
 
-  // Handle avatar code input
+  // Handle avatar code/URL input with improved validation
   const handleCodeChange = (value: string) => {
-    const upperValue = value.toUpperCase()
-    setAvatarCode(upperValue)
+    setAvatarCode(value.trim())
     setCodeError('')
     
-    // Validate code format as user types
-    if (upperValue.length === 6) {
-      try {
-        avatarCodeSchema.parse({ code: upperValue })
-      } catch (error) {
-        setCodeError('Invalid code format. Must be 6 uppercase letters and numbers.')
+    if (value.trim().length === 0) return
+    
+    const trimmedValue = value.trim()
+    
+    // Check if it's a URL
+    if (trimmedValue.includes('models.readyplayer.me')) {
+      // Extract code from URL if it's a full URL
+      const urlMatch = trimmedValue.match(/models\.readyplayer\.me\/([A-Z0-9]{6,})/i)
+      if (urlMatch) {
+        const extractedCode = urlMatch[1]
+        if (extractedCode.length >= 6) {
+          // Valid URL with code
+          return
+        }
+      }
+      
+      if (!trimmedValue.startsWith('https://models.readyplayer.me/')) {
+        setCodeError('URL should start with https://models.readyplayer.me/')
+        return
+      }
+      
+      if (!trimmedValue.includes('.glb')) {
+        setCodeError('URL should contain .glb extension')
+        return
+      }
+    } else {
+      // Check if it's a 6-digit code
+      if (trimmedValue.length === 6) {
+        if (!/^[A-Z0-9]{6}$/i.test(trimmedValue)) {
+          setCodeError('Code should contain only letters and numbers')
+        }
+      } else if (trimmedValue.length > 6) {
+        setCodeError('Code should be exactly 6 characters, or paste the full URL')
       }
     }
   }
 
-  // Save avatar with code
+  // Save avatar with improved code/URL handling
   const handleSaveAvatar = async () => {
-    if (!avatarCode) {
-      setCodeError('Please enter an avatar code')
+    if (!avatarCode.trim()) {
+      setCodeError('Please enter an avatar code or URL')
       return
     }
 
     try {
-      // Validate code format
-      avatarCodeSchema.parse({ code: avatarCode })
-      
-      // Convert code to URLs
-      const { glbUrl, pngUrl } = AvatarCodeUtils.codeToUrls(avatarCode)
+      let glbUrl: string
+      let pngUrl: string
+      const trimmedInput = avatarCode.trim()
+
+      // Handle URL input (including partial URLs)
+      if (trimmedInput.includes('models.readyplayer.me')) {
+        // Extract code from URL
+        const urlMatch = trimmedInput.match(/models\.readyplayer\.me\/([A-Z0-9]{6,})/i)
+        if (urlMatch) {
+          const extractedCode = urlMatch[1].replace(/\.(glb|png)$/, '').substring(0, 6)
+          glbUrl = `https://models.readyplayer.me/${extractedCode}.glb`
+          pngUrl = `https://models.readyplayer.me/${extractedCode}.png`
+        } else {
+          setCodeError('Could not extract avatar code from URL')
+          return
+        }
+      } else {
+        // Handle 6-digit code
+        const upperCode = trimmedInput.toUpperCase()
+        
+        // Validate code format
+        if (!/^[A-Z0-9]{6}$/.test(upperCode)) {
+          setCodeError('Code must be exactly 6 characters (letters and numbers only)')
+          return
+        }
+        
+        // Convert code to URLs
+        const urls = AvatarCodeUtils.codeToUrls(upperCode)
+        glbUrl = urls.glbUrl
+        pngUrl = urls.pngUrl
+      }
       
       setSaving(true)
       
@@ -121,11 +173,7 @@ function AvatarCreatorModal({ isOpen, onClose, child, onAvatarSaved }: AvatarCre
       }
     } catch (error) {
       console.error('Avatar save error:', error)
-      if (error instanceof Error && error.message.includes('code')) {
-        setCodeError('Invalid avatar code format. Must be 6 uppercase letters and numbers.')
-      } else {
-        toast.error('Error saving avatar')
-      }
+      toast.error('Error saving avatar')
     } finally {
       setSaving(false)
     }
@@ -188,8 +236,8 @@ function AvatarCreatorModal({ isOpen, onClose, child, onAvatarSaved }: AvatarCre
                   <li>Use the Ready Player Me interface below to create an avatar</li>
                   <li>Take or upload a photo when prompted</li>
                   <li>Customize the avatar as desired</li>
-                  <li>Click "Done" or "Export" when finished</li>
-                  <li>You'll then be asked to enter the avatar code</li>
+                  <li>When finished, look for the <strong>"Copy the link to share"</strong> button</li>
+                  <li>Copy that URL and paste it in the next step (or just enter the 6-digit code)</li>
                 </ol>
               </div>
 
@@ -232,27 +280,30 @@ function AvatarCreatorModal({ isOpen, onClose, child, onAvatarSaved }: AvatarCre
           {step === 'code' && (
             <div className="space-y-6">
               <div className="bg-green-50 border-2 border-green-300 p-4">
-                <h3 className="font-bold text-green-800 mb-2">✅ Avatar Created!</h3>
+                <h3 className="font-bold text-green-800 mb-2">✅ Avatar Ready!</h3>
                 <p className="text-sm text-green-700">
-                  Your avatar has been created in Ready Player Me. Please enter the 6-character avatar code to save it to {child.name}'s profile.
+                  Now you can save the avatar to {child.name}'s profile. You have two options:
                 </p>
+                <ul className="text-sm text-green-700 mt-2 list-disc list-inside space-y-1">
+                  <li><strong>Enter the 6-digit code</strong> (like "ABC123")</li>
+                  <li><strong>Paste the entire URL</strong> from the "Copy the link" button</li>
+                </ul>
               </div>
 
-              {/* Avatar Code Input */}
+              {/* Avatar Code/URL Input */}
               <div className="space-y-4">
                 <div>
-                  <label className="block font-bold mb-2">Avatar Code</label>
+                  <label className="block font-bold mb-2">Avatar Code or URL</label>
                   <div className="flex items-center space-x-3">
                     <div className="flex-1">
-                      <input
-                        type="text"
+                      <textarea
                         value={avatarCode}
                         onChange={(e) => handleCodeChange(e.target.value)}
-                        placeholder="Enter 6-character code (e.g., ABC123)"
-                        className={`w-full border-2 p-3 text-lg font-mono uppercase tracking-wider ${
+                        placeholder="Paste the full URL from Ready Player Me OR enter just the 6-character code&#10;&#10;Examples:&#10;• Code: ABC123&#10;• URL: https://models.readyplayer.me/ABC123.glb"
+                        className={`w-full border-2 p-3 text-sm resize-none ${
                           codeError ? 'border-red-500' : 'border-black'
                         }`}
-                        maxLength={6}
+                        rows={4}
                         disabled={saving}
                       />
                       {codeError && (
@@ -263,28 +314,45 @@ function AvatarCreatorModal({ isOpen, onClose, child, onAvatarSaved }: AvatarCre
                   </div>
                 </div>
 
-                {/* Code Format Help */}
-                <div className="bg-gray-50 border-2 border-gray-300 p-4">
-                  <h4 className="font-bold mb-2">Where to find your avatar code:</h4>
-                  <ul className="text-sm text-gray-700 space-y-1 list-disc list-inside">
-                    <li>Look for a 6-character code like "ABC123" in the Ready Player Me interface</li>
-                    <li>The code appears after clicking "Done" or "Export"</li>
-                    <li>It may be shown in a URL or as a separate code</li>
-                    <li>Only letters A-Z and numbers 0-9 are used</li>
-                  </ul>
+                {/* Input Format Help */}
+                <div className="bg-blue-50 border-2 border-blue-300 p-4">
+                  <h4 className="font-bold text-blue-800 mb-2">💡 How to get your avatar:</h4>
+                  <div className="text-sm text-blue-700 space-y-2">
+                    <div className="bg-white p-3 rounded border">
+                      <h5 className="font-bold text-green-600 mb-1">✅ Easiest: Copy the full URL</h5>
+                      <p>After creating your avatar, click the <strong>"Copy the link to share in social media"</strong> button and paste the entire URL here.</p>
+                    </div>
+                    <div className="bg-white p-3 rounded border">
+                      <h5 className="font-bold text-blue-600 mb-1">📝 Alternative: Enter the 6-digit code</h5>
+                      <p>Look for a 6-character code (like "ABC123") in the Ready Player Me interface and enter just that code.</p>
+                    </div>
+                  </div>
                 </div>
 
                 {/* Preview URLs */}
-                {avatarCode.length === 6 && !codeError && (
+                {avatarCode && !codeError && (
                   <div className="bg-blue-50 border-2 border-blue-300 p-4">
                     <h4 className="font-bold mb-2">Preview URLs:</h4>
-                    <div className="space-y-1 text-sm font-mono">
-                      <div>
-                        <span className="font-bold">3D Model:</span> {AvatarCodeUtils.codeToGlbUrl(avatarCode)}
-                      </div>
-                      <div>
-                        <span className="font-bold">Headshot:</span> {AvatarCodeUtils.codeToPngUrl(avatarCode)}
-                      </div>
+                    <div className="space-y-1 text-sm font-mono break-all">
+                      {avatarCode.startsWith('https://models.readyplayer.me/') ? (
+                        <>
+                          <div>
+                            <span className="font-bold">3D Model:</span> {avatarCode}
+                          </div>
+                          <div>
+                            <span className="font-bold">Headshot:</span> {avatarCode.replace('.glb', '.png')}
+                          </div>
+                        </>
+                      ) : avatarCode.length === 6 && /^[A-Z0-9]{6}$/i.test(avatarCode) ? (
+                        <>
+                          <div>
+                            <span className="font-bold">3D Model:</span> {AvatarCodeUtils.codeToGlbUrl(avatarCode.toUpperCase())}
+                          </div>
+                          <div>
+                            <span className="font-bold">Headshot:</span> {AvatarCodeUtils.codeToPngUrl(avatarCode.toUpperCase())}
+                          </div>
+                        </>
+                      ) : null}
                     </div>
                   </div>
                 )}
@@ -341,10 +409,7 @@ export default function ChildrenTab() {
   const [assignModal, setAssignModal] = useState(false)
   const [assignMoldId, setAssignMoldId] = useState('')
   
-  // Avatar management state
-  const [avatarUploading, setAvatarUploading] = useState(false)
-  const [dragActive, setDragActive] = useState(false)
-  const fileInputRef = useRef<HTMLInputElement>(null)
+  // Avatar Creator Modal state only
   
   // Avatar Creator Modal state
   const [showAvatarCreator, setShowAvatarCreator] = useState(false)
@@ -504,101 +569,6 @@ export default function ChildrenTab() {
   }
 
   // Avatar management functions
-  async function handleAvatarUpload(file: File, childId: string) {
-    if (!file) return
-    
-    // Validate file type and size
-    if (!file.type.match(/^image\/(jpeg|jpg|png)$/)) {
-      toast.error('Please upload a JPEG or PNG image')
-      return
-    }
-    
-    if (file.size > 10 * 1024 * 1024) { // 10MB limit
-      toast.error('File size must be less than 10MB')
-      return
-    }
-
-    if (useMock) {
-      toast.success('Avatar created (mock mode)')
-      // Update the child in the local state with a mock avatar URL
-      setChildren(children.map(child => 
-        child.id === childId 
-          ? { 
-              ...child, 
-              avatar_url: 'https://models.readyplayer.me/68ad29be1b10d8c48a4e516d.glb', // Use a known working avatar
-              avatar_headshot_url: 'https://models.readyplayer.me/68ad29be1b10d8c48a4e516d.glb' // For now, use same URL
-            }
-          : child
-      ))
-      return
-    }
-
-    setAvatarUploading(true)
-    try {
-      const formData = new FormData()
-      formData.append('photo', file)
-      formData.append('childId', childId)
-
-      const response = await fetch('/api/avatars/create-from-photo', {
-        method: 'POST',
-        body: formData
-      })
-
-      const result = await response.json()
-
-      if (response.ok && result.success) {
-        toast.success('Avatar created successfully!')
-        // Refresh children data to get updated avatar URLs
-        fetchChildren()
-      } else {
-        toast.error(result.error || 'Failed to create avatar')
-      }
-    } catch (error) {
-      console.error('Avatar upload error:', error)
-      toast.error('Error uploading avatar')
-    } finally {
-      setAvatarUploading(false)
-    }
-  }
-
-  function handleDragEnter(e: React.DragEvent) {
-    e.preventDefault()
-    e.stopPropagation()
-    setDragActive(true)
-  }
-
-  function handleDragLeave(e: React.DragEvent) {
-    e.preventDefault()
-    e.stopPropagation()
-    setDragActive(false)
-  }
-
-  function handleDragOver(e: React.DragEvent) {
-    e.preventDefault()
-    e.stopPropagation()
-  }
-
-  function handleDrop(e: React.DragEvent, childId: string) {
-    e.preventDefault()
-    e.stopPropagation()
-    setDragActive(false)
-
-    const files = Array.from(e.dataTransfer.files)
-    if (files.length > 0) {
-      handleAvatarUpload(files[0], childId)
-    }
-  }
-
-  function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>, childId: string) {
-    const files = e.target.files
-    if (files && files.length > 0) {
-      handleAvatarUpload(files[0], childId)
-    }
-    // Reset the input
-    if (fileInputRef.current) {
-      fileInputRef.current.value = ''
-    }
-  }
 
   async function removeAvatar(childId: string) {
     if (!confirm('Are you sure you want to remove this avatar?')) {
@@ -788,113 +758,34 @@ export default function ChildrenTab() {
                   </div>
                 </div>
 
-                {/* Upload Interface */}
+                {/* Avatar Creation Interface */}
                 <div className="space-y-4">
                   <h3 className="text-lg font-bold">
                     {child?.avatar_url ? 'Replace Avatar' : 'Create Avatar'}
                   </h3>
                   
-                  {/* Drag and Drop Area */}
-                  <div
-                    className={`border-4 border-dashed p-8 text-center transition-all ${
-                      dragActive 
-                        ? 'border-chart-2 bg-chart-2/10' 
-                        : 'border-gray-300 hover:border-gray-400'
-                    } ${avatarUploading ? 'opacity-50 pointer-events-none' : ''}`}
-                    onDragEnter={handleDragEnter}
-                    onDragLeave={handleDragLeave}
-                    onDragOver={handleDragOver}
-                    onDrop={(e) => handleDrop(e, child?.id || '')}
-                  >
-                    {avatarUploading ? (
-                      <div className="space-y-4">
-                        <Loader2 className="w-12 h-12 mx-auto animate-spin text-chart-2" />
-                        <div>
-                          <p className="font-bold text-chart-2">Creating Avatar...</p>
-                          <p className="text-sm text-gray-600 mt-1">This may take a few moments</p>
-                        </div>
+                  {/* Ready Player Me Avatar Creator */}
+                  <div className="bg-blue-50 border-2 border-blue-300 p-6 text-center">
+                    <div className="space-y-4">
+                      <div className="text-blue-800">
+                        <svg className="w-16 h-16 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                        </svg>
                       </div>
-                    ) : (
-                      <div className="space-y-4">
-                        <Upload className="w-12 h-12 mx-auto text-gray-400" />
-                        <div>
-                          <p className="font-bold text-gray-700">
-                            Drag and drop a photo here, or click to browse
-                          </p>
-                          <p className="text-sm text-gray-500 mt-2">
-                            Supports JPEG and PNG files up to 10MB
-                          </p>
-                          <p className="text-xs text-gray-400 mt-1">
-                            Best results with clear front-facing photos
-                          </p>
-                        </div>
+                      <div>
+                        <h4 className="font-bold text-blue-800 mb-2">Create 3D Avatar</h4>
+                        <p className="text-sm text-blue-700 mb-4">
+                          Use Ready Player Me to create a personalized 3D avatar for {child?.name}
+                        </p>
                         <button
-                          onClick={() => fileInputRef.current?.click()}
+                          onClick={() => openAvatarCreator(child?.id || '')}
                           className="bg-chart-2 text-white px-6 py-3 border-2 border-black shadow-brutal hover:shadow-brutal-lg font-bold flex items-center space-x-2 mx-auto"
                         >
-                          <Camera className="h-5 w-5" />
-                          <span>CHOOSE PHOTO</span>
+                          <User className="h-5 w-5" />
+                          <span>CREATE AVATAR</span>
                         </button>
                       </div>
-                    )}
-                  </div>
-
-                  {/* File Input */}
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept="image/jpeg,image/jpg,image/png"
-                    onChange={(e) => handleFileSelect(e, child?.id || '')}
-                    className="hidden"
-                  />
-
-                  {/* Avatar Permissions */}
-                  <div className="bg-gray-50 border-2 border-black shadow-brutal p-4">
-                    <h4 className="font-bold mb-3">Avatar Permissions</h4>
-                    <div className="space-y-2">
-                      <label className="flex items-center">
-                        <input 
-                          type="checkbox" 
-                          defaultChecked={child?.avatar_permissions?.can_customize ?? true}
-                          className="mr-2" 
-                        />
-                        <span className="text-sm font-bold">Allow avatar customization</span>
-                      </label>
-                      <label className="flex items-center">
-                        <input 
-                          type="checkbox" 
-                          defaultChecked={child?.avatar_permissions?.can_chat ?? true}
-                          className="mr-2" 
-                        />
-                        <span className="text-sm font-bold">Enable avatar chatbot</span>
-                      </label>
-                      <div className="flex items-center space-x-2">
-                        <span className="text-sm font-bold">Chat time limit:</span>
-                        <select 
-                          defaultValue={child?.avatar_permissions?.chat_time_limit_minutes ?? 30}
-                          className="border border-black px-2 py-1 text-sm"
-                        >
-                          <option value={15}>15 minutes</option>
-                          <option value={30}>30 minutes</option>
-                          <option value={45}>45 minutes</option>
-                          <option value={60}>60 minutes</option>
-                        </select>
-                      </div>
                     </div>
-                    <button className="mt-3 bg-chart-1 text-white px-4 py-2 border-2 border-black shadow-brutal hover:shadow-brutal-lg font-bold text-sm">
-                      SAVE PERMISSIONS
-                    </button>
-                  </div>
-
-                  {/* Usage Guidelines */}
-                  <div className="bg-yellow-50 border-2 border-yellow-300 p-4">
-                    <h4 className="font-bold text-yellow-800 mb-2">📋 Photo Guidelines</h4>
-                    <ul className="text-sm text-yellow-700 space-y-1">
-                      <li>• Use clear, well-lit front-facing photos</li>
-                      <li>• Avoid sunglasses or face coverings</li>
-                      <li>• Single person in the photo works best</li>
-                      <li>• Higher resolution photos create better avatars</li>
-                    </ul>
                   </div>
                 </div>
               </div>

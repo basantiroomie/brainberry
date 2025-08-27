@@ -4,14 +4,16 @@ import { createSupabaseServerClient } from '@/lib/supabase-server'
 export async function POST(req: NextRequest) {
   try {
     const { accessCode } = await req.json()
+    
     if (!accessCode) return NextResponse.json({ error: 'Access code required' }, { status: 400 })
     
     const supabase = await createSupabaseServerClient()
     
-    // Use Supabase directly - much cleaner than Prisma!
+    // Use Supabase directly - get all child data needed for the dashboard
+    // Note: Using exact column names from database schema
     const { data: child, error } = await supabase
       .from('ChildProfile')
-      .select('id, name, age, diagnosis')
+      .select('id, name, age, diagnosis, avatar_url, avatar_headshot_url, access_code, notes')
       .eq('access_code', accessCode)
       .single()
     

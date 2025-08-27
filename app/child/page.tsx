@@ -12,6 +12,7 @@ import FreePlayTab from "./components/FreePlayTab"
 import EducatorMenuTab from "./components/EducatorMenuTab"
 import EducatorGate from "./components/EducatorGate"
 import ChildAvatarDisplay from "./components/ChildAvatarDisplay"
+import { AuthUtils } from "@/lib/auth-utils"
 
 type TabType = "play" | "mystuff" | "freeplay" | "educatormenu"
 
@@ -22,33 +23,23 @@ export default function ChildDashboard() {
   const [educatorGateCounter, setEducatorGateCounter] = useState(0)
   const [childProfile, setChildProfile] = useState<any>(null)
 
-  // Function to refresh child profile data
-  const refreshChildProfile = async (childId: string) => {
-    try {
-      const response = await fetch(`/api/children/${childId}`)
-      if (response.ok) {
-        const updatedProfile = await response.json()
-        setChildProfile(updatedProfile)
-        // Update sessionStorage with fresh data
-        sessionStorage.setItem('childProfile', JSON.stringify(updatedProfile))
-        return updatedProfile
-      }
-    } catch (error) {
-      console.error('Failed to refresh child profile:', error)
-    }
-    return null
-  }
+  // Note: Profile refresh removed to prevent authentication issues
+  // Child profile data is loaded once during login and stored in sessionStorage
 
   useEffect(() => {
     // Get child profile from sessionStorage
     const stored = sessionStorage.getItem('childProfile')
     if (stored) {
-      const profile = JSON.parse(stored)
-      setChildProfile(profile)
-      
-      // Refresh profile data to ensure avatar info is current
-      if (profile.id) {
-        refreshChildProfile(profile.id)
+      try {
+        const profile = JSON.parse(stored)
+        setChildProfile(profile)
+        
+        // Profile is already loaded from sessionStorage, no need to refresh
+        console.log('Child profile loaded:', profile.name)
+      } catch (error) {
+        console.error('Failed to parse stored child profile:', error)
+        sessionStorage.removeItem('childProfile')
+        router.push('/login')
       }
     } else {
       // Redirect to login if no child profile found
@@ -112,9 +103,16 @@ export default function ChildDashboard() {
                     avatarUrl={childProfile.avatar_url}
                     headshotUrl={childProfile.avatar_headshot_url}
                     childName={childProfile.name}
+                    childId={childProfile.id}
                     size="medium"
+                    className="border-2 border-gray-300"
                   />
-                  <span className="text-sm font-medium text-main">Welcome, {childProfile.name}!</span>
+                  <div className="flex flex-col">
+                    <span className="text-sm font-medium text-main">Welcome, {childProfile.name}!</span>
+                    {childProfile.avatar_url && (
+                      <span className="text-xs text-green-600 font-medium">✨ Avatar Ready</span>
+                    )}
+                  </div>
                 </div>
               )}
             </div>

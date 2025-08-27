@@ -2,6 +2,8 @@
 
 import React, { useState, useEffect, useCallback } from 'react'
 import { ProfilePictureUtils, AvatarCodeUtils } from '@/lib/avatar-utils'
+import { AvatarUrlValidator } from '@/lib/avatar-url-validator'
+import HeadshotGenerator from './HeadshotGenerator'
 
 interface ProfilePictureProps {
   avatarUrl?: string | null
@@ -12,6 +14,7 @@ interface ProfilePictureProps {
   autoGenerate?: boolean
   fallbackIcon?: React.ReactNode
   onHeadshotGenerated?: (headshotUrl: string) => void
+  childId?: string // Add childId for headshot generation
 }
 
 export const ProfilePicture: React.FC<ProfilePictureProps> = ({
@@ -22,12 +25,14 @@ export const ProfilePicture: React.FC<ProfilePictureProps> = ({
   className = '',
   autoGenerate = true,
   fallbackIcon,
-  onHeadshotGenerated
+  onHeadshotGenerated,
+  childId
 }) => {
   const [imageError, setImageError] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
   const [generatedHeadshot, setGeneratedHeadshot] = useState<string | null>(null)
   const [isGenerating, setIsGenerating] = useState(false)
+  const [shouldGenerateHeadshot, setShouldGenerateHeadshot] = useState(false)
 
   const sizeClasses = {
     xs: 'w-6 h-6',
@@ -120,9 +125,15 @@ export const ProfilePicture: React.FC<ProfilePictureProps> = ({
   // Trigger profile picture generation when needed
   useEffect(() => {
     if (!headshotUrl && avatarUrl && autoGenerate && !generatedHeadshot && !isGenerating) {
+      // First try the traditional method
       generateProfilePicture()
+      
+      // If that fails and we have a childId, try 3D headshot generation
+      if (childId && AvatarUrlValidator.isValidAvatarUrl(avatarUrl) && avatarUrl.endsWith('.glb')) {
+        setShouldGenerateHeadshot(true)
+      }
     }
-  }, [avatarUrl, headshotUrl, autoGenerate, generatedHeadshot, isGenerating, generateProfilePicture])
+  }, [avatarUrl, headshotUrl, autoGenerate, generatedHeadshot, isGenerating, generateProfilePicture, childId])
 
   // Determine the best URL to display (priority: headshotUrl > generatedHeadshot > avatarUrl)
   const getDisplayUrl = (): string | null => {
@@ -202,6 +213,27 @@ export const ProfilePicture: React.FC<ProfilePictureProps> = ({
       {isGenerating && !hasAvatar && (
         <div className="absolute inset-0 flex items-center justify-center bg-gray-100">
           <div className="w-3 h-3 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+        </div>
+      )}
+      
+      {/* 3D Headshot Generator */}
+      {shouldGenerateHeadshot && childId && avatarUrl && (
+        <div className="absolute -bottom-8 left-0 right-0">
+          <HeadshotGenerator
+            avatarUrl={avatarUrl}
+            childId={childId}
+            onHeadshotGenerated={(headshotUrl) => {
+              setGeneratedHeadshot(headshotUrl)
+              setShouldGenerateHeadshot(false)
+              onHeadshotGenerated?.(headshotUrl)
+            }}
+            onError={(error) => {
+              console.warn('Headshot generation failed:', error)
+              setShouldGenerateHeadshot(false)
+              // Don't throw the error, just log it and continue
+            }}
+            autoGenerate={true}
+          />
         </div>
       )}
     </div>

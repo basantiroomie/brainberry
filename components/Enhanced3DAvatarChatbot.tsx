@@ -2,38 +2,26 @@
 
 import React, { useState, useRef, useEffect, useCallback } from 'react'
 import { SimpleAvatarViewer } from '@/components/SimpleAvatarViewer'
-import { AvatarChatbotErrorBoundary } from '@/components/AvatarErrorBoundary'
 import { getLipsyncManager } from '@/lib/lipsync-manager'
 import { BlendShapeTargets } from '@/types/avatar'
 import { Object3D, Mesh, SkinnedMesh } from 'three'
-import { logger } from '@/utils/logger'
-import { 
-  measureAvatarOperation, 
-  recordAvatarEvent 
-} from '@/lib/avatar-performance-monitor'
-import { 
-  handleAvatarError, 
-  AvatarErrorType 
-} from '@/lib/avatar-error-handler'
-import { retryTTSOperation, retryApiCall } from '@/lib/avatar-retry-manager'
 
 interface ChatMessage {
   id: string
   text: string
   sender: 'child' | 'avatar'
   timestamp: Date
-  facialExpression?: 'smile' | 'neutral' | 'excited'
-  animation?: 'Idle' | 'Talking' | 'Listening'
+  isAudioPlaying?: boolean
 }
 
-interface AvatarChatbotProps {
+interface Enhanced3DAvatarChatbotProps {
   avatarUrl: string
   childId: string
   accessCode?: string
   onMessageSent?: (message: string) => void
 }
 
-export const AvatarChatbot: React.FC<AvatarChatbotProps> = ({
+export const Enhanced3DAvatarChatbot: React.FC<Enhanced3DAvatarChatbotProps> = ({
   avatarUrl,
   childId,
   accessCode,
@@ -45,6 +33,7 @@ export const AvatarChatbot: React.FC<AvatarChatbotProps> = ({
   const [isLoading, setIsLoading] = useState(false)
   const [isSpeaking, setIsSpeaking] = useState(false)
   const [currentBlendShapes, setCurrentBlendShapes] = useState<Partial<BlendShapeTargets>>({})
+  const [avatarLoaded, setAvatarLoaded] = useState(false)
   
   // Refs
   const avatarModelRef = useRef<Object3D | null>(null)
@@ -115,14 +104,12 @@ export const AvatarChatbot: React.FC<AvatarChatbotProps> = ({
   // Handle avatar model load
   const handleAvatarLoad = useCallback((model: Object3D) => {
     avatarModelRef.current = model
-    logger.debug('Avatar model loaded for chatbot', 'AVATAR_CHATBOT', { 
-      childId,
-      hasModel: !!model 
-    })
+    setAvatarLoaded(true)
+    console.log('3D Avatar loaded successfully for chatbot')
     
     // Start idle animations
     startIdleAnimations()
-  }, [childId])
+  }, [])
 
   // Start idle animations (blinking, subtle movements)
   const startIdleAnimations = useCallback(() => {
@@ -184,7 +171,7 @@ export const AvatarChatbot: React.FC<AvatarChatbotProps> = ({
     return englishVoice || voices[0]
   }, [])
 
-  // Speak text using TTS with lip-sync and error handling
+  // Speak text using TTS with lip-sync
   const speakText = useCallback(async (text: string, facialExpression?: string) => {
     if (isSpeaking) {
       // Cancel current speech
@@ -194,101 +181,64 @@ export const AvatarChatbot: React.FC<AvatarChatbotProps> = ({
     setIsSpeaking(true)
     stopIdleAnimations()
 
-    // Use retry mechanism for TTS operations
-    const ttsResult = await retryTTSOperation(
-      async () => {
-        return new Promise<void>((resolve, reject) => {
-          try {
-            const utterance = new SpeechSynthesisUtterance(text)
-            const voice = getBestTTSVoice()
-            
-            if (voice) {
-              utterance.voice = voice
-            }
-            
-            utterance.rate = ttsConfig.rate
-            utterance.pitch = ttsConfig.pitch
-            utterance.volume = ttsConfig.volume
+    return new Promise<void>((resolve, reject) => {
+      try {
+        const utterance = new SpeechSynthesisUtterance(text)
+        const voice = getBestTTSVoice()
+        
+        if (voice) {
+          utterance.voice = voice
+        }
+        
+        utterance.rate = ttsConfig.rate
+        utterance.pitch = ttsConfig.pitch
+        utterance.volume = ttsConfig.volume
 
-            // Set up lipsync processing for speech synthesis
-            lipsyncManagerRef.current.processSpeechSynthesis(utterance)
+        // Set up lipsync processing for speech synthesis
+        lipsyncManagerRef.current.processSpeechSynthesis(utterance)
 
-            utterance.onstart = () => {
-              recordAvatarEvent('tts', 'speech-start', 0, { 
-                textLength: text.length,
-                voice: voice?.name 
-              })
-              logger.debug('TTS started', 'AVATAR_CHATBOT', { text: text.substring(0, 50) })
-            }
+        utterance.onstart = () => {
+          console.log('Avatar started speaking:', text.substring(0, 50))
+        }
 
-            utterance.onend = () => {
-              setIsSpeaking(false)
-              
-              // Reset to neutral expression
-              const neutralShapes = {
-                jawOpen: 0.0,
-                mouthSmile: facialExpression === 'smile' ? 0.3 : 0.0,
-                mouthFunnel: 0.0
-              }
-              applyBlendShapesToAvatar(neutralShapes)
-              
-              // Restart idle animations
-              startIdleAnimations()
-              
-              recordAvatarEvent('tts', 'speech-end', 0)
-              logger.debug('TTS ended', 'AVATAR_CHATBOT')
-              resolve()
-            }
-
-            utterance.onerror = (event) => {
-              const error = new Error(`TTS error: ${event.error}`)
-              
-              handleAvatarError(
-                AvatarErrorType.TTS_ERROR,
-                'Text-to-speech failed',
-                error,
-                { 
-                  childId,
-                  operation: 'tts-speak',
-                  textLength: text.length 
-                }
-              )
-
-              setIsSpeaking(false)
-              startIdleAnimations()
-              reject(error)
-            }
-
-            speechSynthesisRef.current = utterance
-            speechSynthesis.speak(utterance)
-
-          } catch (error) {
-            const ttsError = error instanceof Error ? error : new Error(String(error))
-            
-            handleAvatarError(
-              AvatarErrorType.TTS_ERROR,
-              'Failed to initialize TTS',
-              ttsError,
-              { childId, operation: 'tts-init' }
-            )
-
-            setIsSpeaking(false)
-            startIdleAnimations()
-            reject(ttsError)
+        utterance.onend = () => {
+          setIsSpeaking(false)
+          
+          // Reset to neutral expression
+          const neutralShapes = {
+            jawOpen: 0.0,
+            mouthSmile: facialExpression === 'smile' ? 0.3 : 0.0,
+            mouthFunnel: 0.0
           }
-        })
-      },
-      text
-    )
+          applyBlendShapesToAvatar(neutralShapes)
+          
+          // Restart idle animations
+          startIdleAnimations()
+          
+          console.log('Avatar finished speaking')
+          resolve()
+        }
 
-    if (!ttsResult.success) {
-      logger.error('TTS operation failed after retries', ttsResult.error, 'AVATAR_CHATBOT')
-      setIsSpeaking(false)
-      startIdleAnimations()
-    }
-  }, [isSpeaking, getBestTTSVoice, applyBlendShapesToAvatar, startIdleAnimations, stopIdleAnimations, childId])
+        utterance.onerror = (event) => {
+          console.error('TTS error:', event.error)
+          setIsSpeaking(false)
+          startIdleAnimations()
+          reject(new Error(`TTS error: ${event.error}`))
+        }
 
-  // Send message to chat API with retry mechanism
+        speechSynthesisRef.current = utterance
+        speechSynthesis.speak(utterance)
+
+      } catch (error) {
+        console.error('Failed to initialize TTS:', error)
+        setIsSpeaking(false)
+        startIdleAnimations()
+        reject(error)
+      }
+    })
+  }, [isSpeaking, getBestTTSVoice, applyBlendShapesToAvatar, startIdleAnimations, stopIdleAnimations])
+
+  // Send message to chat API
   const sendMessage = useCallback(async (message: string) => {
     if (!message.trim() || isLoading) return
 
@@ -304,86 +254,60 @@ export const AvatarChatbot: React.FC<AvatarChatbotProps> = ({
     setIsLoading(true)
     onMessageSent?.(message.trim())
 
-    // Use retry mechanism for API calls
-    const apiResult = await measureAvatarOperation(
-      'render',
-      'chat-api-call',
-      async () => {
-        return retryApiCall(
-          async () => {
-            const response = await fetch('/api/chat', {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json'
-              },
-              body: JSON.stringify({
-                message: message.trim(),
-                childId,
-                accessCode
-              })
-            })
-
-            if (!response.ok) {
-              throw new Error(`Chat API error: ${response.status} ${response.statusText}`)
-            }
-
-            return response.json()
-          },
-          '/api/chat'
-        )
-      },
-      { messageLength: message.length, childId }
-    )
-
     try {
-      if (apiResult.success && apiResult.data) {
-        const data = apiResult.data
-        
-        const avatarMessage: ChatMessage = {
-          id: (Date.now() + 1).toString(),
-          text: data.text,
-          sender: 'avatar',
-          timestamp: new Date(),
-          facialExpression: data.facialExpression,
-          animation: data.animation
-        }
+      const response = await fetch('/api/chat', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          message: message.trim(),
+          childId,
+          accessCode
+        })
+      })
 
-        setMessages(prev => [...prev, avatarMessage])
-        
-        // Speak the avatar's response
+      if (!response.ok) {
+        throw new Error(`Chat API error: ${response.status} ${response.statusText}`)
+      }
+
+      const data = await response.json()
+      
+      const avatarMessage: ChatMessage = {
+        id: (Date.now() + 1).toString(),
+        text: data.text,
+        sender: 'avatar',
+        timestamp: new Date(),
+        isAudioPlaying: true
+      }
+
+      setMessages(prev => [...prev, avatarMessage])
+      
+      // Speak the avatar's response with 3D avatar
+      if (avatarLoaded) {
         await speakText(data.text, data.facialExpression)
-
-      } else {
-        throw apiResult.error || new Error('API call failed')
       }
 
     } catch (error) {
-      handleAvatarError(
-        AvatarErrorType.NETWORK_ERROR,
-        'Chat API request failed',
-        error instanceof Error ? error : new Error(String(error)),
-        { 
-          childId, 
-          operation: 'chat-api',
-          messageLength: message.length 
-        }
-      )
+      console.error('Chat API error:', error)
       
       // Add error message
       const errorMessage: ChatMessage = {
         id: (Date.now() + 1).toString(),
         text: "I'm having trouble right now. Can you try again?",
         sender: 'avatar',
-        timestamp: new Date(),
-        facialExpression: 'neutral'
+        timestamp: new Date()
       }
       
       setMessages(prev => [...prev, errorMessage])
-      await speakText(errorMessage.text, 'neutral')
+      
+      if (avatarLoaded) {
+        await speakText(errorMessage.text, 'neutral')
+      }
     } finally {
       setIsLoading(false)
     }
-  }, [childId, accessCode, isLoading, onMessageSent, speakText])
+  }, [childId, accessCode, isLoading, onMessageSent, speakText, avatarLoaded])
 
   // Handle form submission
   const handleSubmit = (e: React.FormEvent) => {
@@ -409,67 +333,73 @@ export const AvatarChatbot: React.FC<AvatarChatbotProps> = ({
     }
   }, [stopIdleAnimations])
 
-  // Debug logging
-  useEffect(() => {
-    console.log('AvatarChatbot props:', {
-      avatarUrl,
-      childId,
-      hasAccessCode: !!accessCode
-    })
-  }, [avatarUrl, childId, accessCode])
-
   return (
-    <AvatarChatbotErrorBoundary avatarUrl={avatarUrl} childId={childId}>
-      <div className="flex flex-col h-full bg-gradient-to-b from-blue-50 to-purple-50">
-        {/* Avatar Display Header */}
-        <div className="flex-shrink-0 bg-white border-b-2 border-gray-200 p-4">
-          <div className="text-center">
-            <h2 className="text-xl font-bold text-gray-800 mb-2">Chat with Your Avatar!</h2>
-            <p className="text-sm text-gray-600">Your 3D avatar will speak back to you</p>
-          </div>
+    <div className="flex flex-col h-full bg-gradient-to-b from-blue-50 to-purple-50">
+      {/* Avatar Display Header */}
+      <div className="flex-shrink-0 bg-white border-b-2 border-gray-200 p-4">
+        <div className="text-center">
+          <h2 className="text-xl font-bold text-gray-800 mb-2">
+            🎭 3D Avatar Chat
+          </h2>
+          <p className="text-sm text-gray-600">
+            Your avatar will speak back to you with voice and lip sync!
+          </p>
+          {!avatarLoaded && (
+            <p className="text-xs text-orange-600 mt-1">Loading 3D avatar...</p>
+          )}
         </div>
+      </div>
 
-        {/* Avatar Display */}
-        <div className="flex-shrink-0 h-80 bg-white shadow-sm m-4 rounded-lg overflow-hidden border-2 border-gray-200">
-          {avatarUrl ? (
-            <SimpleAvatarViewer
-              avatarUrl={avatarUrl}
-              enableControls={false}
-              cameraMode="headshot"
-              onModelLoad={handleAvatarLoad}
-              onModelError={(error) => {
-                console.error('Avatar loading error in chatbot:', error)
-                handleAvatarError(
-                  AvatarErrorType.RENDERING_ERROR,
-                  'Avatar model failed to load in chatbot',
-                  error,
-                  { avatarUrl, childId, operation: 'chatbot-avatar-load' }
-                )
-              }}
-              className="w-full h-full"
-            />
-          ) : (
-            <div className="w-full h-full flex items-center justify-center bg-gray-50">
-              <div className="text-center">
-                <div className="text-gray-400 mb-2">
-                  <svg className="w-16 h-16 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                  </svg>
-                </div>
-                <p className="text-sm text-gray-600">No avatar available</p>
-                <p className="text-xs text-gray-500 mt-1">Ask your educator to create one!</p>
+      {/* 3D Avatar Display */}
+      <div className="flex-shrink-0 h-80 bg-white shadow-sm m-4 rounded-lg overflow-hidden border-2 border-gray-200 relative">
+        {avatarUrl ? (
+          <SimpleAvatarViewer
+            avatarUrl={avatarUrl}
+            enableControls={false}
+            cameraMode="headshot"
+            onModelLoad={handleAvatarLoad}
+            onModelError={(error) => {
+              console.error('3D Avatar loading error:', error)
+            }}
+            className="w-full h-full"
+          />
+        ) : (
+          <div className="w-full h-full flex items-center justify-center bg-gray-50">
+            <div className="text-center">
+              <div className="text-gray-400 mb-2">
+                <svg className="w-16 h-16 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                </svg>
               </div>
+              <p className="text-sm text-gray-600">No 3D avatar available</p>
+              <p className="text-xs text-gray-500 mt-1">Ask your educator to create one!</p>
             </div>
-          )}
-          
-          {/* Speaking indicator overlay */}
-          {isSpeaking && (
-            <div className="absolute top-4 right-4 bg-green-500 text-white px-3 py-1 rounded-full text-xs font-medium flex items-center space-x-2">
-              <div className="w-2 h-2 bg-white rounded-full animate-pulse"></div>
-              <span>Speaking...</span>
+          </div>
+        )}
+        
+        {/* Speaking indicator overlay */}
+        {isSpeaking && (
+          <div className="absolute top-4 right-4 bg-green-500 text-white px-3 py-1 rounded-full text-xs font-medium flex items-center space-x-2 animate-pulse">
+            <div className="w-2 h-2 bg-white rounded-full animate-bounce"></div>
+            <span>Avatar Speaking...</span>
+          </div>
+        )}
+
+        {/* Avatar status indicator */}
+        <div className="absolute top-4 left-4">
+          {avatarLoaded ? (
+            <div className="bg-green-500 text-white px-2 py-1 rounded-full text-xs font-medium flex items-center space-x-1">
+              <div className="w-2 h-2 bg-white rounded-full"></div>
+              <span>3D Ready</span>
+            </div>
+          ) : (
+            <div className="bg-orange-500 text-white px-2 py-1 rounded-full text-xs font-medium flex items-center space-x-1">
+              <div className="w-2 h-2 bg-white rounded-full animate-spin"></div>
+              <span>Loading...</span>
             </div>
           )}
         </div>
+      </div>
 
       {/* Chat Messages */}
       <div className="flex-1 overflow-y-auto px-4 pb-4">
@@ -483,7 +413,7 @@ export const AvatarChatbot: React.FC<AvatarChatbotProps> = ({
               </div>
               <p className="text-lg font-medium text-gray-700">Hi there! 👋</p>
               <p className="text-sm text-gray-500 mt-1">
-                {avatarUrl ? 'Start a conversation with your 3D avatar!' : 'Chat with me! (Ask your educator to create an avatar for 3D chat)'}
+                {avatarUrl ? 'Start chatting with your 3D avatar!' : 'Chat with me! (Ask your educator to create a 3D avatar)'}
               </p>
             </div>
           )}
@@ -501,9 +431,17 @@ export const AvatarChatbot: React.FC<AvatarChatbotProps> = ({
                 }`}
               >
                 <p className="text-sm">{message.text}</p>
-                <p className="text-xs opacity-70 mt-1">
-                  {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                </p>
+                <div className="flex items-center justify-between mt-1">
+                  <p className="text-xs opacity-70">
+                    {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  </p>
+                  {message.sender === 'avatar' && message.isAudioPlaying && (
+                    <div className="flex items-center space-x-1">
+                      <div className="w-1 h-1 bg-green-500 rounded-full animate-pulse"></div>
+                      <span className="text-xs text-green-600">🎤</span>
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
           ))}
@@ -517,7 +455,7 @@ export const AvatarChatbot: React.FC<AvatarChatbotProps> = ({
                     <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
                     <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
                   </div>
-                  <span className="text-xs text-gray-500">Thinking...</span>
+                  <span className="text-xs text-gray-500">Avatar thinking...</span>
                 </div>
               </div>
             </div>
@@ -559,14 +497,13 @@ export const AvatarChatbot: React.FC<AvatarChatbotProps> = ({
           <div className="mt-2 flex items-center justify-center text-sm text-gray-500">
             <div className="flex items-center space-x-2">
               <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
-              <span>Avatar is speaking...</span>
+              <span>🎭 Your 3D avatar is speaking with lip sync...</span>
             </div>
           </div>
         )}
       </div>
     </div>
-    </AvatarChatbotErrorBoundary>
   )
 }
 
-export default AvatarChatbot
+export default Enhanced3DAvatarChatbot

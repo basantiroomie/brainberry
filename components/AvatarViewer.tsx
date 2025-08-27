@@ -7,11 +7,6 @@ import { Object3D } from 'three'
 import { AvatarViewerProps } from '@/types/avatar'
 import { AvatarViewerErrorBoundary } from './AvatarErrorBoundary'
 import { 
-  measureAvatarOperation, 
-  startAvatarPerformanceMonitoring,
-  avatarPerformanceMonitor 
-} from '@/lib/avatar-performance-monitor'
-import { 
   avatarCacheManager, 
   getCachedAvatarModel, 
   cacheAvatarModel 
@@ -22,6 +17,8 @@ import {
 } from '@/lib/avatar-error-handler'
 import { retryAvatarLoad } from '@/lib/avatar-retry-manager'
 import { logger } from '@/utils/logger'
+import { useSafeAvatar } from '@/lib/avatar-error-prevention'
+import { SafeAvatarErrorBoundary } from './SafeAvatarErrorBoundary'
 
 // Preload function to handle errors better
 const preloadGLTF = (url: string) => {
@@ -50,12 +47,17 @@ class AvatarViewerErrorBoundary extends React.Component<
   }
 
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
-    console.error('AvatarViewer 3D Error:', {
-      error: error.message || error,
-      stack: error.stack,
-      errorInfo,
-      timestamp: new Date().toISOString()
-    })
+    // Only log meaningful errors, not empty objects
+    if (error && (error.message || error.stack)) {
+      console.error('AvatarViewer 3D Error:', {
+        error: error.message || error.toString(),
+        stack: error.stack,
+        errorInfo: errorInfo.componentStack,
+        timestamp: new Date().toISOString()
+      })
+    } else {
+      console.warn('AvatarViewer: Empty error caught, likely a network or loading issue')
+    }
   }
 
   render() {
@@ -101,6 +103,7 @@ const GLTFModel: React.FC<{
 }> = ({ url, onLoaded, onError }) => {
   const meshRef = useRef<any>(null)
   const [isLoading, setIsLoading] = useState(true)
+  const [hasError, setHasError] = useState(false)
   const loadStartTime = useRef<number>(0)
   
   // Check cache first
@@ -112,25 +115,22 @@ const GLTFModel: React.FC<{
   useEffect(() => {
     loadStartTime.current = performance.now()
     setIsLoading(true)
+    setHasError(false)
   }, [url])
 
   useEffect(() => {
-    if (gltf?.scene) {
+    if (gltf?.scene && !hasError) {
       const loadTime = performance.now() - loadStartTime.current
       
-      // Record performance metrics
-      avatarPerformanceMonitor.recordEvent('load', `avatar-model-${url}`, loadTime, {
-        url,
-        cached: !!cachedModel,
-        animationCount: gltf.animations?.length || 0
-      })
-
-      logger.debug('GLB avatar loaded successfully', 'AVATAR_VIEWER', {
-        url,
-        loadTime: `${loadTime.toFixed(2)}ms`,
-        cached: !!cachedModel,
-        animations: gltf.animations?.length || 0
-      })
+      // Log successful load
+      if (process.env.NODE_ENV === 'development') {
+        logger.debug('Avatar model loaded', 'AVATAR_VIEWER', {
+          url,
+          loadTime: `${loadTime.toFixed(2)}ms`,
+          cached: !!cachedModel,
+          animationCount: gltf.animations?.length || 0
+        })
+      }
 
       // Cache the model if not already cached
       if (!cachedModel) {
@@ -138,13 +138,17 @@ const GLTFModel: React.FC<{
       }
 
       setIsLoading(false)
-      onLoaded?.(gltf.scene)
+      
+      // Use setTimeout to avoid calling during render
+      setTimeout(() => {
+        onLoaded?.(gltf.scene)
+      }, 0)
     }
-  }, [gltf, url, onLoaded, cachedModel])
+  }, [gltf, url, onLoaded, cachedModel, hasError])
 
   useEffect(() => {
     // Check for loading errors with enhanced error handling
-    if (gltf) {
+    if (gltf && !hasError) {
       if (gltf.scene === undefined && gltf.nodes === undefined) {
         const error = new Error('GLB file failed to load - no scene or nodes found')
         
@@ -156,11 +160,21 @@ const GLTFModel: React.FC<{
         )
 
         setIsLoading(false)
-        onError?.(error)
+        setHasError(true)
+        
+        // Use setTimeout to avoid calling during render
+        setTimeout(() => {
+          onError?.(error)
+        }, 0)
         return
       }
     }
-  }, [gltf, onError, url])
+  }, [gltf, onError, url, hasError])
+
+  // Don't render if there's an error
+  if (hasError) {
+    return null
+  }
 
   // Return cached model if available
   if (cachedModel && !isLoading) {
@@ -254,28 +268,97 @@ const GLBAvatar: React.FC<{
       )
 
       setLoadError(error.message)
-      handleError(error)
+      
+      // Use setTimeout to avoid calling during render
+      setTimeout(() => {
+        handleError(error)
+      }, 0)
       return
     }
 
-    // Reset error when URL changes
-    setLoadError(null)
-    setIsRetrying(false)
-    retryAttemptRef.current = 0
+    // Check if URL is accessible before attempting to load
+    const validateUrl = async () => {
+      try {
+        const controller = new AbortController()
+        const timeoutId = setTimeout(() => controller.abort(), 3000) // 3 second timeout
+        
+        const response = await fetch(modelSrc, { 
+          method: 'HEAD',
+          mode: 'cors',
+          cache: 'no-cache',
+          signal: controller.signal
+        })
+        
+        clearTimeout(timeoutId)
+        
+        if (!response.ok) {
+          throw new Error(`Avatar not found: ${response.status} ${response.statusText}`)
+        }
+        
+        // Reset error state if URL is valid
+        setLoadError(null)
+        setIsRetrying(false)
+        retryAttemptRef.current = 0
+        
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : 'Failed to validate avatar URL'
+        console.warn('Avatar URL validation failed:', {
+          url: modelSrc,
+          error: errorMessage,
+          isAbortError: error instanceof Error && error.name === 'AbortError'
+        })
+        
+        // If it's a 404 or network error, set error immediately
+        if (errorMessage.includes('404') || errorMessage.includes('not found')) {
+          setLoadError('Avatar not found - this avatar may have been deleted or moved')
+          
+          // Use setTimeout to avoid calling during render
+          setTimeout(() => {
+            handleError(new Error(errorMessage))
+          }, 0)
+        }
+        // For other errors, let the GLTFModel component try to load anyway
+      }
+    }
+
+    validateUrl()
   }, [modelSrc, handleError])
 
-  // If there's an error or invalid URL, return null
+  // If there's an error or invalid URL, show fallback avatar
   if (loadError || !modelSrc || typeof modelSrc !== 'string') {
-    return null
+    return (
+      <group position={[0, 1, 0]}>
+        {/* Simple fallback avatar representation */}
+        <mesh>
+          <boxGeometry args={[0.4, 1.8, 0.2]} />
+          <meshStandardMaterial color="#e0e0e0" />
+        </mesh>
+        <mesh position={[0, 0.8, 0]}>
+          <sphereGeometry args={[0.15]} />
+          <meshStandardMaterial color="#f0f0f0" />
+        </mesh>
+        {/* Add a simple face */}
+        <mesh position={[0, 0.85, 0.12]}>
+          <sphereGeometry args={[0.02]} />
+          <meshStandardMaterial color="#333" />
+        </mesh>
+        <mesh position={[-0.05, 0.82, 0.12]}>
+          <sphereGeometry args={[0.015]} />
+          <meshStandardMaterial color="#333" />
+        </mesh>
+        <mesh position={[0.05, 0.82, 0.12]}>
+          <sphereGeometry args={[0.015]} />
+          <meshStandardMaterial color="#333" />
+        </mesh>
+      </group>
+    )
   }
 
   // Preload the model with error handling
   useEffect(() => {
     const preloadModel = async () => {
       try {
-        await measureAvatarOperation('load', 'preload-gltf', async () => {
-          useGLTF.preload(modelSrc)
-        }, { url: modelSrc })
+        useGLTF.preload(modelSrc)
       } catch (error) {
         logger.warn('Failed to preload GLB', 'AVATAR_VIEWER', { 
           url: modelSrc, 
@@ -555,53 +638,39 @@ export const AvatarViewer: React.FC<AvatarViewerProps> = ({
   className = ''
 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null)
-  const [performanceIssues, setPerformanceIssues] = useState<string[]>([])
+  const [hasValidationError, setHasValidationError] = useState(false)
   
-  // Initialize performance monitoring
-  useEffect(() => {
-    startAvatarPerformanceMonitoring()
-    
-    return () => {
-      // Cleanup performance monitoring if needed
-      const summary = avatarPerformanceMonitor.getPerformanceSummary()
-      if (summary.issues.length > 0) {
-        logger.warn('Avatar performance issues detected', 'AVATAR_VIEWER', {
-          issues: summary.issues,
-          metrics: summary.metrics
-        })
-      }
-    }
-  }, [])
-
-  // Monitor performance issues
-  useEffect(() => {
-    const checkPerformance = () => {
-      const summary = avatarPerformanceMonitor.getPerformanceSummary()
-      setPerformanceIssues(summary.issues)
-      
-      if (summary.issues.length > 0) {
-        logger.warn('Performance issues detected in AvatarViewer', 'AVATAR_VIEWER', {
-          issues: summary.issues
-        })
-      }
-    }
-
-    const intervalId = setInterval(checkPerformance, 5000) // Check every 5 seconds
-    return () => clearInterval(intervalId)
-  }, [])
+  // Use safe avatar loading
+  const { safeUrl, isLoading: urlValidating, error: urlError } = useSafeAvatar(avatarUrl)
   
-  // Enhanced debug logging with performance context
+  // Enhanced debug logging with performance context (only in development)
   useEffect(() => {
-    logger.debug('AvatarViewer received URL', 'AVATAR_VIEWER', {
-      avatarUrl,
-      type: typeof avatarUrl,
-      length: avatarUrl?.length,
-      isValid: avatarUrl && typeof avatarUrl === 'string' && avatarUrl.length > 0,
-      cameraMode,
-      enableControls,
-      enableAnimations
-    })
-  }, [avatarUrl, cameraMode, enableControls, enableAnimations])
+    if (process.env.NODE_ENV === 'development') {
+      logger.debug('AvatarViewer received URL', 'AVATAR_VIEWER', {
+        avatarUrl,
+        safeUrl,
+        type: typeof avatarUrl,
+        length: avatarUrl?.length,
+        isValid: avatarUrl && typeof avatarUrl === 'string' && avatarUrl.length > 0,
+        cameraMode,
+        enableControls,
+        enableAnimations,
+        urlError
+      })
+    }
+  }, [avatarUrl, safeUrl, cameraMode, enableControls, enableAnimations, urlError])
+
+  // Handle URL validation errors
+  useEffect(() => {
+    if (urlError) {
+      setHasValidationError(true)
+      if (onModelError) {
+        onModelError(new Error(`Avatar URL validation failed: ${urlError}`))
+      }
+    } else {
+      setHasValidationError(false)
+    }
+  }, [urlError, onModelError])
 
   // Headshot capture functionality
   const captureHeadshot = useCallback(() => {
@@ -664,27 +733,28 @@ export const AvatarViewer: React.FC<AvatarViewerProps> = ({
     }
   }, [onModelLoad, captureHeadshot])
 
-  // If no avatar URL is provided, show fallback
-  if (!avatarUrl) {
-    console.warn('AvatarViewer: No avatar URL provided')
+  // Show loading state while validating URL
+  if (urlValidating) {
     return (
       <div className={`w-full h-full ${className}`}>
-        <NoAvatarFallback />
+        <LoadingFallback />
       </div>
     )
   }
 
-  // Validate URL format
-  if (typeof avatarUrl !== 'string' || avatarUrl.trim().length === 0) {
-    console.error('AvatarViewer: Invalid avatar URL format:', avatarUrl)
+  // If no avatar URL is provided or validation failed, show fallback
+  if (!avatarUrl || hasValidationError || !safeUrl) {
+    if (process.env.NODE_ENV === 'development') {
+      console.warn('AvatarViewer: No valid avatar URL available', {
+        avatarUrl,
+        hasValidationError,
+        safeUrl,
+        urlError
+      })
+    }
     return (
       <div className={`w-full h-full ${className}`}>
-        <div className="flex items-center justify-center w-full h-full bg-red-50 rounded-lg">
-          <div className="text-center p-4">
-            <p className="text-sm text-red-600 font-bold">Invalid Avatar URL</p>
-            <p className="text-xs text-red-500 mt-1">URL: {String(avatarUrl)}</p>
-          </div>
-        </div>
+        <NoAvatarFallback />
       </div>
     )
   }
@@ -708,16 +778,7 @@ export const AvatarViewer: React.FC<AvatarViewerProps> = ({
 
   return (
     <div className={`w-full h-full ${className}`} ref={canvasRef}>
-      <AvatarViewerErrorBoundary
-        avatarUrl={avatarUrl}
-        context={{
-          avatarUrl,
-          operation: 'avatar-viewer-render',
-          cameraMode,
-          enableControls,
-          enableAnimations
-        }}
-      >
+      <SafeAvatarErrorBoundary>
         <Canvas
           camera={{
             position: config.position,
@@ -728,32 +789,34 @@ export const AvatarViewer: React.FC<AvatarViewerProps> = ({
             antialias: true,
             alpha: true,
             preserveDrawingBuffer: true,
-            powerPreference: 'high-performance', // Prefer dedicated GPU
-            failIfMajorPerformanceCaveat: false // Don't fail on slower hardware
+            powerPreference: 'default', // Use default instead of high-performance for compatibility
+            failIfMajorPerformanceCaveat: false, // Don't fail on slower hardware
+            stencil: false, // Disable stencil buffer to reduce memory usage
+            depth: true // Ensure depth buffer is enabled
           }}
+          dpr={[1, 2]} // Limit device pixel ratio for performance
           onCreated={({ gl, scene, camera }) => {
-            // Log WebGL context info
-            logger.debug('WebGL context created', 'AVATAR_VIEWER', {
-              renderer: gl.getParameter(gl.RENDERER),
-              vendor: gl.getParameter(gl.VENDOR),
-              version: gl.getParameter(gl.VERSION),
-              maxTextureSize: gl.getParameter(gl.MAX_TEXTURE_SIZE),
-              maxVertexAttribs: gl.getParameter(gl.MAX_VERTEX_ATTRIBS)
-            })
-
-            // Monitor memory usage
-            const info = gl.getExtension('WEBGL_debug_renderer_info')
-            if (info) {
-              logger.debug('GPU info', 'AVATAR_VIEWER', {
-                unmaskedRenderer: gl.getParameter(info.UNMASKED_RENDERER_WEBGL),
-                unmaskedVendor: gl.getParameter(info.UNMASKED_VENDOR_WEBGL)
-              })
+            try {
+              // Safely log WebGL context info with error handling (only in development)
+              if (process.env.NODE_ENV === 'development' && gl && typeof gl.getParameter === 'function') {
+                logger.debug('WebGL context created', 'AVATAR_VIEWER', {
+                  renderer: gl.getParameter(gl.RENDERER),
+                  vendor: gl.getParameter(gl.VENDOR),
+                  version: gl.getParameter(gl.VERSION),
+                  maxTextureSize: gl.getParameter(gl.MAX_TEXTURE_SIZE),
+                  maxVertexAttribs: gl.getParameter(gl.MAX_VERTEX_ATTRIBS)
+                })
+              }
+            } catch (error) {
+              if (process.env.NODE_ENV === 'development') {
+                logger.error('Error accessing WebGL context', error, 'AVATAR_VIEWER')
+              }
             }
           }}
         >
           <Suspense fallback={null}>
             <AvatarScene
-              avatarUrl={avatarUrl}
+              avatarUrl={safeUrl}
               enableControls={enableControls}
               enableAnimations={enableAnimations}
               cameraMode={cameraMode}
@@ -762,21 +825,7 @@ export const AvatarViewer: React.FC<AvatarViewerProps> = ({
             />
           </Suspense>
         </Canvas>
-        
-        {/* Performance warning overlay */}
-        {performanceIssues.length > 0 && process.env.NODE_ENV === 'development' && (
-          <div className="absolute top-2 right-2 bg-yellow-100 border border-yellow-400 text-yellow-700 px-2 py-1 rounded text-xs max-w-xs">
-            <div className="font-semibold">Performance Issues:</div>
-            {performanceIssues.slice(0, 3).map((issue, index) => (
-              <div key={index} className="truncate">{issue}</div>
-            ))}
-          </div>
-        )}
-        
-        <Suspense fallback={<LoadingFallback />}>
-          {/* This ensures loading state is shown while Canvas loads */}
-        </Suspense>
-      </AvatarViewerErrorBoundary>
+      </SafeAvatarErrorBoundary>
     </div>
   )
 }

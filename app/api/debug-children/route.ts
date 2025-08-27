@@ -1,34 +1,36 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createSupabaseServerClient } from '@/lib/supabase-server'
+import { createSupabaseServiceClient } from '@/lib/supabase-server'
 
 export async function GET() {
   try {
-    const supabase = await createSupabaseServerClient()
+    const supabase = createSupabaseServiceClient()
     
-    // Get all children to see their structure
+    console.log('Debug: Attempting to fetch children from database...')
+    
+    // Get all children with their access codes
     const { data: children, error } = await supabase
       .from('ChildProfile')
-      .select('*')
-      .limit(5)
+      .select('id, name, age, access_code, created_at')
+      .order('created_at', { ascending: false })
+    
+    console.log('Debug: Query result:', { children, error })
     
     if (error) {
       console.error('Database error:', error)
       return NextResponse.json({ error: 'Database error', details: error }, { status: 500 })
     }
     
-    // Also get table schema info
-    const { data: tableInfo, error: schemaError } = await supabase
-      .rpc('get_table_columns', { table_name: 'ChildProfile' })
-      .single()
-    
-    return NextResponse.json({ 
-      children, 
-      tableInfo,
-      schemaError,
-      count: children?.length || 0 
+    return NextResponse.json({
+      success: true,
+      count: children?.length || 0,
+      children: children || [],
+      debug: {
+        query: 'SELECT id, name, age, access_code, created_at FROM ChildProfile ORDER BY created_at DESC',
+        error: error
+      }
     })
   } catch (error) {
-    console.error('Debug error:', error)
-    return NextResponse.json({ error: 'Failed to debug children', details: error }, { status: 500 })
+    console.error('Debug children error:', error)
+    return NextResponse.json({ error: 'Failed to fetch children', details: error }, { status: 500 })
   }
 }

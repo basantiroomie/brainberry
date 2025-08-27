@@ -6,6 +6,8 @@ import MoldPersonalizationWizard from './MoldPersonalizationWizard'
 import PolymorphicGamePlayer from './PolymorphicGamePlayer'
 import CanvasColoringGame from '../Games/CanvasColoringGame'
 import { imageCache } from '@/lib/image-cache'
+import AvatarStatusIndicator from '@/components/AvatarStatusIndicator'
+import { useSafeApiCall } from '@/lib/api-error-prevention'
 
 interface PlayTabProps {
   childId: string
@@ -18,15 +20,39 @@ export default function PlayTab({ childId, childProfile }: PlayTabProps) {
   const [viewMode, setViewMode] = useState<ViewMode>('dashboard')
   const [selectedMold, setSelectedMold] = useState<any>(null)
   const [selectedPersonalizedGame, setSelectedPersonalizedGame] = useState<string | null>(null)
-  const [availableMolds, setAvailableMolds] = useState<any[]>([])
-  const [personalizedGames, setPersonalizedGames] = useState<any[]>([])
-  const [loading, setLoading] = useState(true)
+
+  // Use safe API calls with fallback data
+  const { 
+    data: availableMolds, 
+    error: moldsError, 
+    isLoading: moldsLoading 
+  } = useSafeApiCall<any[]>('/api/child-molds', {}, {
+    fallbackData: [{
+      id: 'expression_game',
+      name: 'Expression Game',
+      category: 'emotional',
+      experience_type: 'interactive',
+      personalizationComponent: 'ExpressionGame'
+    }],
+    cache: true
+  })
+
+  const { 
+    data: personalizedGames, 
+    error: personalizedError, 
+    isLoading: personalizedLoading 
+  } = useSafeApiCall<any[]>(
+    childId ? `/api/child-personalized-molds?child_id=${childId}` : null, 
+    {}, 
+    {
+      fallbackData: [],
+      cache: true
+    }
+  )
+
+  const loading = moldsLoading || personalizedLoading
 
   useEffect(() => {
-    if (childId) {
-      loadGameData()
-    }
-
     // Cleanup function to manage cache when component unmounts
     return () => {
       // Get cache stats before cleanup for logging
@@ -37,69 +63,7 @@ export default function PlayTab({ childId, childProfile }: PlayTabProps) {
       // Note: We don't clear all cache here as images might be reused
       // Cache will be cleared when specific games are deleted
     }
-  }, [childId])
-
-  async function loadGameData() {
-    if (!childId) {
-      console.error('No childId provided')
-      setLoading(false)
-      return
-    }
-    
-    try {
-      setLoading(true)
-      
-      // Load available molds and personalized games using child-specific APIs
-      const [moldsResponse, personalizedResponse] = await Promise.all([
-        fetch('/api/child-molds'),
-        fetch(`/api/child-personalized-molds?child_id=${childId}`)
-      ])
-
-      // Parse and sanitize molds
-      let moldsData: any[] = []
-      if (moldsResponse.ok) {
-        try {
-          const moldsJson = await moldsResponse.json()
-          moldsData = Array.isArray(moldsJson)
-            ? moldsJson.map(m => ({
-                ...m,
-                personalizationComponent: m.personalizationComponent || (m.id === 'expression_game' ? 'ExpressionGame' : 'MoldPersonalizationWizard'),
-                experience_type: m.experience_type || m.experienceType || 'interactive',
-              }) )
-            : []
-        } catch (e) {
-          console.error('Failed to parse molds JSON:', e)
-        }
-      } else {
-        console.error('Molds API failed:', moldsResponse.status, moldsResponse.statusText)
-      }
-
-      // Parse personalized games
-      let personalizedData: any[] = []
-      if (personalizedResponse.ok) {
-        try {
-          const personalizedJson = await personalizedResponse.json()
-          personalizedData = Array.isArray(personalizedJson) ? personalizedJson : []
-        } catch (e) {
-          console.error('Failed to parse personalized JSON:', e)
-        }
-      } else {
-        console.error('Personalized API failed:', personalizedResponse.status, personalizedResponse.statusText)
-      }
-
-      console.log('Molds data:', moldsData)
-      console.log('Personalized data:', personalizedData)
-
-      setAvailableMolds(moldsData)
-      setPersonalizedGames(personalizedData)
-    } catch (error) {
-      console.error('Error loading game data:', error)
-      setAvailableMolds([])
-      setPersonalizedGames([])
-    } finally {
-      setLoading(false)
-    }
-  }
+  }, [])
 
   async function deletePersonalizedGame(gameId: string) {
     try {
@@ -120,8 +84,7 @@ export default function PlayTab({ childId, childProfile }: PlayTabProps) {
           }
         }
         
-        // Refresh the game data
-        await loadGameData()
+        // The API hooks will automatically refresh the data
       } else {
         console.error('Failed to delete game')
       }
@@ -161,8 +124,7 @@ export default function PlayTab({ childId, childProfile }: PlayTabProps) {
     setViewMode('play-personalized')
     setSelectedMold(null)
     
-    // Also refresh the game data for the dashboard
-    loadGameData()
+    // The API hooks will automatically refresh when the component re-renders
   }
 
   function handleGameComplete() {
@@ -260,14 +222,15 @@ export default function PlayTab({ childId, childProfile }: PlayTabProps) {
           </div>
         </div>
         {/* Avatar Status Indicator */}
-        {childProfile?.avatar_url && (
-          <div className="mt-4 flex items-center justify-center space-x-2 text-sm text-gray-600">
-            <div className="w-6 h-6 bg-green-100 border border-green-300 rounded-full flex items-center justify-center">
-              <span className="text-xs">🦸</span>
-            </div>
-            <span>Your avatar is ready for chat!</span>
-          </div>
-        )}
+        <div className="mt-4 flex items-center justify-center">
+          <AvatarStatusIndicator
+            avatarUrl={childProfile?.avatar_url}
+            headshotUrl={childProfile?.avatar_headshot_url}
+            childName={childProfile?.name || 'Your'}
+            size="medium"
+            showText={true}
+          />
+        </div>
       </div>
 
       {loading ? (
@@ -277,8 +240,29 @@ export default function PlayTab({ childId, childProfile }: PlayTabProps) {
         </div>
       ) : (
         <>
+          {/* Show error messages if APIs failed */}
+          {(moldsError || personalizedError) && (
+            <div className="bg-yellow-50 border-2 border-yellow-200 rounded-lg p-4 mb-6">
+              <div className="flex items-center">
+                <span className="text-yellow-600 mr-2">⚠️</span>
+                <div>
+                  <p className="text-sm font-medium text-yellow-800">
+                    Some games might not be available right now
+                  </p>
+                  <p className="text-xs text-yellow-600 mt-1">
+                    Don't worry - you can still play the games that are loaded!
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+        </>
+      )}
+
+      {!loading && (
+        <>
           {/* Your Personalized Games Section */}
-          {personalizedGames.length > 0 && (
+          {personalizedGames && personalizedGames.length > 0 && (
             <div>
               <h2 className="text-2xl font-bold mb-6 text-center">My Games</h2>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -354,7 +338,7 @@ export default function PlayTab({ childId, childProfile }: PlayTabProps) {
               </div>
 
               {/* Available Game Templates */}
-              {availableMolds.length === 0 ? (
+              {!availableMolds || availableMolds.length === 0 ? (
                 <div className="col-span-full text-center py-8">
                   <div className="text-4xl mb-4">🔧</div>
                   <p className="text-gray-600">
@@ -400,11 +384,11 @@ export default function PlayTab({ childId, childProfile }: PlayTabProps) {
             <h2 className="text-2xl font-bold mb-4 text-center">Your Gaming Stats</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="text-center p-4 bg-chart-1 text-white border-2 border-black shadow-brutal">
-                <div className="text-3xl font-bold mb-2">{personalizedGames.length}</div>
+                <div className="text-3xl font-bold mb-2">{personalizedGames?.length || 0}</div>
                 <div>Personalized Games</div>
               </div>
               <div className="text-center p-4 bg-chart-2 text-white border-2 border-black shadow-brutal">
-                <div className="text-3xl font-bold mb-2">{availableMolds.length}</div>
+                <div className="text-3xl font-bold mb-2">{availableMolds?.length || 0}</div>
                 <div>Templates Available</div>
               </div>
             </div>

@@ -107,7 +107,10 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
         .from('ChildProfile')
         .update(updateData)
         .eq('id', id)
-        .select()
+        .select(`
+          *,
+          assignments:MoldAssignment(*)
+        `)
         .single()
       
       if (error) {
