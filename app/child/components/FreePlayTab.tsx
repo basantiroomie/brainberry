@@ -57,48 +57,7 @@ export default function FreePlayTab({ childProfile }: FreePlayTabProps) {
             </button>
           </div>
         </div>
-
-        {/* Shape Sorter */}
-        <div className="bg-white border-4 border-black shadow-brutal-xl p-6 hover:shadow-brutal-2xl transition-all">
-          <div className="text-center">
-            <div className="bg-orange-500 text-white rounded-full w-16 h-16 flex items-center justify-center mx-auto mb-4">
-              <span className="text-2xl">🔷</span>
-            </div>
-            <h3 className="text-xl font-bold mb-2">Shape Sorter</h3>
-            <p className="text-gray-600 mb-4">Fun with shapes and colors</p>
-            <button className="bg-orange-500 text-white px-6 py-2 border-2 border-black shadow-brutal hover:shadow-brutal-lg transition-all font-bold">
-              SORT
-            </button>
-          </div>
-        </div>
-
-        {/* Story Builder */}
-        <div className="bg-white border-4 border-black shadow-brutal-xl p-6 hover:shadow-brutal-2xl transition-all">
-          <div className="text-center">
-            <div className="bg-pink-500 text-white rounded-full w-16 h-16 flex items-center justify-center mx-auto mb-4">
-              <span className="text-2xl">📖</span>
-            </div>
-            <h3 className="text-xl font-bold mb-2">Story Builder</h3>
-            <p className="text-gray-600 mb-4">Create amazing stories</p>
-            <button className="bg-pink-500 text-white px-6 py-2 border-2 border-black shadow-brutal hover:shadow-brutal-lg transition-all font-bold">
-              CREATE
-            </button>
-          </div>
-        </div>
-
-        {/* Puzzle Time */}
-        <div className="bg-white border-4 border-black shadow-brutal-xl p-6 hover:shadow-brutal-2xl transition-all">
-          <div className="text-center">
-            <div className="bg-teal-500 text-white rounded-full w-16 h-16 flex items-center justify-center mx-auto mb-4">
-              <span className="text-2xl">🧩</span>
-            </div>
-            <h3 className="text-xl font-bold mb-2">Puzzle Time</h3>
-            <p className="text-gray-600 mb-4">Solve fun puzzles</p>
-            <button className="bg-teal-500 text-white px-6 py-2 border-2 border-black shadow-brutal hover:shadow-brutal-lg transition-all font-bold">
-              SOLVE
-            </button>
-          </div>
-        </div>
+        
       </div>
     </div>
   )

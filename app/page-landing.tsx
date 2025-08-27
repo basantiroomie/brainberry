@@ -48,8 +48,8 @@ export default function BrainBerry() {
       <section className="relative h-screen flex items-center justify-center overflow-hidden">
         <div className="absolute inset-0">
           <Image
-            src="/diverse-children-educational-games.png"
-            alt="Children engaged in therapeutic gaming"
+            src="/hero-climber.png"
+            alt="Child climbing and achieving goals through learning"
             fill
             className="object-cover"
             priority
@@ -116,6 +116,64 @@ export default function BrainBerry() {
                     height={400}
                     className="border-2 border-border"
                   />
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Video Section */}
+      <section className="py-20 bg-chart-1">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="text-center mb-12">
+            <div className="bg-main border-4 border-border shadow-brutal-colored-xl p-4 inline-block transform rotate-1">
+              <h2 className="text-4xl md:text-5xl font-bold text-main-foreground">SEE BRAINBERRY IN ACTION</h2>
+            </div>
+          </div>
+          <div className="grid md:grid-cols-2 gap-12 items-center">
+            <div className="order-2 md:order-1">
+              <div className="space-y-6">
+                <div className="bg-black border-4 border-border shadow-brutal-xl p-6">
+                  <h3 className="text-2xl font-bold text-white mb-4">Real Learning, Real Progress</h3>
+                  <p className="text-white font-medium mb-4">
+                    Watch how BrainBerry transforms learning through personalized therapeutic gaming experiences.
+                  </p>
+                  <ul className="space-y-2 text-white font-medium">
+                    <li>• Adaptive gameplay for every learning style</li>
+                    <li>• Progress tracking for parents and therapists</li>
+                    <li>• Engaging, therapeutic activities</li>
+                    <li>• Safe, supervised environment</li>
+                  </ul>
+                </div>
+                <button
+                  onClick={goToLogin}
+                  className="bg-chart-2 text-main-foreground px-8 py-4 border-4 border-border shadow-brutal hover:shadow-brutal-lg transition-all font-bold text-lg w-full"
+                >
+                  TRY IT NOW
+                </button>
+              </div>
+            </div>
+            <div className="order-1 md:order-2">
+              <div className="bg-black border-4 border-border shadow-brutal-3xl p-4 transform -rotate-1 hover:shadow-[28px_28px_0px_0px_var(--color-border)] transition-all duration-300">
+                <div className="relative aspect-video bg-chart-3 border-2 border-border">
+                  <video
+                    className="w-full h-full object-cover"
+                    controls
+                    poster="/diverse-children-educational-games.png"
+                  >
+                    <source src="/demo-video.mp4" type="video/mp4" />
+                    <div className="flex items-center justify-center h-full bg-chart-3 border-2 border-border">
+                      <div className="text-center">
+                        <div className="bg-main border-2 border-border shadow-brutal p-4 mb-4">
+                          <p className="text-main-foreground font-bold">🎮 DEMO COMING SOON</p>
+                        </div>
+                        <p className="text-main-foreground font-medium">
+                          Interactive preview of our therapeutic gaming platform
+                        </p>
+                      </div>
+                    </div>
+                  </video>
                 </div>
               </div>
             </div>
