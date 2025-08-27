@@ -2,6 +2,9 @@ import { Crown, Trophy, MessageCircle } from "lucide-react"
 import { useEffect, useState } from "react"
 import MyAvatarTab from "../Games/MyAvatarTab"
 import ChatAssistant from "./ChatAssistant"
+import AvatarChatbot from "./AvatarChatbot"
+import { AvatarViewer } from "@/components/AvatarViewer"
+import ChildAvatarDisplay from "./ChildAvatarDisplay"
 
 interface ChildProgress {
   completedAssignments: number
@@ -10,25 +13,25 @@ interface ChildProgress {
   achievements: string[]
 }
 
-export default function MyStuffTab() {
+interface MyStuffTabProps {
+  childProfile: any
+}
+
+export default function MyStuffTab({ childProfile }: MyStuffTabProps) {
   const [progress, setProgress] = useState<ChildProgress>({ 
     completedAssignments: 0, 
     totalSessions: 0, 
     unlockedThemes: ['dinosaur'], 
     achievements: [] 
   })
-  const [childProfile, setChildProfile] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [activeSection, setActiveSection] = useState<'overview' | 'avatar' | 'chat' | 'themes' | 'trophies'>('overview')
 
   useEffect(() => {
-    const stored = sessionStorage.getItem('childProfile')
-    if (stored) {
-      const profile = JSON.parse(stored)
-      setChildProfile(profile)
-      loadChildProgress(profile.id)
+    if (childProfile?.id) {
+      loadChildProgress(childProfile.id)
     }
-  }, [])
+  }, [childProfile])
 
   const loadChildProgress = async (childId: string) => {
     try {
@@ -113,21 +116,88 @@ export default function MyStuffTab() {
     )
   }
 
-  // Show avatar customization section
+  // Show avatar view section (read-only)
   if (activeSection === 'avatar') {
     return (
-      <MyAvatarTab 
-        childId={childProfile?.id} 
-        onBack={() => setActiveSection('overview')}
-      />
+      <div className="space-y-8">
+        <div className="flex items-center gap-4 mb-8">
+          <button 
+            onClick={() => setActiveSection('overview')}
+            className="bg-gray-500 text-white px-4 py-2 border-2 border-black shadow-brutal hover:shadow-brutal-lg transition-all font-bold"
+          >
+            <span className="inline-block mr-2">←</span>
+            BACK
+          </button>
+          <div className="inline-block transform -rotate-1">
+            <div className="bg-chart-3 text-white px-8 py-4 border-4 border-black shadow-brutal-xl font-bold text-3xl">
+              MY AVATAR
+            </div>
+          </div>
+        </div>
+        
+        <div className="bg-white border-4 border-black shadow-brutal-xl p-6 max-w-4xl mx-auto">
+          <div className="text-center mb-6">
+            <h2 className="text-2xl font-bold mb-2">Your Amazing Avatar!</h2>
+            <p className="text-gray-600">This is your special character created by your educator!</p>
+          </div>
+          
+          {childProfile?.avatar_url ? (
+            <div className="bg-gray-100 border-2 border-black rounded-lg overflow-hidden" style={{ height: '500px' }}>
+              <AvatarViewer
+                avatarUrl={childProfile.avatar_url}
+                enableControls={true}
+                enableAnimations={true}
+                cameraMode="full"
+                className="w-full h-full"
+              />
+            </div>
+          ) : (
+            <div className="bg-gray-100 border-2 border-black rounded-lg p-12 text-center">
+              <div className="text-6xl mb-4">🦸</div>
+              <h3 className="text-xl font-bold mb-2">No Avatar Yet!</h3>
+              <p className="text-gray-600">Ask your educator to create an avatar for you!</p>
+            </div>
+          )}
+        </div>
+      </div>
     )
   }
 
   // Show chat section
   if (activeSection === 'chat') {
-    return (
-      <ChatAssistant onBack={() => setActiveSection('overview')} />
-    )
+    // Use AvatarChatbot if child has an avatar, otherwise use regular ChatAssistant
+    if (childProfile?.avatar_url) {
+      return (
+        <div className="space-y-8">
+          <div className="flex items-center gap-4 mb-8">
+            <button 
+              onClick={() => setActiveSection('overview')}
+              className="bg-gray-500 text-white px-4 py-2 border-2 border-black shadow-brutal hover:shadow-brutal-lg transition-all font-bold"
+            >
+              <span className="inline-block mr-2">←</span>
+              BACK
+            </button>
+            <div className="inline-block transform -rotate-1">
+              <div className="bg-chart-5 text-white px-8 py-4 border-4 border-black shadow-brutal-xl font-bold text-3xl">
+                CHAT WITH YOUR AVATAR!
+              </div>
+            </div>
+          </div>
+          
+          <div className="bg-white border-4 border-black shadow-brutal-xl overflow-hidden max-w-4xl mx-auto" style={{ height: '600px' }}>
+            <AvatarChatbot
+              avatarUrl={childProfile.avatar_url}
+              childId={childProfile.id}
+              accessCode={childProfile.access_code}
+            />
+          </div>
+        </div>
+      )
+    } else {
+      return (
+        <ChatAssistant onBack={() => setActiveSection('overview')} />
+      )
+    }
   }
 
   return (
@@ -141,22 +211,28 @@ export default function MyStuffTab() {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        {/* Avatar Creator */}
+        {/* My Avatar */}
         <div className="bg-white border-4 border-black shadow-brutal-xl p-6">
           <div className="text-center">
             <div className="bg-chart-3 text-white rounded-full w-16 h-16 flex items-center justify-center mx-auto mb-4">
               <Crown className="h-8 w-8" />
             </div>
-            <h3 className="text-xl font-bold mb-2">Avatar Creator</h3>
-            <p className="text-gray-600 mb-4">Design your character!</p>
-            <div className="w-24 h-24 bg-gray-200 border-2 border-black mx-auto mb-4 flex items-center justify-center">
-              <span className="text-2xl">🦸</span>
+            <h3 className="text-xl font-bold mb-2">My Avatar</h3>
+            <p className="text-gray-600 mb-4">See your amazing character!</p>
+            <div className="mx-auto mb-4">
+              <ChildAvatarDisplay
+                avatarUrl={childProfile?.avatar_url}
+                headshotUrl={childProfile?.avatar_headshot_url}
+                childName={childProfile?.name || 'Your'}
+                size="large"
+                className="w-24 h-24"
+              />
             </div>
             <button 
               onClick={() => setActiveSection('avatar')}
               className="bg-chart-3 text-white px-4 py-2 border-2 border-black shadow-brutal hover:shadow-brutal-lg transition-all font-bold"
             >
-              CUSTOMIZE
+              {childProfile?.avatar_url ? 'VIEW AVATAR' : 'NO AVATAR YET'}
             </button>
           </div>
         </div>
@@ -167,16 +243,32 @@ export default function MyStuffTab() {
             <div className="bg-chart-5 text-white rounded-full w-16 h-16 flex items-center justify-center mx-auto mb-4">
               <MessageCircle className="h-8 w-8" />
             </div>
-            <h3 className="text-xl font-bold mb-2">Chat Assistant</h3>
-            <p className="text-gray-600 mb-4">Ask me anything!</p>
-            <div className="w-24 h-24 bg-gray-200 border-2 border-black mx-auto mb-4 flex items-center justify-center">
-              <span className="text-2xl">💬</span>
+            <h3 className="text-xl font-bold mb-2">
+              {childProfile?.avatar_url ? 'Avatar Chat' : 'Chat Assistant'}
+            </h3>
+            <p className="text-gray-600 mb-4">
+              {childProfile?.avatar_url ? 'Talk with your 3D avatar!' : 'Ask me anything!'}
+            </p>
+            <div className="mx-auto mb-4">
+              {childProfile?.avatar_url ? (
+                <ChildAvatarDisplay
+                  avatarUrl={childProfile.avatar_url}
+                  headshotUrl={childProfile.avatar_headshot_url}
+                  childName={childProfile.name || 'Your'}
+                  size="large"
+                  className="w-24 h-24"
+                />
+              ) : (
+                <div className="w-24 h-24 bg-gray-200 border-2 border-black rounded-full flex items-center justify-center">
+                  <span className="text-2xl">💬</span>
+                </div>
+              )}
             </div>
             <button 
               onClick={() => setActiveSection('chat')}
               className="bg-chart-5 text-white px-4 py-2 border-2 border-black shadow-brutal hover:shadow-brutal-lg transition-all font-bold"
             >
-              CHAT NOW
+              {childProfile?.avatar_url ? 'CHAT WITH AVATAR' : 'CHAT NOW'}
             </button>
           </div>
         </div>

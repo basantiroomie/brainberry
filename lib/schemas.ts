@@ -239,6 +239,29 @@ export const avatarPhotoUploadSchema = z.object({
     )
 })
 
+// Avatar Code Validation Schema
+export const avatarCodeSchema = z.object({
+  code: z.string()
+    .regex(/^[A-Z0-9]{6}$/, "Avatar code must be 6 uppercase alphanumeric characters")
+    .length(6, "Avatar code must be exactly 6 characters")
+})
+
+export const avatarCodeToUrlsSchema = z.object({
+  code: z.string().regex(/^[A-Z0-9]{6}$/, "Avatar code must be 6 uppercase alphanumeric characters"),
+  glbUrl: z.string().url().optional(),
+  pngUrl: z.string().url().optional()
+})
+
+// Avatar Update with Code Schema
+export const updateChildAvatarSchema = z.object({
+  avatar_code: avatarCodeSchema.shape.code.optional(),
+  avatar_url: z.string().url().optional(),
+  avatar_headshot_url: z.string().url().optional()
+}).refine(
+  (data) => data.avatar_code || (data.avatar_url && data.avatar_headshot_url),
+  "Either avatar_code or both avatar_url and avatar_headshot_url must be provided"
+)
+
 // Avatar type exports
 export type AvatarPermissions = z.infer<typeof avatarPermissionsSchema>
 export type ReadyPlayerMeConfig = z.infer<typeof readyPlayerMeConfigSchema>
@@ -247,3 +270,6 @@ export type UpdateAvatarRequest = z.infer<typeof updateAvatarRequestSchema>
 export type AvatarResponse = z.infer<typeof avatarResponseSchema>
 export type TTSConfig = z.infer<typeof ttsConfigSchema>
 export type ElevenLabsConfig = z.infer<typeof elevenLabsConfigSchema>
+export type AvatarCode = z.infer<typeof avatarCodeSchema>
+export type AvatarCodeToUrls = z.infer<typeof avatarCodeToUrlsSchema>
+export type UpdateChildAvatar = z.infer<typeof updateChildAvatarSchema>

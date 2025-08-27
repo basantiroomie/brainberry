@@ -11,6 +11,7 @@ import MyStuffTab from "./components/MyStuffTab"
 import FreePlayTab from "./components/FreePlayTab"
 import EducatorMenuTab from "./components/EducatorMenuTab"
 import EducatorGate from "./components/EducatorGate"
+import ChildAvatarDisplay from "./components/ChildAvatarDisplay"
 
 type TabType = "play" | "mystuff" | "freeplay" | "educatormenu"
 
@@ -21,11 +22,34 @@ export default function ChildDashboard() {
   const [educatorGateCounter, setEducatorGateCounter] = useState(0)
   const [childProfile, setChildProfile] = useState<any>(null)
 
+  // Function to refresh child profile data
+  const refreshChildProfile = async (childId: string) => {
+    try {
+      const response = await fetch(`/api/children/${childId}`)
+      if (response.ok) {
+        const updatedProfile = await response.json()
+        setChildProfile(updatedProfile)
+        // Update sessionStorage with fresh data
+        sessionStorage.setItem('childProfile', JSON.stringify(updatedProfile))
+        return updatedProfile
+      }
+    } catch (error) {
+      console.error('Failed to refresh child profile:', error)
+    }
+    return null
+  }
+
   useEffect(() => {
     // Get child profile from sessionStorage
     const stored = sessionStorage.getItem('childProfile')
     if (stored) {
-      setChildProfile(JSON.parse(stored))
+      const profile = JSON.parse(stored)
+      setChildProfile(profile)
+      
+      // Refresh profile data to ensure avatar info is current
+      if (profile.id) {
+        refreshChildProfile(profile.id)
+      }
     } else {
       // Redirect to login if no child profile found
       router.push('/login')
@@ -62,15 +86,15 @@ export default function ChildDashboard() {
     
     switch (activeTab) {
       case "play":
-        return <PlayTab childId={childId} />
+        return <PlayTab childId={childId} childProfile={childProfile} />
       case "mystuff":
-        return <MyStuffTab />
+        return <MyStuffTab childProfile={childProfile} />
       case "freeplay":
-        return <FreePlayTab />
+        return <FreePlayTab childProfile={childProfile} />
       case "educatormenu":
         return <EducatorMenuTab onBackToChild={handleBackToChild} />
       default:
-        return <PlayTab childId={childId} />
+        return <PlayTab childId={childId} childProfile={childProfile} />
     }
   }
 
@@ -80,10 +104,18 @@ export default function ChildDashboard() {
       <header className="sticky top-0 z-50 bg-white border-b-4 border-black shadow-brutal-xl">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
-            <div className="flex items-center space-x-2">
+            <div className="flex items-center space-x-4">
               <BrandLogo variant="child" />
               {childProfile && (
-                <span className="text-sm font-medium text-main">Welcome, {childProfile.name}!</span>
+                <div className="flex items-center space-x-3">
+                  <ChildAvatarDisplay
+                    avatarUrl={childProfile.avatar_url}
+                    headshotUrl={childProfile.avatar_headshot_url}
+                    childName={childProfile.name}
+                    size="medium"
+                  />
+                  <span className="text-sm font-medium text-main">Welcome, {childProfile.name}!</span>
+                </div>
               )}
             </div>
             

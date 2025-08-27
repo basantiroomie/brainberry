@@ -5,6 +5,23 @@ import { Canvas } from '@react-three/fiber'
 import { OrbitControls, Environment, useGLTF } from '@react-three/drei'
 import { Object3D } from 'three'
 import { AvatarViewerProps } from '@/types/avatar'
+import { AvatarViewerErrorBoundary } from './AvatarErrorBoundary'
+import { 
+  measureAvatarOperation, 
+  startAvatarPerformanceMonitoring,
+  avatarPerformanceMonitor 
+} from '@/lib/avatar-performance-monitor'
+import { 
+  avatarCacheManager, 
+  getCachedAvatarModel, 
+  cacheAvatarModel 
+} from '@/lib/avatar-cache-manager'
+import { 
+  handleAvatarError, 
+  AvatarErrorType 
+} from '@/lib/avatar-error-handler'
+import { retryAvatarLoad } from '@/lib/avatar-retry-manager'
+import { logger } from '@/utils/logger'
 
 // Preload function to handle errors better
 const preloadGLTF = (url: string) => {
@@ -76,45 +93,82 @@ class AvatarViewerErrorBoundary extends React.Component<
   }
 }
 
-// Internal component that always calls useGLTF
+// Internal component that always calls useGLTF with performance monitoring and caching
 const GLTFModel: React.FC<{
   url: string
   onLoaded?: (model: Object3D) => void
   onError?: (error: any) => void
 }> = ({ url, onLoaded, onError }) => {
   const meshRef = useRef<any>(null)
+  const [isLoading, setIsLoading] = useState(true)
+  const loadStartTime = useRef<number>(0)
+  
+  // Check cache first
+  const cachedModel = getCachedAvatarModel(url)
   
   // Always call useGLTF hook - this is required by React hooks rules
   const gltf = useGLTF(url)
 
   useEffect(() => {
-    if (gltf?.scene) {
-      console.log('GLB avatar loaded successfully:', {
-        url,
-        scene: gltf.scene,
-        animations: gltf.animations?.length || 0
-      })
-      onLoaded?.(gltf.scene)
-    }
-  }, [gltf, url, onLoaded])
+    loadStartTime.current = performance.now()
+    setIsLoading(true)
+  }, [url])
 
   useEffect(() => {
-    // Check for loading errors
-    if (gltf) {
-      if (gltf.error) {
-        console.error('GLB loading failed with error property:', gltf.error)
-        onError?.(gltf.error)
-        return
-      }
+    if (gltf?.scene) {
+      const loadTime = performance.now() - loadStartTime.current
       
+      // Record performance metrics
+      avatarPerformanceMonitor.recordEvent('load', `avatar-model-${url}`, loadTime, {
+        url,
+        cached: !!cachedModel,
+        animationCount: gltf.animations?.length || 0
+      })
+
+      logger.debug('GLB avatar loaded successfully', 'AVATAR_VIEWER', {
+        url,
+        loadTime: `${loadTime.toFixed(2)}ms`,
+        cached: !!cachedModel,
+        animations: gltf.animations?.length || 0
+      })
+
+      // Cache the model if not already cached
+      if (!cachedModel) {
+        cacheAvatarModel(url, gltf.scene)
+      }
+
+      setIsLoading(false)
+      onLoaded?.(gltf.scene)
+    }
+  }, [gltf, url, onLoaded, cachedModel])
+
+  useEffect(() => {
+    // Check for loading errors with enhanced error handling
+    if (gltf) {
       if (gltf.scene === undefined && gltf.nodes === undefined) {
         const error = new Error('GLB file failed to load - no scene or nodes found')
-        console.error('GLB loading failed:', error)
+        
+        handleAvatarError(
+          AvatarErrorType.LOADING_ERROR,
+          'Failed to load GLB model',
+          error,
+          { avatarUrl: url, operation: 'gltf-load' }
+        )
+
+        setIsLoading(false)
         onError?.(error)
         return
       }
     }
-  }, [gltf, onError])
+  }, [gltf, onError, url])
+
+  // Return cached model if available
+  if (cachedModel && !isLoading) {
+    const scene = cachedModel.clone()
+    scene.scale.setScalar(1)
+    scene.position.set(0, 0, 0)
+    return <primitive ref={meshRef} object={scene} />
+  }
 
   if (!gltf?.scene) {
     return null
@@ -128,35 +182,77 @@ const GLTFModel: React.FC<{
   return <primitive ref={meshRef} object={scene} />
 }
 
-// GLB Avatar component for displaying Ready Player Me avatars
+// GLB Avatar component for displaying Ready Player Me avatars with retry logic
 const GLBAvatar: React.FC<{
   modelSrc: string
   onLoaded?: (model: Object3D) => void
   onError?: (error: any) => void
 }> = ({ modelSrc, onLoaded, onError }) => {
   const [loadError, setLoadError] = useState<string | null>(null)
+  const [isRetrying, setIsRetrying] = useState(false)
+  const retryAttemptRef = useRef(0)
 
   // Memoize callbacks to prevent dependency array changes
   const handleLoaded = useCallback((model: Object3D) => {
     setLoadError(null)
+    setIsRetrying(false)
+    retryAttemptRef.current = 0
     onLoaded?.(model)
   }, [onLoaded])
 
-  const handleError = useCallback((error: any) => {
-    console.error('useGLTF hook error:', {
-      error: error instanceof Error ? error.message : error,
+  const handleError = useCallback(async (error: any) => {
+    const errorObj = error instanceof Error ? error : new Error(String(error))
+    
+    logger.error('GLB avatar loading error', errorObj, 'AVATAR_VIEWER', {
       url: modelSrc,
-      stack: error instanceof Error ? error.stack : undefined
+      attempt: retryAttemptRef.current + 1
     })
-    setLoadError(error instanceof Error ? error.message : 'Failed to load model')
-    onError?.(error)
+
+    // Try retry mechanism
+    if (retryAttemptRef.current < 2) { // Max 2 retries
+      setIsRetrying(true)
+      retryAttemptRef.current++
+      
+      logger.info(
+        `Retrying avatar load (attempt ${retryAttemptRef.current + 1}/3)`,
+        'AVATAR_VIEWER'
+      )
+
+      // Use retry manager for the load operation
+      const retryResult = await retryAvatarLoad(
+        async () => {
+          // Force reload by clearing cache and preloading again
+          useGLTF.clear(modelSrc)
+          useGLTF.preload(modelSrc)
+          return Promise.resolve()
+        },
+        modelSrc
+      )
+
+      if (!retryResult.success) {
+        setLoadError(errorObj.message || 'Failed to load model')
+        setIsRetrying(false)
+        onError?.(errorObj)
+      }
+    } else {
+      setLoadError(errorObj.message || 'Failed to load model')
+      setIsRetrying(false)
+      onError?.(errorObj)
+    }
   }, [modelSrc, onError])
 
-  // Validate URL
+  // Validate URL with enhanced error handling
   useEffect(() => {
     if (!modelSrc || typeof modelSrc !== 'string') {
       const error = new Error(`Invalid avatar URL: ${modelSrc}`)
-      console.error('GLB loading failed:', error)
+      
+      handleAvatarError(
+        AvatarErrorType.VALIDATION_ERROR,
+        'Invalid avatar URL provided',
+        error,
+        { avatarUrl: modelSrc, operation: 'url-validation' }
+      )
+
       setLoadError(error.message)
       handleError(error)
       return
@@ -164,6 +260,8 @@ const GLBAvatar: React.FC<{
 
     // Reset error when URL changes
     setLoadError(null)
+    setIsRetrying(false)
+    retryAttemptRef.current = 0
   }, [modelSrc, handleError])
 
   // If there's an error or invalid URL, return null
@@ -171,19 +269,38 @@ const GLBAvatar: React.FC<{
     return null
   }
 
-  // Preload the model
-  try {
-    useGLTF.preload(modelSrc)
-  } catch (error) {
-    console.warn('Failed to preload GLB:', modelSrc, error)
-  }
+  // Preload the model with error handling
+  useEffect(() => {
+    const preloadModel = async () => {
+      try {
+        await measureAvatarOperation('load', 'preload-gltf', async () => {
+          useGLTF.preload(modelSrc)
+        }, { url: modelSrc })
+      } catch (error) {
+        logger.warn('Failed to preload GLB', 'AVATAR_VIEWER', { 
+          url: modelSrc, 
+          error 
+        })
+      }
+    }
+
+    preloadModel()
+  }, [modelSrc])
 
   return (
-    <GLTFModel
-      url={modelSrc}
-      onLoaded={handleLoaded}
-      onError={handleError}
-    />
+    <>
+      <GLTFModel
+        url={modelSrc}
+        onLoaded={handleLoaded}
+        onError={handleError}
+      />
+      {isRetrying && (
+        <mesh position={[0, 1, 0]}>
+          <sphereGeometry args={[0.05]} />
+          <meshStandardMaterial color="orange" />
+        </mesh>
+      )}
+    </>
   )
 }
 
@@ -434,17 +551,118 @@ export const AvatarViewer: React.FC<AvatarViewerProps> = ({
   cameraMode = 'full',
   onModelLoad,
   onModelError,
+  onHeadshotCapture,
   className = ''
 }) => {
-  // Debug logging
+  const canvasRef = useRef<HTMLCanvasElement>(null)
+  const [performanceIssues, setPerformanceIssues] = useState<string[]>([])
+  
+  // Initialize performance monitoring
   useEffect(() => {
-    console.log('AvatarViewer received URL:', {
+    startAvatarPerformanceMonitoring()
+    
+    return () => {
+      // Cleanup performance monitoring if needed
+      const summary = avatarPerformanceMonitor.getPerformanceSummary()
+      if (summary.issues.length > 0) {
+        logger.warn('Avatar performance issues detected', 'AVATAR_VIEWER', {
+          issues: summary.issues,
+          metrics: summary.metrics
+        })
+      }
+    }
+  }, [])
+
+  // Monitor performance issues
+  useEffect(() => {
+    const checkPerformance = () => {
+      const summary = avatarPerformanceMonitor.getPerformanceSummary()
+      setPerformanceIssues(summary.issues)
+      
+      if (summary.issues.length > 0) {
+        logger.warn('Performance issues detected in AvatarViewer', 'AVATAR_VIEWER', {
+          issues: summary.issues
+        })
+      }
+    }
+
+    const intervalId = setInterval(checkPerformance, 5000) // Check every 5 seconds
+    return () => clearInterval(intervalId)
+  }, [])
+  
+  // Enhanced debug logging with performance context
+  useEffect(() => {
+    logger.debug('AvatarViewer received URL', 'AVATAR_VIEWER', {
       avatarUrl,
       type: typeof avatarUrl,
       length: avatarUrl?.length,
-      isValid: avatarUrl && typeof avatarUrl === 'string' && avatarUrl.length > 0
+      isValid: avatarUrl && typeof avatarUrl === 'string' && avatarUrl.length > 0,
+      cameraMode,
+      enableControls,
+      enableAnimations
     })
-  }, [avatarUrl])
+  }, [avatarUrl, cameraMode, enableControls, enableAnimations])
+
+  // Headshot capture functionality
+  const captureHeadshot = useCallback(() => {
+    if (!canvasRef.current) {
+      console.error('Canvas ref not available for headshot capture')
+      return null
+    }
+
+    try {
+      // Get the canvas element from React Three Fiber
+      const canvas = canvasRef.current.querySelector('canvas') as HTMLCanvasElement
+      if (!canvas) {
+        console.error('Canvas element not found for headshot capture')
+        return null
+      }
+
+      // Create a new canvas for the headshot
+      const headshotCanvas = document.createElement('canvas')
+      const ctx = headshotCanvas.getContext('2d')
+      if (!ctx) {
+        console.error('Could not get 2D context for headshot canvas')
+        return null
+      }
+
+      // Set headshot dimensions (square format for profile pictures)
+      const size = 256
+      headshotCanvas.width = size
+      headshotCanvas.height = size
+
+      // Draw the current frame to the headshot canvas
+      ctx.drawImage(canvas, 0, 0, size, size)
+
+      // Convert to data URL
+      const dataUrl = headshotCanvas.toDataURL('image/png', 0.9)
+      
+      console.log('Headshot captured successfully')
+      
+      // Call the callback if provided
+      if (onHeadshotCapture) {
+        onHeadshotCapture(dataUrl)
+      }
+      
+      return dataUrl
+    } catch (error) {
+      console.error('Error capturing headshot:', error)
+      return null
+    }
+  }, [onHeadshotCapture])
+
+  // Expose capture function via ref if needed
+  useEffect(() => {
+    if (onModelLoad) {
+      // Add capture function to the model load callback context
+      const originalOnModelLoad = onModelLoad
+      onModelLoad = (model: Object3D) => {
+        originalOnModelLoad(model)
+        // Attach capture function to the model for external access
+        ;(model as any).captureHeadshot = captureHeadshot
+      }
+    }
+  }, [onModelLoad, captureHeadshot])
 
   // If no avatar URL is provided, show fallback
   if (!avatarUrl) {
@@ -489,8 +707,17 @@ export const AvatarViewer: React.FC<AvatarViewerProps> = ({
   const config = cameraConfig[cameraMode]
 
   return (
-    <div className={`w-full h-full ${className}`}>
-      <AvatarViewerErrorBoundary>
+    <div className={`w-full h-full ${className}`} ref={canvasRef}>
+      <AvatarViewerErrorBoundary
+        avatarUrl={avatarUrl}
+        context={{
+          avatarUrl,
+          operation: 'avatar-viewer-render',
+          cameraMode,
+          enableControls,
+          enableAnimations
+        }}
+      >
         <Canvas
           camera={{
             position: config.position,
@@ -500,7 +727,28 @@ export const AvatarViewer: React.FC<AvatarViewerProps> = ({
           gl={{ 
             antialias: true,
             alpha: true,
-            preserveDrawingBuffer: true
+            preserveDrawingBuffer: true,
+            powerPreference: 'high-performance', // Prefer dedicated GPU
+            failIfMajorPerformanceCaveat: false // Don't fail on slower hardware
+          }}
+          onCreated={({ gl, scene, camera }) => {
+            // Log WebGL context info
+            logger.debug('WebGL context created', 'AVATAR_VIEWER', {
+              renderer: gl.getParameter(gl.RENDERER),
+              vendor: gl.getParameter(gl.VENDOR),
+              version: gl.getParameter(gl.VERSION),
+              maxTextureSize: gl.getParameter(gl.MAX_TEXTURE_SIZE),
+              maxVertexAttribs: gl.getParameter(gl.MAX_VERTEX_ATTRIBS)
+            })
+
+            // Monitor memory usage
+            const info = gl.getExtension('WEBGL_debug_renderer_info')
+            if (info) {
+              logger.debug('GPU info', 'AVATAR_VIEWER', {
+                unmaskedRenderer: gl.getParameter(info.UNMASKED_RENDERER_WEBGL),
+                unmaskedVendor: gl.getParameter(info.UNMASKED_VENDOR_WEBGL)
+              })
+            }
           }}
         >
           <Suspense fallback={null}>
@@ -514,6 +762,17 @@ export const AvatarViewer: React.FC<AvatarViewerProps> = ({
             />
           </Suspense>
         </Canvas>
+        
+        {/* Performance warning overlay */}
+        {performanceIssues.length > 0 && process.env.NODE_ENV === 'development' && (
+          <div className="absolute top-2 right-2 bg-yellow-100 border border-yellow-400 text-yellow-700 px-2 py-1 rounded text-xs max-w-xs">
+            <div className="font-semibold">Performance Issues:</div>
+            {performanceIssues.slice(0, 3).map((issue, index) => (
+              <div key={index} className="truncate">{issue}</div>
+            ))}
+          </div>
+        )}
+        
         <Suspense fallback={<LoadingFallback />}>
           {/* This ensures loading state is shown while Canvas loads */}
         </Suspense>

@@ -219,4 +219,66 @@ class AvatarService {
   }
 }
 
+/**
+ * Avatar Code Validation and URL Conversion Utilities
+ */
+export class AvatarCodeUtils {
+  /**
+   * Validate avatar code format (6 uppercase alphanumeric characters)
+   */
+  static validateAvatarCode(code: string): boolean {
+    const avatarCodeRegex = /^[A-Z0-9]{6}$/;
+    return avatarCodeRegex.test(code);
+  }
+
+  /**
+   * Convert avatar code to GLB URL
+   */
+  static codeToGlbUrl(code: string): string {
+    if (!this.validateAvatarCode(code)) {
+      throw new Error('Invalid avatar code format. Must be 6 uppercase alphanumeric characters.');
+    }
+    return `https://models.readyplayer.me/${code}.glb`;
+  }
+
+  /**
+   * Convert avatar code to PNG URL (for headshots)
+   */
+  static codeToPngUrl(code: string): string {
+    if (!this.validateAvatarCode(code)) {
+      throw new Error('Invalid avatar code format. Must be 6 uppercase alphanumeric characters.');
+    }
+    return `https://models.readyplayer.me/${code}.png`;
+  }
+
+  /**
+   * Convert avatar code to both GLB and PNG URLs
+   */
+  static codeToUrls(code: string): { glbUrl: string; pngUrl: string } {
+    if (!this.validateAvatarCode(code)) {
+      throw new Error('Invalid avatar code format. Must be 6 uppercase alphanumeric characters.');
+    }
+    return {
+      glbUrl: this.codeToGlbUrl(code),
+      pngUrl: this.codeToPngUrl(code)
+    };
+  }
+
+  /**
+   * Extract avatar code from GLB URL
+   */
+  static extractCodeFromGlbUrl(url: string): string | null {
+    const match = url.match(/https:\/\/models\.readyplayer\.me\/([A-Z0-9]{6})\.glb/);
+    return match ? match[1] : null;
+  }
+
+  /**
+   * Extract avatar code from PNG URL
+   */
+  static extractCodeFromPngUrl(url: string): string | null {
+    const match = url.match(/https:\/\/models\.readyplayer\.me\/([A-Z0-9]{6})\.png/);
+    return match ? match[1] : null;
+  }
+}
+
 export default AvatarService;

@@ -9,11 +9,12 @@ import { imageCache } from '@/lib/image-cache'
 
 interface PlayTabProps {
   childId: string
+  childProfile?: any
 }
 
 type ViewMode = 'dashboard' | 'personalize' | 'play-personalized' | 'expression-game' | 'canvas'
 
-export default function PlayTab({ childId }: { childId: string }) {
+export default function PlayTab({ childId, childProfile }: PlayTabProps) {
   const [viewMode, setViewMode] = useState<ViewMode>('dashboard')
   const [selectedMold, setSelectedMold] = useState<any>(null)
   const [selectedPersonalizedGame, setSelectedPersonalizedGame] = useState<string | null>(null)
@@ -258,6 +259,15 @@ export default function PlayTab({ childId }: { childId: string }) {
              GAME WORLD! 
           </div>
         </div>
+        {/* Avatar Status Indicator */}
+        {childProfile?.avatar_url && (
+          <div className="mt-4 flex items-center justify-center space-x-2 text-sm text-gray-600">
+            <div className="w-6 h-6 bg-green-100 border border-green-300 rounded-full flex items-center justify-center">
+              <span className="text-xs">🦸</span>
+            </div>
+            <span>Your avatar is ready for chat!</span>
+          </div>
+        )}
       </div>
 
       {loading ? (

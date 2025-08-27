@@ -9,6 +9,7 @@ export interface AvatarViewerProps {
   cameraMode?: 'full' | 'headshot' | 'profile'
   onModelLoad?: (model: Object3D) => void
   onModelError?: (error: any) => void
+  onHeadshotCapture?: (dataUrl: string) => void
   className?: string
   style?: React.CSSProperties
 }
@@ -70,6 +71,24 @@ export interface AnimationState {
   isIdle: boolean
   isSpeaking: boolean
   currentBlendShapes: Partial<BlendShapeTargets>
+}
+
+// Wawa Lipsync Types
+export interface LipsyncManager {
+  processAudio(): void
+  viseme: string
+  setAudioContext(context: AudioContext): void
+  setAudioSource(source: AudioBufferSourceNode): void
+}
+
+export interface VisemeMapping {
+  [viseme: string]: Partial<BlendShapeTargets>
+}
+
+export interface LipsyncConfig {
+  visemeToMorphTarget: VisemeMapping
+  audioContext?: AudioContext
+  smoothingFactor: number
 }
 
 // API Response Types
