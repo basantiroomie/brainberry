@@ -483,6 +483,12 @@ const AvatarScene: React.FC<{
         const controller = new AbortController()
         const connectivityTimeoutId = setTimeout(() => controller.abort(), 5000) // 5 second timeout for connectivity test
         
+        // Skip HEAD request for ReadyPlayer.me URLs as they often don't support it
+        if (avatarUrl.includes('readyplayer.me') || avatarUrl.includes('models.readyplayer.me')) {
+          clearTimeout(connectivityTimeoutId)
+          return // Skip connectivity test for ReadyPlayer.me URLs
+        }
+        
         const response = await fetch(avatarUrl, { 
           method: 'HEAD',
           mode: 'cors',

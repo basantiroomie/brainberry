@@ -6,6 +6,8 @@ import { OrbitControls, Environment, useGLTF } from '@react-three/drei'
 import { Object3D } from 'three'
 import { SafeAvatarErrorBoundary } from './SafeAvatarErrorBoundary'
 import { useSafeModelLoader } from '@/lib/safe-avatar-hooks'
+import { validateAvatarUrl, getValidAvatarUrl, isReadyPlayerMeUrl } from '@/lib/avatar-url-utils'
+import { handleAvatarLoadError, getUserFriendlyErrorMessage } from '@/lib/avatar-error-recovery'
 
 interface SimpleAvatarViewerProps {
   avatarUrl: string
@@ -16,8 +18,100 @@ interface SimpleAvatarViewerProps {
   className?: string
 }
 
-// Simple GLB loader component
-const GLBModel: React.FC<{
+// Safe GLB loader component that validates URLs before loading
+const SafeGLBLoader: React.FC<{
+  url: string
+  onLoaded?: (model: Object3D) => void
+  onError?: (error: any) => void
+}> = ({ url, onLoaded, onError }) => {
+  const [validatedUrl, setValidatedUrl] = useState<string | null>(null)
+  const [isValidating, setIsValidating] = useState(true)
+  const [validationError, setValidationError] = useState<string | null>(null)
+
+  // Validate URL before attempting to load
+  useEffect(() => {
+    const validateUrl = async () => {
+      setIsValidating(true)
+      setValidationError(null)
+      setValidatedUrl(null)
+      
+      try {
+        // Get properly formatted URL
+        const validUrl = getValidAvatarUrl(url)
+        if (!validUrl) {
+          throw new Error('Invalid URL format')
+        }
+
+        // Use the avatar URL validation utility
+        const validation = await validateAvatarUrl(validUrl)
+        
+        if (validation.isValid) {
+          setValidatedUrl(validUrl)
+        } else {
+          throw new Error(validation.error || 'URL validation failed')
+        }
+      } catch (error) {
+        const avatarError = handleAvatarLoadError(error, url)
+        const userMessage = getUserFriendlyErrorMessage(avatarError)
+        
+        setValidationError(userMessage)
+        setTimeout(() => {
+          onError?.(error instanceof Error ? error : new Error(userMessage))
+        }, 0)
+      } finally {
+        setIsValidating(false)
+      }
+    }
+
+    validateUrl()
+  }, [url, onError])
+
+  // Show loading state while validating
+  if (isValidating) {
+    return (
+      <mesh position={[0, 1, 0]}>
+        <sphereGeometry args={[0.03]} />
+        <meshStandardMaterial color="orange" />
+      </mesh>
+    )
+  }
+
+  // Show error state if validation failed
+  if (validationError || !validatedUrl) {
+    return (
+      <group position={[0, 1, 0]}>
+        {/* Fallback avatar representation */}
+        <mesh>
+          <boxGeometry args={[0.4, 1.8, 0.2]} />
+          <meshStandardMaterial color="#e0e0e0" />
+        </mesh>
+        <mesh position={[0, 0.8, 0]}>
+          <sphereGeometry args={[0.15]} />
+          <meshStandardMaterial color="#f0f0f0" />
+        </mesh>
+        {/* Simple face */}
+        <mesh position={[0, 0.85, 0.12]}>
+          <sphereGeometry args={[0.02]} />
+          <meshStandardMaterial color="#333" />
+        </mesh>
+        <mesh position={[-0.05, 0.82, 0.12]}>
+          <sphereGeometry args={[0.015]} />
+          <meshStandardMaterial color="#333" />
+        </mesh>
+        <mesh position={[0.05, 0.82, 0.12]}>
+          <sphereGeometry args={[0.015]} />
+          <meshStandardMaterial color="#333" />
+        </mesh>
+      </group>
+    )
+  }
+
+  // Only render the actual GLB loader if URL is validated
+  return <ValidatedGLBModel url={validatedUrl} onLoaded={onLoaded} onError={onError} />
+}
+
+// Component that only loads validated URLs
+const ValidatedGLBModel: React.FC<{
   url: string
   onLoaded?: (model: Object3D) => void
   onError?: (error: any) => void
@@ -25,35 +119,45 @@ const GLBModel: React.FC<{
   const meshRef = useRef<any>(null)
   const [hasError, setHasError] = useState(false)
   
-  // Always call useGLTF hook - never conditionally
+  // Always call useGLTF hook with validated URL
   const gltf = useGLTF(url)
   
   // Handle successful loading
   useEffect(() => {
     if (gltf?.scene && !hasError) {
-      // Use setTimeout to avoid calling during render
       setTimeout(() => {
         onLoaded?.(gltf.scene)
       }, 0)
     }
   }, [gltf, onLoaded, hasError])
 
-  // Handle errors in useEffect, not during render
+  // Handle GLB loading errors
   useEffect(() => {
     if (gltf && !gltf.scene && !gltf.nodes) {
       setHasError(true)
-      // Use setTimeout to avoid calling during render
       setTimeout(() => {
         const error = new Error('GLB file failed to load - no scene or nodes found')
-        console.error('GLB loading error:', error)
+        const avatarError = handleAvatarLoadError(error, url)
         onError?.(error)
       }, 0)
     }
-  }, [gltf, onError])
+  }, [gltf, onError, url])
 
-  // Don't render anything if there's an error
+  // Don't render if there's an error
   if (hasError || !gltf?.scene) {
-    return null
+    return (
+      <group position={[0, 1, 0]}>
+        {/* Fallback avatar representation */}
+        <mesh>
+          <boxGeometry args={[0.4, 1.8, 0.2]} />
+          <meshStandardMaterial color="#e0e0e0" />
+        </mesh>
+        <mesh position={[0, 0.8, 0]}>
+          <sphereGeometry args={[0.15]} />
+          <meshStandardMaterial color="#f0f0f0" />
+        </mesh>
+      </group>
+    )
   }
 
   const scene = gltf.scene.clone()
@@ -109,7 +213,7 @@ const AvatarScene: React.FC<{
       <Environment preset="studio" />
       
       {/* Avatar Model */}
-      <GLBModel
+      <SafeGLBLoader
         url={avatarUrl}
         onLoaded={handleModelLoaded}
         onError={handleModelError}

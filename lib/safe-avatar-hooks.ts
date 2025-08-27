@@ -7,6 +7,7 @@
 
 import { useEffect, useRef, useCallback, useState } from 'react'
 import { Object3D } from 'three'
+import { validateAvatarUrl, getValidAvatarUrl } from './avatar-url-utils'
 
 /**
  * Safe callback hook that prevents state updates during render
@@ -84,7 +85,9 @@ export function useSafeUrlValidation(url: string | null | undefined) {
   const [validationError, setValidationError] = useState<string | null>(null)
 
   useEffect(() => {
-    if (!url || typeof url !== 'string') {
+    const validUrl = getValidAvatarUrl(url)
+    
+    if (!validUrl) {
       setIsValid(false)
       setIsValidating(false)
       setValidationError('Invalid URL format')
@@ -94,36 +97,16 @@ export function useSafeUrlValidation(url: string | null | undefined) {
     setIsValidating(true)
     setValidationError(null)
 
-    const validateUrl = async () => {
+    const performValidation = async () => {
       try {
-        // Basic URL format validation
-        new URL(url)
+        const validation = await validateAvatarUrl(validUrl)
         
-        // For HTTP URLs, try a HEAD request
-        if (url.startsWith('http')) {
-          const controller = new AbortController()
-          const timeoutId = setTimeout(() => controller.abort(), 3000)
-          
-          const response = await fetch(url, {
-            method: 'HEAD',
-            mode: 'cors',
-            cache: 'no-cache',
-            signal: controller.signal
-          })
-          
-          clearTimeout(timeoutId)
-          
-          if (response.ok) {
-            setIsValid(true)
-            setValidationError(null)
-          } else {
-            setIsValid(false)
-            setValidationError(`HTTP ${response.status}: ${response.statusText}`)
-          }
-        } else {
-          // For relative URLs, assume they're valid
+        if (validation.isValid) {
           setIsValid(true)
           setValidationError(null)
+        } else {
+          setIsValid(false)
+          setValidationError(validation.error || 'Validation failed')
         }
       } catch (error) {
         setIsValid(false)
@@ -133,7 +116,7 @@ export function useSafeUrlValidation(url: string | null | undefined) {
       }
     }
 
-    validateUrl()
+    performValidation()
   }, [url])
 
   return { isValid, isValidating, validationError }

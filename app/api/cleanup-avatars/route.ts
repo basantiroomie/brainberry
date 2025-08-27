@@ -20,7 +20,11 @@ export async function POST() {
     
     for (const child of children || []) {
       try {
-        // Test if avatar URL is accessible
+        // Test if avatar URL is accessible (skip for ReadyPlayer.me URLs)
+        if (child.avatar_url.includes('readyplayer.me') || child.avatar_url.includes('models.readyplayer.me')) {
+          continue // Skip validation for ReadyPlayer.me URLs
+        }
+        
         const response = await fetch(child.avatar_url, { method: 'HEAD' })
         
         if (!response.ok) {

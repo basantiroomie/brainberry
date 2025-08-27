@@ -36,10 +36,12 @@ export const HeadshotGenerator: React.FC<HeadshotGeneratorProps> = ({
         throw new Error('Invalid avatar URL - must be a .glb file')
       }
 
-      // Test if the URL is accessible
-      const testResponse = await fetch(avatarUrl, { method: 'HEAD' })
-      if (!testResponse.ok) {
-        throw new Error(`Avatar URL not accessible: ${testResponse.status}`)
+      // Test if the URL is accessible (skip for ReadyPlayer.me URLs)
+      if (!avatarUrl.includes('readyplayer.me') && !avatarUrl.includes('models.readyplayer.me')) {
+        const testResponse = await fetch(avatarUrl, { method: 'HEAD' })
+        if (!testResponse.ok) {
+          throw new Error(`Avatar URL not accessible: ${testResponse.status}`)
+        }
       }
       
       const generator = getHeadshotGenerator()

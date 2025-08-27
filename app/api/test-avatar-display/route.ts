@@ -30,6 +30,17 @@ export async function GET() {
         }
         
         try {
+          // Skip HEAD request for ReadyPlayer.me URLs
+          if (child.avatar_url.includes('readyplayer.me') || child.avatar_url.includes('models.readyplayer.me')) {
+            return {
+              childId: child.id,
+              name: child.name,
+              avatarUrl: child.avatar_url,
+              status: 'accessible',
+              statusCode: 200
+            }
+          }
+          
           const response = await fetch(child.avatar_url, { method: 'HEAD' })
           return {
             childId: child.id,

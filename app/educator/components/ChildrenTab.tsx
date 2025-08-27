@@ -41,13 +41,27 @@ function generateAccessCode(): string {
 interface AvatarCreatorModalProps {
   isOpen: boolean
   onClose: () => void
-  child: Child
+  child: Child | null
   onAvatarSaved: () => void
 }
 
 function AvatarCreatorModal({ isOpen, onClose, child, onAvatarSaved }: AvatarCreatorModalProps) {
   const [step, setStep] = useState<'iframe' | 'code'>('iframe')
   const [avatarCode, setAvatarCode] = useState('')
+  
+  // Safety check - if child is null or undefined, close the modal
+  useEffect(() => {
+    if (isOpen && !child) {
+      console.error('AvatarCreatorModal opened without valid child')
+      toast.error('Child data not available. Please try again.')
+      onClose()
+    }
+  }, [isOpen, child, onClose])
+  
+  // Don't render if child is null
+  if (!child) {
+    return null
+  }
   const [codeError, setCodeError] = useState('')
   const [saving, setSaving] = useState(false)
   const [iframeLoaded, setIframeLoaded] = useState(false)
@@ -169,7 +183,18 @@ function AvatarCreatorModal({ isOpen, onClose, child, onAvatarSaved }: AvatarCre
         onClose()
       } else {
         const errorData = await response.json().catch(() => ({ error: 'Unknown error' }))
-        toast.error(`Failed to save avatar: ${errorData.error || 'Unknown error'}`)
+        console.error('Avatar save failed:', {
+          status: response.status,
+          statusText: response.statusText,
+          childId: child.id,
+          errorData
+        })
+        
+        if (response.status === 404) {
+          toast.error('Child not found. Please refresh the page and try again.')
+        } else {
+          toast.error(`Failed to save avatar: ${errorData.error || 'Unknown error'}`)
+        }
       }
     } catch (error) {
       console.error('Avatar save error:', error)
@@ -605,7 +630,29 @@ export default function ChildrenTab() {
   }
 
   // Open avatar creator modal
-  function openAvatarCreator(childId: string) {
+  async function openAvatarCreator(childId: string) {
+    // First check if child exists in current data
+    const childInCurrentData = children.some(child => child.id === childId)
+    if (!childInCurrentData) {
+      toast.error('Child not found in current data. Refreshing...')
+      await fetchChildren() // Refresh the children list
+      
+      // Check again after refresh
+      const refreshedChild = children.some(child => child.id === childId)
+      if (!refreshedChild) {
+        toast.error('Child not found. It may have been deleted.')
+        return
+      }
+    }
+    
+    // Double-check with server
+    const childExistsOnServer = await validateChildExists(childId)
+    if (!childExistsOnServer) {
+      toast.error('Child not found on server. Please refresh the page.')
+      fetchChildren()
+      return
+    }
+    
     setAvatarCreatorChildId(childId)
     setShowAvatarCreator(true)
   }
@@ -613,6 +660,17 @@ export default function ChildrenTab() {
   // Handle avatar saved from modal
   function handleAvatarSaved() {
     fetchChildren() // Refresh children data to show new avatar
+  }
+  
+  // Validate child exists before operations
+  async function validateChildExists(childId: string): Promise<boolean> {
+    try {
+      const response = await fetch(`/api/children/${childId}`)
+      return response.ok
+    } catch (error) {
+      console.error('Error validating child existence:', error)
+      return false
+    }
   }
 
   if (selectedChild) {
@@ -869,7 +927,7 @@ export default function ChildrenTab() {
               setShowAvatarCreator(false)
               setAvatarCreatorChildId(null)
             }}
-            child={children.find(c => c.id === avatarCreatorChildId)!}
+            child={children.find(c => c.id === avatarCreatorChildId) || null}
             onAvatarSaved={handleAvatarSaved}
           />
         )}
@@ -928,6 +986,20 @@ export default function ChildrenTab() {
             <button disabled={creating} className="bg-chart-1 text-white px-6 py-2 border-2 border-black shadow-brutal font-bold text-sm inline-flex items-center space-x-2 disabled:opacity-50">{creating ? <Loader2 className="h-4 w-4 animate-spin"/>:<Plus className="h-4 w-4"/>}<span>ADD CHILD</span></button>
           </div>
         </form>
+      </div>
+
+      {/* Children List Header */}
+      <div className="flex justify-between items-center mb-4">
+        <h3 className="text-lg font-bold">Children ({children.length})</h3>
+        <button
+          onClick={() => fetchChildren()}
+          disabled={loading}
+          className="bg-gray-100 hover:bg-gray-200 px-3 py-1 border-2 border-black shadow-brutal font-bold text-sm inline-flex items-center space-x-2 disabled:opacity-50"
+          title="Refresh children list"
+        >
+          <RotateCcw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+          <span>REFRESH</span>
+        </button>
       </div>
 
       {/* Children List */}
@@ -1022,7 +1094,7 @@ export default function ChildrenTab() {
             setShowAvatarCreator(false)
             setAvatarCreatorChildId(null)
           }}
-          child={children.find(c => c.id === avatarCreatorChildId)!}
+          child={children.find(c => c.id === avatarCreatorChildId) || null}
           onAvatarSaved={handleAvatarSaved}
         />
       )}

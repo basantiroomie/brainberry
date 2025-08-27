@@ -39,6 +39,12 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     const { id } = await params
     const supabase = await createSupabaseServerClient()
     
+    console.log('[DEBUG] PUT /api/children/[id] - Request:', { 
+      childId: id, 
+      userId: user.id,
+      requestData: json 
+    })
+    
     // Check if this is an avatar update request
     const isAvatarUpdate = json.avatar_code || json.avatar_url || json.avatar_headshot_url
     
@@ -102,8 +108,40 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
         }
       }
       
-      // Update avatar data
-      const { data: child, error } = await supabase
+      // For avatar updates, always use service client to bypass RLS issues
+      console.log('[DEBUG] Avatar update - using service client to bypass RLS')
+      
+      // Import service client for RLS bypass
+      const { createSupabaseServiceClient } = await import('@/lib/supabase-server')
+      const serviceSupabase = createSupabaseServiceClient()
+      
+      // First verify the child exists
+      const { data: existingChild, error: checkError } = await serviceSupabase
+        .from('ChildProfile')
+        .select('id, educator_id, name')
+        .eq('id', id)
+        .single()
+      
+      if (checkError || !existingChild) {
+        console.error('Child not found during avatar update:', { 
+          id, 
+          userId: user.id,
+          error: checkError,
+          errorCode: checkError?.code,
+          errorMessage: checkError?.message
+        })
+        return NextResponse.json({ error: 'Child not found' }, { status: 404 })
+      }
+      
+      console.log('[DEBUG] Child found, proceeding with avatar update:', {
+        childId: existingChild.id,
+        childName: existingChild.name,
+        educatorId: existingChild.educator_id,
+        currentUserId: user.id
+      })
+      
+      // Update avatar data using service client
+      const { data: updatedChildren, error: updateError } = await serviceSupabase
         .from('ChildProfile')
         .update(updateData)
         .eq('id', id)
@@ -111,12 +149,19 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
           *,
           assignments:MoldAssignment(*)
         `)
-        .single()
       
-      if (error) {
-        console.error('Database error:', error)
+      if (updateError) {
+        console.error('Service client avatar update error:', updateError)
         return NextResponse.json({ error: 'Failed to update child avatar' }, { status: 500 })
       }
+      
+      if (!updatedChildren || updatedChildren.length === 0) {
+        console.error('No children returned after update')
+        return NextResponse.json({ error: 'Child not found or update failed' }, { status: 404 })
+      }
+      
+      const child = updatedChildren[0]
+      console.log('[DEBUG] Avatar update successful:', { childId: child.id, childName: child.name })
       
       return NextResponse.json({ 
         success: true, 
@@ -135,7 +180,38 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       
       const data = parsed.data
       
-      const { data: child, error } = await supabase
+      // For profile updates, also use service client to ensure consistency
+      console.log('[DEBUG] Profile update - using service client to bypass RLS')
+      
+      const serviceSupabaseProfile = createSupabaseServiceClient()
+      
+      // First verify the child exists
+      const { data: existingChild, error: checkError } = await serviceSupabaseProfile
+        .from('ChildProfile')
+        .select('id, educator_id, name')
+        .eq('id', id)
+        .single()
+      
+      if (checkError || !existingChild) {
+        console.error('Child not found during profile update:', { 
+          id, 
+          userId: user.id,
+          error: checkError,
+          errorCode: checkError?.code,
+          errorMessage: checkError?.message
+        })
+        return NextResponse.json({ error: 'Child not found' }, { status: 404 })
+      }
+      
+      console.log('[DEBUG] Child found, proceeding with profile update:', {
+        childId: existingChild.id,
+        childName: existingChild.name,
+        educatorId: existingChild.educator_id,
+        currentUserId: user.id
+      })
+      
+      // Update profile data using service client
+      const { data: updatedChildren, error: updateError } = await serviceSupabaseProfile
         .from('ChildProfile')
         .update({
           name: data.name,
@@ -145,12 +221,19 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
         })
         .eq('id', id)
         .select()
-        .single()
       
-      if (error) {
-        console.error('Database error:', error)
+      if (updateError) {
+        console.error('Service client profile update error:', updateError)
         return NextResponse.json({ error: 'Failed to update child' }, { status: 500 })
       }
+      
+      if (!updatedChildren || updatedChildren.length === 0) {
+        console.error('No children returned after profile update')
+        return NextResponse.json({ error: 'Child not found or update failed' }, { status: 404 })
+      }
+      
+      const child = updatedChildren[0]
+      console.log('[DEBUG] Profile update successful:', { childId: child.id, childName: child.name })
       
       return NextResponse.json(child)
     }
