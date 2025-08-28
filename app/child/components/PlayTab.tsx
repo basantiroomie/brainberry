@@ -1,7 +1,8 @@
 "use client"
 
 import { useState, useEffect } from 'react'
-import { Gamepad, Sparkles, ArrowLeft, Palette } from 'lucide-react'
+import { Gamepad, Sparkles, ArrowLeft, Palette, Brain, BookOpen, Puzzle, Calculator, Heart, Star, Grid3X3, Trash2 } from 'lucide-react'
+import Image from 'next/image'
 import MoldPersonalizationWizard from './MoldPersonalizationWizard'
 import PolymorphicGamePlayer from './PolymorphicGamePlayer'
 import CanvasColoringGame from '../Games/CanvasColoringGame'
@@ -68,7 +69,7 @@ export default function PlayTab({ childId, childProfile }: PlayTabProps) {
   async function deletePersonalizedGame(gameId: string) {
     try {
       // Find the game to get its image URLs for cache cleanup
-      const gameToDelete = personalizedGames.find(g => g.id === gameId)
+      const gameToDelete = personalizedGames?.find(g => g.id === gameId)
       
       const response = await fetch(`/api/personalized-molds/${gameId}`, {
         method: 'DELETE'
@@ -171,43 +172,243 @@ export default function PlayTab({ childId, childProfile }: PlayTabProps) {
     )
   }
 
-  // Helper function to get game icon
+  // Helper function to get game image based on type
+  function getGameImage(gameType: string) {
+    // Debug: Log which image is being selected
+    console.log(`Getting image for game type: ${gameType}`)
+    
+    switch (gameType?.toLowerCase()) {
+      case 'matching':
+      case 'memory':
+      case 'matching_cards':
+      case 'memory_cards':
+        console.log('→ Using diverse-children-educational-games.png for memory/matching')
+        return '/diverse-children-educational-games.png'
+      case 'sorting':
+      case 'category_sorting':
+        console.log('→ Using therapy-gaming-tablet.png for sorting')
+        return '/therapy-gaming-tablet.png'
+      case 'expression':
+      case 'emotions':
+        console.log('→ Using happy-child-achievement.png for expression')
+        return '/happy-child-achievement.png'
+      case 'puzzle':
+      case 'puzzles':
+        console.log('→ Using parent-therapist-brainberry.png for puzzle')
+        return '/parent-therapist-brainberry.png'
+      case 'math':
+      case 'mathematics':
+        console.log('→ Using landingpage.jpg for math')
+        return '/landingpage.jpg'
+      case 'reading':
+      case 'language':
+        console.log('→ Using placeholder.jpg for reading')
+        return '/placeholder.jpg'
+      case 'creativity':
+      case 'creative':
+        console.log('→ Using diverse-children-educational-games.png for creativity')
+        return '/diverse-children-educational-games.png'
+      default:
+        console.log(`→ Using default happy-child-achievement.png for unknown type: ${gameType}`)
+        return '/happy-child-achievement.png'
+    }
+  }
+
+  // Helper function to get mold image based on category
+  function getMoldImage(category: string) {
+    // Debug: Log which image is being selected
+    console.log(`Getting image for mold category: ${category}`)
+    
+    const categoryLower = category?.toLowerCase() || ''
+    
+    // Handle Memory & Cognition categories
+    if (categoryLower.includes('memory') || categoryLower.includes('cognition')) {
+      console.log('→ Using diverse-children-educational-games.png for memory/cognition mold')
+      return '/diverse-children-educational-games.png'
+    }
+    
+    // Handle Creativity categories
+    if (categoryLower.includes('creativity') || categoryLower.includes('creative')) {
+      console.log('→ Using happy-child-achievement.png for creativity mold')
+      return '/happy-child-achievement.png'
+    }
+    
+    // Handle Logic & Learning categories
+    if (categoryLower.includes('logic') || categoryLower.includes('learning')) {
+      console.log('→ Using therapy-gaming-tablet.png for logic/learning mold')
+      return '/therapy-gaming-tablet.png'
+    }
+    
+    // Handle Language categories
+    if (categoryLower.includes('language')) {
+      console.log('→ Using parent-therapist-brainberry.png for language mold')
+      return '/parent-therapist-brainberry.png'
+    }
+    
+    // Handle Math categories
+    if (categoryLower.includes('math')) {
+      console.log('→ Using landingpage.jpg for math mold')
+      return '/landingpage.jpg'
+    }
+    
+    // Handle Emotional & Social categories
+    if (categoryLower.includes('emotional') || categoryLower.includes('emotion') || categoryLower.includes('social')) {
+      console.log('→ Using happy-child-achievement.png for emotional/social mold')
+      return '/happy-child-achievement.png'
+    }
+    
+    // Handle Problem Solving categories
+    if (categoryLower.includes('problem') || categoryLower.includes('solving')) {
+      console.log('→ Using therapy-gaming-tablet.png for problem solving mold')
+      return '/therapy-gaming-tablet.png'
+    }
+    
+    // Exact matches for backwards compatibility
+    switch (categoryLower) {
+      case 'memory':
+        console.log('→ Using diverse-children-educational-games.png for memory mold')
+        return '/diverse-children-educational-games.png'
+      case 'creativity':
+        console.log('→ Using happy-child-achievement.png for creativity mold')
+        return '/happy-child-achievement.png'
+      case 'problem solving':
+        console.log('→ Using therapy-gaming-tablet.png for problem solving mold')
+        return '/therapy-gaming-tablet.png'
+      case 'language':
+        console.log('→ Using parent-therapist-brainberry.png for language mold')
+        return '/parent-therapist-brainberry.png'
+      case 'math':
+        console.log('→ Using landingpage.jpg for math mold')
+        return '/landingpage.jpg'
+      case 'emotional':
+        console.log('→ Using happy-child-achievement.png for emotional mold')
+        return '/happy-child-achievement.png'
+      default:
+        console.log(`→ Using default placeholder.jpg for unknown category: ${category}`)
+        return '/placeholder.jpg'
+    }
+  }
+
+  // Helper function to get fallback gradient colors based on game type
+  function getGameGradient(gameType: string) {
+    switch (gameType?.toLowerCase()) {
+      case 'matching':
+      case 'memory':
+        return 'from-purple-100 to-indigo-100'
+      case 'sorting':
+        return 'from-green-100 to-emerald-100'
+      case 'expression':
+        return 'from-pink-100 to-rose-100'
+      case 'puzzle':
+        return 'from-orange-100 to-amber-100'
+      case 'math':
+        return 'from-blue-100 to-cyan-100'
+      case 'reading':
+        return 'from-teal-100 to-green-100'
+      case 'creativity':
+        return 'from-pink-100 to-orange-100'
+      default:
+        return 'from-gray-100 to-slate-100'
+    }
+  }
+
+  // Helper function to get fallback gradient colors for molds
+  function getMoldGradient(category: string) {
+    switch (category?.toLowerCase()) {
+      case 'memory':
+        return 'from-purple-200 to-indigo-200'
+      case 'creativity':
+        return 'from-pink-200 to-orange-200'
+      case 'problem solving':
+        return 'from-orange-200 to-amber-200'
+      case 'language':
+        return 'from-teal-200 to-green-200'
+      case 'math':
+        return 'from-blue-200 to-cyan-200'
+      case 'emotional':
+        return 'from-pink-200 to-rose-200'
+      default:
+        return 'from-blue-200 to-green-200'
+    }
+  }
+
+  // Helper function to get game icon component
   function getGameIcon(gameType: string) {
     switch (gameType?.toLowerCase()) {
       case 'matching':
       case 'memory':
-        return '🧠'
+        return <Brain className="h-6 w-6" />
       case 'sorting':
-        return '📦'
+        return <Grid3X3 className="h-6 w-6" />
       case 'expression':
-        return '😊'
+        return <Heart className="h-6 w-6" />
       case 'puzzle':
-        return '🧩'
+        return <Puzzle className="h-6 w-6" />
       case 'math':
-        return '🔢'
+        return <Calculator className="h-6 w-6" />
       case 'reading':
-        return '📚'
+        return <BookOpen className="h-6 w-6" />
       default:
-        return '🎮'
+        return <Gamepad className="h-6 w-6" />
     }
   }
 
   function getMoldIcon(category: string) {
     switch (category?.toLowerCase()) {
       case 'memory':
-        return '🧠'
+        return <Brain className="h-6 w-6" />
       case 'creativity':
-        return '🎨'
+        return <Palette className="h-6 w-6" />
       case 'problem solving':
-        return '🧩'
+        return <Puzzle className="h-6 w-6" />
       case 'language':
-        return '📝'
+        return <BookOpen className="h-6 w-6" />
       case 'math':
-        return '🔢'
+        return <Calculator className="h-6 w-6" />
       case 'emotional':
-        return '😊'
+        return <Heart className="h-6 w-6" />
       default:
-        return '⭐'
+        return <Star className="h-6 w-6" />
+    }
+  }
+
+  // Helper function to get game description
+  function getGameDescription(gameType: string) {
+    switch (gameType?.toLowerCase()) {
+      case 'matching':
+      case 'memory':
+        return 'Test your memory skills with fun matching challenges'
+      case 'sorting':
+        return 'Organize and categorize items in this sorting adventure'
+      case 'expression':
+        return 'Express emotions and learn about feelings'
+      case 'puzzle':
+        return 'Solve exciting puzzles and brain teasers'
+      case 'math':
+        return 'Practice math skills with interactive problems'
+      case 'reading':
+        return 'Improve reading skills through fun activities'
+      default:
+        return 'Play this exciting educational game'
+    }
+  }
+
+  function getMoldDescription(category: string) {
+    switch (category?.toLowerCase()) {
+      case 'memory':
+        return 'Challenge your brain with memory-building games'
+      case 'creativity':
+        return 'Express yourself through creative activities'
+      case 'problem solving':
+        return 'Develop critical thinking with puzzle challenges'
+      case 'language':
+        return 'Enhance communication and language skills'
+      case 'math':
+        return 'Master numbers through interactive learning'
+      case 'emotional':
+        return 'Learn about emotions and social skills'
+      default:
+        return 'Discover new learning adventures'
     }
   }
 
@@ -236,7 +437,7 @@ export default function PlayTab({ childId, childProfile }: PlayTabProps) {
       {loading ? (
         <div className="text-center py-12">
           <div className="animate-spin rounded-full h-16 w-16 border-4 border-blue-500 border-t-transparent mx-auto mb-4"></div>
-          <p className="text-xl font-bold text-gray-600">Loading your games... 🎲</p>
+          <p className="text-xl font-bold text-gray-600">Loading your games...</p>
         </div>
       ) : (
         <>
@@ -244,7 +445,9 @@ export default function PlayTab({ childId, childProfile }: PlayTabProps) {
           {(moldsError || personalizedError) && (
             <div className="bg-yellow-50 border-2 border-yellow-200 rounded-lg p-4 mb-6">
               <div className="flex items-center">
-                <span className="text-yellow-600 mr-2">⚠️</span>
+                <div className="bg-yellow-200 rounded-full p-2 mr-3">
+                  <span className="text-yellow-600 text-sm font-bold">!</span>
+                </div>
                 <div>
                   <p className="text-sm font-medium text-yellow-800">
                     Some games might not be available right now
@@ -264,23 +467,51 @@ export default function PlayTab({ childId, childProfile }: PlayTabProps) {
           {/* Your Personalized Games Section */}
           {personalizedGames && personalizedGames.length > 0 && (
             <div>
-              <h2 className="text-2xl font-bold mb-6 text-center">My Games</h2>
+              <h2 className="text-3xl font-bold mb-8 text-center bg-gradient-to-r from-purple-600 to-blue-600 bg-clip-text text-transparent">
+                My Custom Games
+              </h2>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {personalizedGames.map((game) => (
                   <div
                     key={game.id}
-                    className="bg-white border-4 border-black shadow-brutal-xl p-6"
+                    className="bg-white border-4 border-black shadow-brutal-xl overflow-hidden hover:shadow-brutal-2xl transition-all duration-300 hover:-translate-y-1"
                   >
-                    <div className="text-center">
-                      <div className="bg-chart-1 text-white rounded-full w-16 h-16 flex items-center justify-center mx-auto mb-4">
-                        <span className="text-2xl">{getGameIcon(game.config?.game_type)}</span>
+                    {/* Game Image */}
+                    <div className={`relative h-48 bg-gradient-to-br ${getGameGradient(game.config?.game_type)} border-b-4 border-black`}>
+                      <Image
+                        src={getGameImage(game.config?.game_type)}
+                        alt={game.title}
+                        fill
+                        className="object-cover"
+                        onError={(e) => {
+                          console.error(`Game image failed to load for ${game.config?.game_type}:`, getGameImage(game.config?.game_type));
+                          const target = e.target as HTMLImageElement;
+                          target.style.display = 'none';
+                          target.nextElementSibling?.classList.remove('hidden');
+                        }}
+                        onLoad={() => {
+                          console.log(`Game image loaded successfully for ${game.config?.game_type}:`, getGameImage(game.config?.game_type));
+                        }}
+                      />
+                      <div className={`hidden absolute inset-0 flex items-center justify-center bg-gradient-to-br ${getGameGradient(game.config?.game_type).replace('100', '200')}`}>
+                        <div className="bg-white rounded-full p-4 border-2 border-black">
+                          {getGameIcon(game.config?.game_type)}
+                        </div>
                       </div>
-                      <h3 className="text-xl font-bold mb-2">{game.title}</h3>
-                      <p className="text-gray-600 mb-4">Ready to play!</p>
-                      
-                      <div className="w-24 h-24 bg-gray-200 border-2 border-black mx-auto mb-4 flex items-center justify-center">
-                        <span className="text-3xl">{getGameIcon(game.config?.game_type)}</span>
+                      {/* Game Type Badge */}
+                      <div className="absolute top-3 right-3 bg-white border-2 border-black px-3 py-1 rounded-full shadow-brutal">
+                        <span className="text-sm font-bold text-gray-700 capitalize">
+                          {game.config?.game_type || 'Game'}
+                        </span>
                       </div>
+                    </div>
+                    
+                    {/* Game Content */}
+                    <div className="p-6">
+                      <h3 className="text-xl font-bold mb-2 text-gray-800">{game.title}</h3>
+                      <p className="text-gray-600 mb-4 text-sm leading-relaxed">
+                        {getGameDescription(game.config?.game_type)}
+                      </p>
                       
                       <div className="flex gap-2">
                         <button 
@@ -299,9 +530,9 @@ export default function PlayTab({ childId, childProfile }: PlayTabProps) {
                               deletePersonalizedGame(game.id)
                             }
                           }}
-                          className="bg-red-500 text-white px-3 py-2 border-2 border-black shadow-brutal hover:shadow-brutal-lg transition-all font-bold"
+                          className="bg-red-500 text-white px-3 py-2 border-2 border-black shadow-brutal hover:shadow-brutal-lg transition-all font-bold flex items-center justify-center"
                         >
-                          🗑️
+                          <Trash2 className="h-4 w-4" />
                         </button>
                       </div>
                     </div>
@@ -313,64 +544,121 @@ export default function PlayTab({ childId, childProfile }: PlayTabProps) {
 
           {/* All Games Section - Combined Fun Games and More Games */}
           <div>
-            <h2 className="text-2xl font-bold mb-6 text-center">All Games</h2>
+            <h2 className="text-3xl font-bold mb-8 text-center bg-gradient-to-r from-green-600 to-teal-600 bg-clip-text text-transparent">
+              Discover New Games
+            </h2>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {/* Canvas Coloring Game */}
-              <div className="bg-white border-4 border-black shadow-brutal-xl p-6">
-                <div className="text-center">
-                  <div className="bg-chart-4 text-white rounded-full w-16 h-16 flex items-center justify-center mx-auto mb-4">
-                    <Palette className="h-8 w-8" />
+              <div className="bg-white border-4 border-black shadow-brutal-xl overflow-hidden hover:shadow-brutal-2xl transition-all duration-300 hover:-translate-y-1">
+                {/* Game Image */}
+                <div className="relative h-48 bg-gradient-to-br from-pink-100 to-orange-100 border-b-4 border-black">
+                  <Image
+                    src="/diverse-children-educational-games.png"
+                    alt="Canvas Coloring Game"
+                    fill
+                    className="object-cover"
+                    onError={(e) => {
+                      console.error('Canvas coloring image failed to load:', e);
+                      const target = e.target as HTMLImageElement;
+                      target.style.display = 'none';
+                      target.nextElementSibling?.classList.remove('hidden');
+                    }}
+                    onLoad={() => {
+                      console.log('Canvas coloring image loaded successfully');
+                    }}
+                  />
+                  <div className="hidden absolute inset-0 flex items-center justify-center bg-gradient-to-br from-pink-200 to-orange-200">
+                    <div className="bg-white rounded-full p-4 border-2 border-black">
+                      <Palette className="h-8 w-8 text-pink-500" />
+                    </div>
                   </div>
-                  <h3 className="text-xl font-bold mb-2">Canvas Coloring</h3>
-                  <p className="text-gray-600 mb-4">Turn pictures into coloring pages!</p>
-                  
-                  <div className="w-24 h-24 bg-gray-200 border-2 border-black mx-auto mb-4 flex items-center justify-center">
-                    <span className="text-3xl">🎨</span>
+                  {/* Game Type Badge */}
+                  <div className="absolute top-3 right-3 bg-white border-2 border-black px-3 py-1 rounded-full shadow-brutal">
+                    <span className="text-sm font-bold text-gray-700">Creativity</span>
                   </div>
+                </div>
+                
+                {/* Game Content */}
+                <div className="p-6">
+                  <h3 className="text-xl font-bold mb-2 text-gray-800">Canvas Coloring</h3>
+                  <p className="text-gray-600 mb-4 text-sm leading-relaxed">
+                    Transform any picture into a coloring page and unleash your creativity with digital art tools.
+                  </p>
                   
                   <button 
                     onClick={() => setViewMode('canvas')}
                     className="w-full bg-chart-4 text-white px-4 py-2 border-2 border-black shadow-brutal hover:shadow-brutal-lg transition-all font-bold"
                   >
-                    PLAY NOW
+                    START COLORING
                   </button>
                 </div>
               </div>
 
               {/* Available Game Templates */}
               {!availableMolds || availableMolds.length === 0 ? (
-                <div className="col-span-full text-center py-8">
-                  <div className="text-4xl mb-4">🔧</div>
-                  <p className="text-gray-600">
-                    No more game templates available yet.
-                  </p>
+                <div className="col-span-full text-center py-12">
+                  <div className="bg-gray-100 border-4 border-black rounded-lg p-8 shadow-brutal">
+                    <div className="bg-gray-200 rounded-full p-4 w-16 h-16 mx-auto mb-4 flex items-center justify-center">
+                      <Star className="h-8 w-8 text-gray-500" />
+                    </div>
+                    <h3 className="text-xl font-bold text-gray-700 mb-2">More Games Coming Soon!</h3>
+                    <p className="text-gray-600">
+                      We're working on exciting new game templates for you to customize and enjoy.
+                    </p>
+                  </div>
                 </div>
               ) : (
                 availableMolds.map((mold) => (
                   <div
                     key={mold.id}
-                    className="bg-white border-4 border-black shadow-brutal-xl p-6"
+                    className="bg-white border-4 border-black shadow-brutal-xl overflow-hidden hover:shadow-brutal-2xl transition-all duration-300 hover:-translate-y-1"
                   >
-                    <div className="text-center">
-                      <div className="bg-chart-2 text-white rounded-full w-16 h-16 flex items-center justify-center mx-auto mb-4">
-                        <span className="text-2xl">{getMoldIcon(mold.category)}</span>
+                    {/* Game Image */}
+                    <div className={`relative h-48 bg-gradient-to-br ${getMoldGradient(mold.category)} border-b-4 border-black`}>
+                      <Image
+                        src={getMoldImage(mold.category)}
+                        alt={mold.name}
+                        fill
+                        className="object-cover"
+                        onError={(e) => {
+                          console.error(`Mold image failed to load for ${mold.category}:`, getMoldImage(mold.category));
+                          const target = e.target as HTMLImageElement;
+                          target.style.display = 'none';
+                          target.nextElementSibling?.classList.remove('hidden');
+                        }}
+                        onLoad={() => {
+                          console.log(`Mold image loaded successfully for ${mold.category}:`, getMoldImage(mold.category));
+                        }}
+                      />
+                      <div className={`hidden absolute inset-0 flex items-center justify-center bg-gradient-to-br ${getMoldGradient(mold.category)}`}>
+                        <div className="bg-white rounded-full p-4 border-2 border-black">
+                          {getMoldIcon(mold.category)}
+                        </div>
                       </div>
-                      <h3 className="text-xl font-bold mb-2">{mold.name}</h3>
-                      <p className="text-gray-600 mb-4">Create your own version!</p>
-                      
-                      <div className="w-24 h-24 bg-gray-200 border-2 border-black mx-auto mb-4 flex items-center justify-center">
-                        <span className="text-3xl">{getMoldIcon(mold.category)}</span>
+                      {/* Game Type Badge */}
+                      <div className="absolute top-3 right-3 bg-white border-2 border-black px-3 py-1 rounded-full shadow-brutal">
+                        <span className="text-sm font-bold text-gray-700 capitalize">
+                          {mold.category}
+                        </span>
                       </div>
+                    </div>
+                    
+                    {/* Game Content */}
+                    <div className="p-6">
+                      <h3 className="text-xl font-bold mb-2 text-gray-800">{mold.name}</h3>
+                      <p className="text-gray-600 mb-4 text-sm leading-relaxed">
+                        {getMoldDescription(mold.category)}
+                      </p>
                       
                       <button
                         onClick={() => {
                           setSelectedMold(mold)
                           setViewMode(mold.personalizationComponent === 'ExpressionGame' ? 'expression-game' : 'personalize')
                         }}
-                        className="w-full bg-chart-2 text-white px-4 py-2 border-2 border-black shadow-brutal hover:shadow-brutal-lg transition-all font-bold"
+                        className="w-full bg-chart-2 text-white px-4 py-2 border-2 border-black shadow-brutal hover:shadow-brutal-lg transition-all font-bold flex items-center justify-center"
                       >
-                        <Sparkles className="inline-block mr-2" size={16} />
-                        MAKE IT MINE
+                        <Sparkles className="mr-2 h-4 w-4" />
+                        CUSTOMIZE GAME
                       </button>
                     </div>
                   </div>
@@ -380,16 +668,26 @@ export default function PlayTab({ childId, childProfile }: PlayTabProps) {
           </div>
 
           {/* Progress Summary */}
-          <div className="bg-white border-4 border-black shadow-brutal-xl p-6">
-            <h2 className="text-2xl font-bold mb-4 text-center">Your Gaming Stats</h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="text-center p-4 bg-chart-1 text-white border-2 border-black shadow-brutal">
-                <div className="text-3xl font-bold mb-2">{personalizedGames?.length || 0}</div>
-                <div>Personalized Games</div>
-              </div>
-              <div className="text-center p-4 bg-chart-2 text-white border-2 border-black shadow-brutal">
-                <div className="text-3xl font-bold mb-2">{availableMolds?.length || 0}</div>
-                <div>Templates Available</div>
+          <div className="bg-white border-4 border-black shadow-brutal-xl overflow-hidden">
+            <div className="bg-chart-2 text-white p-6 border-b-4 border-black">
+              <h2 className="text-2xl font-bold text-center">Your Gaming Progress</h2>
+            </div>
+            <div className="p-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="text-center p-6 bg-chart-1 text-white border-2 border-black shadow-brutal rounded-lg">
+                  <div className="bg-white rounded-full p-3 w-12 h-12 mx-auto mb-3 flex items-center justify-center border-2 border-black">
+                    <Gamepad className="h-6 w-6 text-green-600" />
+                  </div>
+                  <div className="text-3xl font-bold mb-2">{personalizedGames?.length || 0}</div>
+                  <div className="font-medium">Custom Games Created</div>
+                </div>
+                <div className="text-center p-6 bg-chart-2 text-white border-2 border-black shadow-brutal rounded-lg">
+                  <div className="bg-white rounded-full p-3 w-12 h-12 mx-auto mb-3 flex items-center justify-center border-2 border-black">
+                    <Star className="h-6 w-6 text-purple-600" />
+                  </div>
+                  <div className="text-3xl font-bold mb-2">{availableMolds?.length || 0}</div>
+                  <div className="font-medium">Game Templates Available</div>
+                </div>
               </div>
             </div>
           </div>

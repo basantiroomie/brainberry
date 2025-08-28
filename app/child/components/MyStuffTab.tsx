@@ -1,5 +1,6 @@
-import { Crown, Trophy, MessageCircle } from "lucide-react"
+import { Crown, Trophy, MessageCircle, Star, Award, Medal, Shield, Gem, ArrowLeft } from "lucide-react"
 import { useEffect, useState } from "react"
+import Image from "next/image"
 import MyAvatarTab from "../Games/MyAvatarTab"
 import ChatAssistant from "./ChatAssistant"
 import { SimpleAvatarViewer } from "@/components/SimpleAvatarViewer"
@@ -78,12 +79,12 @@ export default function MyStuffTab({ childProfile }: MyStuffTabProps) {
     }
   }
 
-  const getThemeEmoji = (theme: string) => {
+  const getThemeIcon = (theme: string) => {
     switch (theme) {
-      case 'dinosaur': return '🦕'
-      case 'space': return '🚀'
-      case 'castle': return '🏰'
-      default: return '🌍'
+      case 'dinosaur': return <Star className="h-6 w-6" />
+      case 'space': return <Star className="h-6 w-6" />
+      case 'castle': return <Crown className="h-6 w-6" />
+      default: return <Star className="h-6 w-6" />
     }
   }
 
@@ -96,14 +97,25 @@ export default function MyStuffTab({ childProfile }: MyStuffTabProps) {
     }
   }
 
-  const getAchievementEmoji = (achievement: string) => {
+  const getAchievementIcon = (achievement: string) => {
     switch (achievement) {
-      case 'first-quest': return '🏆'
-      case 'quest-master': return '⭐'
-      case 'dedicated-player': return '🎖️'
-      case 'superstar': return '🥇'
-      case 'champion': return '💎'
-      default: return '🏅'
+      case 'first-quest': return <Trophy className="h-5 w-5" />
+      case 'quest-master': return <Star className="h-5 w-5" />
+      case 'dedicated-player': return <Medal className="h-5 w-5" />
+      case 'superstar': return <Award className="h-5 w-5" />
+      case 'champion': return <Gem className="h-5 w-5" />
+      default: return <Shield className="h-5 w-5" />
+    }
+  }
+
+  const getAchievementName = (achievement: string) => {
+    switch (achievement) {
+      case 'first-quest': return 'First Quest'
+      case 'quest-master': return 'Quest Master'
+      case 'dedicated-player': return 'Dedicated Player'
+      case 'superstar': return 'Superstar'
+      case 'champion': return 'Champion'
+      default: return 'Achievement'
     }
   }
 
@@ -111,7 +123,12 @@ export default function MyStuffTab({ childProfile }: MyStuffTabProps) {
     return (
       <div className="space-y-8">
         <div className="text-center mb-8">
-          <h1 className="text-4xl font-bold text-chart-3 mb-2">MY AWESOME STUFF!</h1>
+          <div className="inline-block transform -rotate-2 mb-4">
+            <div className="bg-chart-3 text-white px-8 py-4 border-4 border-black shadow-brutal-xl font-bold text-4xl transform hover:rotate-1 transition-transform">
+              MY STUFF
+            </div>
+          </div>
+          <div className="animate-spin rounded-full h-16 w-16 border-4 border-blue-500 border-t-transparent mx-auto mb-4"></div>
           <p className="text-lg text-gray-700">Loading your amazing progress...</p>
         </div>
       </div>
@@ -125,9 +142,9 @@ export default function MyStuffTab({ childProfile }: MyStuffTabProps) {
         <div className="flex items-center gap-4 mb-8">
           <button 
             onClick={() => setActiveSection('overview')}
-            className="bg-gray-500 text-white px-4 py-2 border-2 border-black shadow-brutal hover:shadow-brutal-lg transition-all font-bold"
+            className="bg-gray-500 text-white px-4 py-2 border-2 border-black shadow-brutal hover:shadow-brutal-lg transition-all font-bold flex items-center"
           >
-            <span className="inline-block mr-2">←</span>
+            <ArrowLeft className="h-4 w-4 mr-2" />
             BACK
           </button>
           <div className="inline-block transform -rotate-1">
@@ -171,14 +188,14 @@ export default function MyStuffTab({ childProfile }: MyStuffTabProps) {
         <div className="flex items-center gap-4 mb-8">
           <button 
             onClick={() => setActiveSection('overview')}
-            className="bg-gray-500 text-white px-4 py-2 border-2 border-black shadow-brutal hover:shadow-brutal-lg transition-all font-bold"
+            className="bg-gray-500 text-white px-4 py-2 border-2 border-black shadow-brutal hover:shadow-brutal-lg transition-all font-bold flex items-center"
           >
-            <span className="inline-block mr-2">←</span>
+            <ArrowLeft className="h-4 w-4 mr-2" />
             BACK
           </button>
           <div className="inline-block transform -rotate-1">
             <div className="bg-chart-5 text-white px-8 py-4 border-4 border-black shadow-brutal-xl font-bold text-3xl">
-              {childProfile?.avatar_url ? 'CHAT WITH YOUR 3D AVATAR!' : 'CHAT ASSISTANT'}
+              {childProfile?.avatar_url ? 'CHAT WITH YOUR 3D AVATAR' : 'CHAT ASSISTANT'}
             </div>
           </div>
         </div>
@@ -220,33 +237,64 @@ export default function MyStuffTab({ childProfile }: MyStuffTabProps) {
       <div className="text-center mb-8">
         <div className="inline-block transform -rotate-2 mb-4">
           <div className="bg-chart-3 text-white px-8 py-4 border-4 border-black shadow-brutal-xl font-bold text-4xl transform hover:rotate-1 transition-transform">
-             MY STUFF
+            MY STUFF
           </div>
         </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         {/* My Avatar */}
-        <div className="bg-white border-4 border-black shadow-brutal-xl p-6">
-          <div className="text-center">
-            <div className="bg-chart-3 text-white rounded-full w-16 h-16 flex items-center justify-center mx-auto mb-4">
-              <Crown className="h-8 w-8" />
-            </div>
-            <h3 className="text-xl font-bold mb-2">My Avatar</h3>
-            <p className="text-gray-600 mb-4">See your amazing character!</p>
-            <div className="mx-auto mb-4">
-              <ChildAvatarDisplay
-                avatarUrl={childProfile?.avatar_url}
-                headshotUrl={childProfile?.avatar_headshot_url}
-                childName={childProfile?.name || 'Your'}
-                childId={childProfile?.id}
-                size="large"
-                className="w-24 h-24"
+        <div className="bg-white border-4 border-black shadow-brutal-xl overflow-hidden hover:shadow-brutal-2xl transition-all duration-300 hover:-translate-y-1">
+          {/* Avatar Image */}
+          <div className="relative h-48 bg-gradient-to-br from-purple-100 to-blue-100 border-b-4 border-black">
+            {childProfile?.avatar_headshot_url ? (
+              <Image
+                src={childProfile.avatar_headshot_url}
+                alt="My Avatar"
+                fill
+                className="object-cover"
+                onError={(e) => {
+                  const target = e.target as HTMLImageElement;
+                  target.style.display = 'none';
+                  target.nextElementSibling?.classList.remove('hidden');
+                }}
               />
+            ) : (
+              <Image
+                src="/images/avatar-showcase.jpg"
+                alt="My Avatar"
+                fill
+                className="object-cover"
+                onError={(e) => {
+                  const target = e.target as HTMLImageElement;
+                  target.style.display = 'none';
+                  target.nextElementSibling?.classList.remove('hidden');
+                }}
+              />
+            )}
+            <div className="hidden absolute inset-0 flex items-center justify-center bg-gradient-to-br from-purple-200 to-blue-200">
+              <div className="bg-white rounded-full p-4 border-2 border-black">
+                <Crown className="h-8 w-8 text-purple-500" />
+              </div>
             </div>
+            {/* Status Badge */}
+            <div className="absolute top-3 right-3 bg-white border-2 border-black px-3 py-1 rounded-full shadow-brutal">
+              <span className="text-sm font-bold text-gray-700">
+                {childProfile?.avatar_url ? 'Ready' : 'Pending'}
+              </span>
+            </div>
+          </div>
+          
+          {/* Card Content */}
+          <div className="p-6">
+            <h3 className="text-xl font-bold mb-2 text-gray-800">My Avatar</h3>
+            <p className="text-gray-600 mb-4 text-sm leading-relaxed">
+              {childProfile?.avatar_url ? 'View and interact with your amazing 3D character!' : 'Ask your educator to create your special avatar!'}
+            </p>
+            
             <button 
               onClick={() => setActiveSection('avatar')}
-              className="bg-chart-3 text-white px-4 py-2 border-2 border-black shadow-brutal hover:shadow-brutal-lg transition-all font-bold"
+              className="w-full bg-chart-3 text-white px-4 py-2 border-2 border-black shadow-brutal hover:shadow-brutal-lg transition-all font-bold"
             >
               {childProfile?.avatar_url ? 'VIEW AVATAR' : 'NO AVATAR YET'}
             </button>
@@ -254,69 +302,131 @@ export default function MyStuffTab({ childProfile }: MyStuffTabProps) {
         </div>
 
         {/* Chat Assistant */}
-        <div className="bg-white border-4 border-black shadow-brutal-xl p-6">
-          <div className="text-center">
-            <div className="bg-chart-5 text-white rounded-full w-16 h-16 flex items-center justify-center mx-auto mb-4">
-              <MessageCircle className="h-8 w-8" />
+        <div className="bg-white border-4 border-black shadow-brutal-xl overflow-hidden hover:shadow-brutal-2xl transition-all duration-300 hover:-translate-y-1">
+          {/* Chat Image */}
+          <div className="relative h-48 bg-gradient-to-br from-green-100 to-teal-100 border-b-4 border-black">
+            <Image
+              src="/images/chat-assistant.jpg"
+              alt="Chat Assistant"
+              fill
+              className="object-cover"
+              onError={(e) => {
+                const target = e.target as HTMLImageElement;
+                target.style.display = 'none';
+                target.nextElementSibling?.classList.remove('hidden');
+              }}
+            />
+            <div className="hidden absolute inset-0 flex items-center justify-center bg-gradient-to-br from-green-200 to-teal-200">
+              <div className="bg-white rounded-full p-4 border-2 border-black">
+                <MessageCircle className="h-8 w-8 text-green-500" />
+              </div>
             </div>
-            <h3 className="text-xl font-bold mb-2">
+            {/* Chat Type Badge */}
+            <div className="absolute top-3 right-3 bg-white border-2 border-black px-3 py-1 rounded-full shadow-brutal">
+              <span className="text-sm font-bold text-gray-700">
+                {childProfile?.avatar_url ? '3D Chat' : 'Text Chat'}
+              </span>
+            </div>
+          </div>
+          
+          {/* Card Content */}
+          <div className="p-6">
+            <h3 className="text-xl font-bold mb-2 text-gray-800">
               {childProfile?.avatar_url ? 'Avatar Chat' : 'Chat Assistant'}
             </h3>
-            <p className="text-gray-600 mb-4">
-              {childProfile?.avatar_url ? 'Talk with your 3D avatar!' : 'Ask me anything!'}
+            <p className="text-gray-600 mb-4 text-sm leading-relaxed">
+              {childProfile?.avatar_url ? 'Have conversations with your 3D avatar and learn together!' : 'Ask questions and get help with your learning journey!'}
             </p>
-            
-            {/* THIS SECTION IS REMOVED TO AVOID REDUNDANCY */}
-            {/* <div className="mx-auto mb-4"> ... </div> */}
 
             <button 
               onClick={() => setActiveSection('chat')}
-              className="bg-chart-5 text-white px-4 py-2 border-2 border-black shadow-brutal hover:shadow-brutal-lg transition-all font-bold"
+              className="w-full bg-chart-5 text-white px-4 py-2 border-2 border-black shadow-brutal hover:shadow-brutal-lg transition-all font-bold"
             >
-              {childProfile?.avatar_url ? 'CHAT WITH AVATAR' : 'CHAT NOW'}
+              {childProfile?.avatar_url ? 'CHAT WITH AVATAR' : 'START CHATTING'}
             </button>
           </div>
         </div>
 
         {/* Trophy Room */}
-        <div className="bg-white border-4 border-black shadow-brutal-xl p-6">
-          <div className="text-center">
-            <div className="bg-chart-2 text-white rounded-full w-16 h-16 flex items-center justify-center mx-auto mb-4">
-              <Trophy className="h-8 w-8" />
+        <div className="bg-white border-4 border-black shadow-brutal-xl overflow-hidden hover:shadow-brutal-2xl transition-all duration-300 hover:-translate-y-1">
+          {/* Trophy Image */}
+          <div className="relative h-48 bg-gradient-to-br from-yellow-100 to-orange-100 border-b-4 border-black">
+            <Image
+              src="/images/trophy-room.jpg"
+              alt="Trophy Room"
+              fill
+              className="object-cover"
+              onError={(e) => {
+                const target = e.target as HTMLImageElement;
+                target.style.display = 'none';
+                target.nextElementSibling?.classList.remove('hidden');
+              }}
+            />
+            <div className="hidden absolute inset-0 flex items-center justify-center bg-gradient-to-br from-yellow-200 to-orange-200">
+              <div className="bg-white rounded-full p-4 border-2 border-black">
+                <Trophy className="h-8 w-8 text-yellow-500" />
+              </div>
             </div>
-            <h3 className="text-xl font-bold mb-2">Trophy Room</h3>
-            <p className="text-gray-600 mb-4">Your amazing rewards!</p>
+            {/* Achievement Count Badge */}
+            <div className="absolute top-3 right-3 bg-white border-2 border-black px-3 py-1 rounded-full shadow-brutal">
+              <span className="text-sm font-bold text-gray-700">
+                {progress.achievements.length}/5
+              </span>
+            </div>
+          </div>
+          
+          {/* Card Content */}
+          <div className="p-6">
+            <h3 className="text-xl font-bold mb-2 text-gray-800">Trophy Room</h3>
+            <p className="text-gray-600 mb-4 text-sm leading-relaxed">
+              See all the amazing achievements you've earned through your learning journey!
+            </p>
+            
             <div className="grid grid-cols-3 gap-2 mb-4">
-              {progress.achievements.slice(0, 5).map((achievement, index) => (
-                <div key={index} className="text-2xl" title={achievement}>
-                  {getAchievementEmoji(achievement)}
+              {progress.achievements.slice(0, 6).map((achievement, index) => (
+                <div key={index} className="bg-gray-100 border border-gray-300 rounded p-2 flex items-center justify-center" title={getAchievementName(achievement)}>
+                  <div className="text-yellow-500">
+                    {getAchievementIcon(achievement)}
+                  </div>
                 </div>
               ))}
               {Array.from({ length: Math.max(0, 6 - progress.achievements.length) }).map((_, index) => (
-                <div key={`locked-${index}`} className="text-gray-300 text-2xl">�</div>
+                <div key={`locked-${index}`} className="bg-gray-50 border border-gray-200 rounded p-2 flex items-center justify-center">
+                  <div className="text-gray-300">
+                    <Shield className="h-5 w-5" />
+                  </div>
+                </div>
               ))}
             </div>
-            <div className="text-xs text-gray-600 mb-2">
-              {progress.achievements.length} of 5 achievements unlocked
-            </div>
-            <button className="bg-chart-2 text-white px-4 py-2 border-2 border-black shadow-brutal hover:shadow-brutal-lg transition-all font-bold">
-              VIEW ALL
+            
+            <button className="w-full bg-chart-2 text-white px-4 py-2 border-2 border-black shadow-brutal hover:shadow-brutal-lg transition-all font-bold">
+              VIEW ALL TROPHIES
             </button>
           </div>
         </div>
       </div>
 
       {/* Progress Summary */}
-      <div className="bg-white border-4 border-black shadow-brutal-xl p-6">
-        <h2 className="text-2xl font-bold mb-4 text-center">Your Progress Summary</h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div className="text-center p-4 bg-chart-1 text-white border-2 border-black shadow-brutal">
-            <div className="text-3xl font-bold mb-2">{progress.completedAssignments}</div>
-            <div>Quests Completed</div>
-          </div>
-          <div className="text-center p-4 bg-chart-2 text-white border-2 border-black shadow-brutal">
-            <div className="text-3xl font-bold mb-2">{progress.totalSessions}</div>
-            <div>Play Sessions</div>
+      <div className="bg-white border-4 border-black shadow-brutal-xl overflow-hidden">
+        <div className="bg-chart-2 text-white p-6 border-b-4 border-black">
+          <h2 className="text-2xl font-bold text-center">Your Learning Progress</h2>
+        </div>
+        <div className="p-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="text-center p-6 bg-chart-1 text-white border-2 border-black shadow-brutal">
+              <div className="bg-white rounded-full p-3 w-12 h-12 mx-auto mb-3 flex items-center justify-center border-2 border-black">
+                <Trophy className="h-6 w-6 text-blue-600" />
+              </div>
+              <div className="text-3xl font-bold mb-2">{progress.completedAssignments}</div>
+              <div className="font-medium">Quests Completed</div>
+            </div>
+            <div className="text-center p-6 bg-chart-2 text-white border-2 border-black shadow-brutal">
+              <div className="bg-white rounded-full p-3 w-12 h-12 mx-auto mb-3 flex items-center justify-center border-2 border-black">
+                <Star className="h-6 w-6 text-purple-600" />
+              </div>
+              <div className="text-3xl font-bold mb-2">{progress.totalSessions}</div>
+              <div className="font-medium">Play Sessions</div>
+            </div>
           </div>
         </div>
       </div>

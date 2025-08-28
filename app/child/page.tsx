@@ -109,9 +109,6 @@ export default function ChildDashboard() {
                   />
                   <div className="flex flex-col">
                     <span className="text-sm font-medium text-main">Welcome, {childProfile.name}!</span>
-                    {childProfile.avatar_url && (
-                      <span className="text-xs text-green-600 font-medium">✨ Avatar Ready</span>
-                    )}
                   </div>
                 </div>
               )}

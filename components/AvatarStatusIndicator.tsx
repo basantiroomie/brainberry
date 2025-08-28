@@ -44,14 +44,6 @@ export const AvatarStatusIndicator: React.FC<AvatarStatusIndicatorProps> = ({
   if (hasValidAvatar) {
     return (
       <div className={`flex items-center space-x-2 text-green-600 ${className}`}>
-        <div className={`${sizeClasses[size]} bg-green-100 border border-green-300 rounded-full flex items-center justify-center`}>
-          <span className={iconSizes[size]}>🎭</span>
-        </div>
-        {showText && (
-          <span className={`font-medium ${textSizes[size]}`}>
-            {childName} 3D avatar is ready!
-          </span>
-        )}
       </div>
     )
   }
