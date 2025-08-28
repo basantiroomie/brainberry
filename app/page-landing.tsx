@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { Brain, Calendar, MapPin, Instagram, Facebook, Twitter } from "lucide-react"
+import { Brain, Calendar, MapPin, Instagram, Facebook, Twitter, Linkedin } from "lucide-react"
 import Image from "next/image"
 import { useRouter } from "next/navigation"
 
@@ -30,7 +30,7 @@ export default function BrainBerry() {
               <a href="#programs" className="text-black hover:text-main font-medium">
                 Programs
               </a>
-              <a href="#community" className="text-black hover:text-main font-medium">
+              <a href="/community" className="text-black hover:text-main font-medium">
                 Community
               </a>
               <button
@@ -48,8 +48,8 @@ export default function BrainBerry() {
       <section className="relative h-screen flex items-center justify-center overflow-hidden">
         <div className="absolute inset-0">
           <Image
-            src="/hero-climber.png"
-            alt="Child climbing and achieving goals through learning"
+            src="/landingpage.jpg"
+            alt="Children enjoying therapeutic gaming together"
             fill
             className="object-cover"
             priority
@@ -229,10 +229,10 @@ export default function BrainBerry() {
           </div>
           <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
             {[
-              { title: "PUZZLE GAMES", desc: "Problem-solving and logic building" },
-              { title: "SOCIAL STORIES", desc: "Interactive narrative experiences" },
-              { title: "SENSORY PLAY", desc: "Regulation and calming activities" },
-              { title: "SKILL BUILDERS", desc: "Personalized learning challenges" },
+              { title: "MEMORY MATCHING", desc: "Personalized card matching games for cognitive development" },
+              { title: "EXPRESSION TRAINING", desc: "Face recognition and emotion identification activities" },
+              { title: "CREATIVE COLORING", desc: "Digital canvas for creative expression and fine motor skills" },
+              { title: "AVATAR INTERACTION", desc: "3D character interaction for social skill building" },
             ].map((gameType, i) => (
               <div key={i}>
                 <div className="bg-black text-white border-4 border-border shadow-brutal-xl p-6 hover:shadow-[16px_16px_0px_0px_var(--color-border)] transition-all duration-300">
@@ -323,8 +323,8 @@ export default function BrainBerry() {
 
       {/* Footer */}
       <footer className="bg-secondary-background border-t-4 border-border py-12">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="grid md:grid-cols-3 gap-8">
+        <div className="max-w-6xl mx-auto px-6 sm:px-8 lg:px-12">
+          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6 lg:gap-8">
             <div>
               <div>
                 <div className="flex items-center space-x-2 mb-4">
@@ -332,9 +332,9 @@ export default function BrainBerry() {
                   <span className="text-xl font-bold text-foreground">BRAINBERRY</span>
                 </div>
                 <p className="text-foreground font-medium mb-4">
-                  123 Learning Ave
+                  Ramaiah Institute of Technology
                   <br />
-                  Austin, TX 78701
+                  Bengaluru, Karnataka, India
                 </p>
                 <p className="text-foreground font-medium">hello@brainberry.com</p>
               </div>
@@ -354,13 +354,8 @@ export default function BrainBerry() {
                     </a>
                   </li>
                   <li>
-                    <a href="#faq" className="text-foreground hover:text-main font-medium">
-                      FAQ
-                    </a>
-                  </li>
-                  <li>
-                    <a href="#contact" className="text-foreground hover:text-main font-medium">
-                      Contact
+                    <a href="/community" className="text-foreground hover:text-main font-medium">
+                      Community
                     </a>
                   </li>
                 </ul>
@@ -368,19 +363,44 @@ export default function BrainBerry() {
             </div>
             <div>
               <div>
-                <h3 className="text-lg font-bold text-foreground mb-4">STAY CONNECTED</h3>
-                <div className="flex space-x-4 mb-6">
-                  <Instagram className="h-6 w-6 text-foreground hover:text-main cursor-pointer" />
-                  <Facebook className="h-6 w-6 text-foreground hover:text-main cursor-pointer" />
-                  <Twitter className="h-6 w-6 text-foreground hover:text-main cursor-pointer" />
+                <h3 className="text-lg font-bold text-foreground mb-4">MADE BY</h3>
+                <div className="space-y-2">
+                  <div className="flex items-center space-x-2">
+                    <span className="text-foreground font-medium">Bhaskar</span>
+                    <a href="https://www.linkedin.com/in/bhaskar-datta-p/" target="_blank" rel="noopener noreferrer">
+                      <Linkedin className="h-4 w-4 text-foreground hover:text-main cursor-pointer" />
+                    </a>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <span className="text-foreground font-medium">Megha</span>
+                    <a href="https://www.linkedin.com/in/meghaprasadd/" target="_blank" rel="noopener noreferrer">
+                      <Linkedin className="h-4 w-4 text-foreground hover:text-main cursor-pointer" />
+                    </a>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <span className="text-foreground font-medium">Siddhanth</span>
+                    <a href="https://www.linkedin.com/in/siddhanth-pradhan/" target="_blank" rel="noopener noreferrer">
+                      <Linkedin className="h-4 w-4 text-foreground hover:text-main cursor-pointer" />
+                    </a>
+                  </div>
                 </div>
-                <div className="flex">
+              </div>
+            </div>
+            <div>
+              <div>
+                <h3 className="text-lg font-bold text-foreground mb-4">STAY CONNECTED</h3>
+                <div className="flex space-x-3 mb-4">
+                  <Instagram className="h-5 w-5 text-foreground hover:text-main cursor-pointer" />
+                  <Facebook className="h-5 w-5 text-foreground hover:text-main cursor-pointer" />
+                  <Twitter className="h-5 w-5 text-foreground hover:text-main cursor-pointer" />
+                </div>
+                <div className="flex flex-col sm:flex-row">
                   <input
                     type="email"
                     placeholder="Your email"
-                    className="flex-1 px-4 py-2 border-2 border-border bg-background text-foreground font-medium"
+                    className="flex-1 px-3 py-2 border-2 border-border bg-background text-foreground font-medium text-sm mb-2 sm:mb-0"
                   />
-                  <button className="bg-main text-main-foreground px-6 py-2 border-2 border-l-0 border-border shadow-[12px_12px_0px_0px_var(--color-border)] hover:shadow-[16px_16px_0px_0px_var(--color-border)] transition-all font-bold">
+                  <button className="bg-main text-main-foreground px-4 py-2 border-2 sm:border-l-0 border-border shadow-[8px_8px_0px_0px_var(--color-border)] hover:shadow-[12px_12px_0px_0px_var(--color-border)] transition-all font-bold text-sm">
                     SUBSCRIBE
                   </button>
                 </div>
