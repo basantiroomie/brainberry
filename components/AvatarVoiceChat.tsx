@@ -27,6 +27,7 @@ export const AvatarVoiceChat: React.FC<AvatarVoiceChatProps> = ({
   const [audioEnabled, setAudioEnabled] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [sessionStartTime, setSessionStartTime] = useState<Date | null>(null)
+  const [currentModel, setCurrentModel] = useState<string | null>(null)
   
   // Refs
   const avatarModelRef = useRef<Object3D | null>(null)
@@ -37,6 +38,7 @@ export const AvatarVoiceChat: React.FC<AvatarVoiceChatProps> = ({
   const audioContextRef = useRef<AudioContext | null>(null)
   const analyserRef = useRef<AnalyserNode | null>(null)
   const animationFrameRef = useRef<number | null>(null)
+  const sessionIdRef = useRef<string | null>(null) // Store Gemini Live session ID
 
   // Initialize audio context and analyzer for voice activity detection
   useEffect(() => {
@@ -83,19 +85,23 @@ export const AvatarVoiceChat: React.FC<AvatarVoiceChatProps> = ({
 
   // Cleanup function
   const cleanup = async () => {
-    // End the session on the server
-    try {
-      const endFormData = new FormData()
-      endFormData.append('childId', childId)
-      endFormData.append('action', 'end')
+    // End the session on the server if we have a sessionId
+    if (sessionIdRef.current) {
+      try {
+        const endFormData = new FormData()
+        endFormData.append('childId', childId)
+        endFormData.append('sessionId', sessionIdRef.current)
+        endFormData.append('action', 'close_session')
 
-      await fetch('/api/chat/voice-livekit', {
-        method: 'POST',
-        body: endFormData,
-      })
-      console.log('🎤 Voice session ended')
-    } catch (error) {
-      console.warn('🎤 Failed to end session:', error)
+        await fetch('/api/chat/voice-livekit', {
+          method: 'POST',
+          body: endFormData,
+        })
+        console.log('🎤 Voice session closed:', sessionIdRef.current)
+        sessionIdRef.current = null
+      } catch (error) {
+        console.warn('🎤 Failed to close session:', error)
+      }
     }
 
     if (mediaRecorderRef.current) {
@@ -108,6 +114,56 @@ export const AvatarVoiceChat: React.FC<AvatarVoiceChatProps> = ({
       cancelAnimationFrame(animationFrameRef.current)
     }
     lipsyncManagerRef.current.stopProcessing()
+  }
+
+  // Recreate session if needed
+  const recreateSessionIfNeeded = async () => {
+    if (sessionIdRef.current) {
+      return true // Session already exists
+    }
+
+    console.log('🎤 Recreating voice session...')
+    
+    try {
+      const sessionFormData = new FormData()
+      sessionFormData.append('childId', childId)
+      sessionFormData.append('action', 'create_session')
+      sessionFormData.append('instructions', 'You are a helpful assistant for children. Respond in a friendly, encouraging tone suitable for voice interaction.')
+
+      const sessionResponse = await fetch('/api/chat/voice-livekit', {
+        method: 'POST',
+        body: sessionFormData,
+      })
+
+      if (!sessionResponse.ok) {
+        const errorData = await sessionResponse.json().catch(() => ({}))
+        
+        if (sessionResponse.status === 429 || errorData.isQuotaError) {
+          setError('API quota exceeded. Please check your Gemini API billing settings.')
+          return false
+        } else {
+          setError(errorData.details || 'Failed to recreate voice session')
+          return false
+        }
+      }
+
+      const sessionData = await sessionResponse.json()
+      console.log('🎤 Voice session recreated:', sessionData)
+      
+      if (sessionData.success && sessionData.sessionId) {
+        sessionIdRef.current = sessionData.sessionId
+        setCurrentModel(sessionData.model || 'Unknown model')
+        console.log('🎤 New session ID stored:', sessionIdRef.current, 'Model:', sessionData.model)
+        return true
+      } else {
+        setError('No session ID returned from API')
+        return false
+      }
+    } catch (error) {
+      console.error('🎤 Session recreation failed:', error)
+      setError('Failed to recreate voice session')
+      return false
+    }
   }
 
   // Start voice conversation
@@ -144,24 +200,41 @@ export const AvatarVoiceChat: React.FC<AvatarVoiceChatProps> = ({
 
       // Initialize session with the server
       const sessionFormData = new FormData()
-      sessionFormData.append('audio', new Blob([], { type: 'audio/webm' })) // Empty blob for session start
       sessionFormData.append('childId', childId)
-      sessionFormData.append('action', 'start')
+      sessionFormData.append('action', 'create_session')
+      sessionFormData.append('instructions', 'You are a helpful assistant for children. Respond in a friendly, encouraging tone suitable for voice interaction.')
 
       try {
+        console.log('🎤 Creating Gemini Live session...')
         const sessionResponse = await fetch('/api/chat/voice-livekit', {
           method: 'POST',
           body: sessionFormData,
         })
 
         if (!sessionResponse.ok) {
-          throw new Error('Failed to start voice session')
+          const errorData = await sessionResponse.json().catch(() => ({}))
+          
+          if (sessionResponse.status === 429 || errorData.isQuotaError) {
+            throw new Error('API quota exceeded. Please check your Gemini API billing settings.')
+          } else {
+            throw new Error(errorData.details || 'Failed to create voice session')
+          }
         }
 
         const sessionData = await sessionResponse.json()
-        console.log('🎤 Voice session started:', sessionData.message || 'Ready')
+        console.log('🎤 Voice session created:', sessionData)
+        
+        if (sessionData.success && sessionData.sessionId) {
+          sessionIdRef.current = sessionData.sessionId
+          setCurrentModel(sessionData.model || 'Unknown model')
+          console.log('🎤 Session ID stored:', sessionIdRef.current, 'Model:', sessionData.model)
+        } else {
+          throw new Error('No session ID returned from API')
+        }
       } catch (sessionError) {
-        console.warn('🎤 Session initialization failed, continuing with fallback:', sessionError)
+        console.error('🎤 Session creation failed:', sessionError)
+        setError('Failed to create voice session')
+        return
       }
       
       // Set up audio analysis for voice activity detection
@@ -272,13 +345,17 @@ export const AvatarVoiceChat: React.FC<AvatarVoiceChatProps> = ({
     recordChunk()
   }
 
-  // Voice activity detection
+  // Voice activity detection with debouncing
   const startVoiceActivityDetection = () => {
     if (!analyserRef.current) return
 
     const bufferLength = analyserRef.current.frequencyBinCount
     const dataArray = new Uint8Array(bufferLength)
-
+    let voiceDetectionBuffer: number[] = []
+    const bufferSize = 10 // Number of samples to average over
+    const voiceThreshold = 35 // Increased threshold to reduce sensitivity
+    const silenceThreshold = 25 // Lower threshold for silence detection
+    
     const detectVoiceActivity = () => {
       // Only continue if we have an active analyser and stream
       if (!analyserRef.current || !streamRef.current || !streamRef.current.active) return
@@ -288,11 +365,22 @@ export const AvatarVoiceChat: React.FC<AvatarVoiceChatProps> = ({
       // Calculate average amplitude
       const average = dataArray.reduce((sum, value) => sum + value, 0) / bufferLength
       
-      // Update connection state based on voice activity (only if connected or listening)
-      if (average > 20 && connectionState === 'connected') {
-        setConnectionState('listening')
-      } else if (average <= 20 && connectionState === 'listening') {
-        setConnectionState('connected')
+      // Add to rolling buffer
+      voiceDetectionBuffer.push(average)
+      if (voiceDetectionBuffer.length > bufferSize) {
+        voiceDetectionBuffer.shift()
+      }
+      
+      // Calculate smoothed average to reduce noise
+      const smoothedAverage = voiceDetectionBuffer.reduce((sum, val) => sum + val, 0) / voiceDetectionBuffer.length
+      
+      // Only update state if we have enough samples and significant change
+      if (voiceDetectionBuffer.length >= bufferSize) {
+        if (smoothedAverage > voiceThreshold && connectionState === 'connected') {
+          setConnectionState('listening')
+        } else if (smoothedAverage <= silenceThreshold && connectionState === 'listening') {
+          setConnectionState('connected')
+        }
       }
 
       animationFrameRef.current = requestAnimationFrame(detectVoiceActivity)
@@ -306,6 +394,16 @@ export const AvatarVoiceChat: React.FC<AvatarVoiceChatProps> = ({
     if (audioChunksRef.current.length === 0 || !audioEnabled) {
       console.log('🎤 Skipping audio processing: no chunks or audio disabled')
       return
+    }
+
+    // Check if we need to recreate the session
+    if (!sessionIdRef.current) {
+      console.log('🎤 No session ID, attempting to recreate session...')
+      const sessionCreated = await recreateSessionIfNeeded()
+      if (!sessionCreated) {
+        console.error('🎤 Failed to recreate session, aborting audio processing')
+        return
+      }
     }
 
     try {
@@ -327,12 +425,14 @@ export const AvatarVoiceChat: React.FC<AvatarVoiceChatProps> = ({
 
       console.log('🎤 Processing audio chunk, size:', audioBlob.size, 'bytes')
 
-      // Send to Gemini Live Continuous API
+      // Send to Gemini Live session
       const formData = new FormData()
       formData.append('audio', audioBlob)
       formData.append('childId', childId)
+      formData.append('sessionId', sessionIdRef.current!)
+      formData.append('action', 'stream_audio')
 
-      console.log('🎤 Sending audio to API...')
+      console.log('🎤 Streaming audio to session:', sessionIdRef.current)
       const response = await fetch('/api/chat/voice-livekit', {
         method: 'POST',
         body: formData
@@ -341,27 +441,70 @@ export const AvatarVoiceChat: React.FC<AvatarVoiceChatProps> = ({
       console.log('🎤 API Response status:', response.status)
 
       if (!response.ok) {
-        const errorText = await response.text()
-        console.error('🎤 API Error response:', errorText)
-        throw new Error(`HTTP error! status: ${response.status}, message: ${errorText}`)
+        const errorData = await response.json().catch(() => ({}))
+        console.error('🎤 API Error response:', errorData)
+        
+        // Handle session closed error (410)
+        if (response.status === 410) {
+          console.log('🎤 Session was closed, clearing session ID')
+          sessionIdRef.current = null
+          setError('Voice session ended. Please start a new conversation.')
+          setConnectionState('disconnected')
+          return
+        }
+        
+        // Handle session not found error (404)
+        if (response.status === 404) {
+          console.log('🎤 Session not found, clearing session ID')
+          sessionIdRef.current = null
+          setError('Voice session lost. Please start a new conversation.')
+          setConnectionState('disconnected')
+          return
+        }
+        
+        // Handle quota errors (429)
+        if (response.status === 429) {
+          setError('API quota exceeded. Please check your billing settings.')
+          setConnectionState('disconnected')
+          return
+        }
+        
+        throw new Error(errorData.details || `HTTP error! status: ${response.status}`)
       }
 
       const data = await response.json()
       console.log('🎤 API Response data:', data)
 
-      if (data.success && data.text) {
-        console.log('🤖 Avatar response:', data.text.substring(0, 50) + '...')
+      if (data.success) {
+        console.log('🤖 Avatar response received from session:', data.sessionId)
         
-        // Check if we have audio data from Gemini Live
-        if (data.hasAudio && data.audioData && data.audioMimeType) {
+        // Update model if it changed (due to automatic fallback)
+        if (data.model && data.model !== currentModel) {
+          console.log('🎤 Model changed from', currentModel, 'to', data.model)
+          setCurrentModel(data.model)
+          
+          // Show a brief notification about the model switch
+          const modelName = data.model.includes('2.0-flash-live') ? 'Gemini 2.0 Flash Live' : 
+                           data.model.includes('preview-native-audio') ? 'Gemini 2.5 Preview Audio' :
+                           data.model.includes('thinking-dialog') ? 'Gemini 2.5 Experimental' :
+                           'Gemini Model'
+          console.log(`🔄 Switched to ${modelName} due to quota limits`)
+        }
+        
+        // Check if we have audio data from Gemini Live turn-based response
+        if (data.streaming?.outputAudio) {
           console.log('🔊 Playing Gemini Live audio response')
-          await playGeminiAudioResponse(data.audioData, data.audioMimeType)
+          await playGeminiAudioResponse(data.streaming.outputAudio, 'audio/wav')
+        } else if (data.streaming?.outputText) {
+          console.log('🔊 Received text response, could implement TTS fallback:', data.streaming.outputText)
+          // For now, just log the text response
+          // You could implement TTS fallback here if needed
+        } else if (data.streaming?.turnsReceived === 0) {
+          console.log('🔊 No turns completed yet, but audio was sent successfully')
+          // Don't treat this as an error - just no completed turns yet
         } else {
-          console.log('🔊 No audio from Gemini Live, using browser TTS fallback')
-          // Fallback to browser TTS if no audio from Gemini Live
-          if (audioEnabled && avatarModelRef.current) {
-            await playAvatarVoiceResponse(data.text)
-          }
+          console.log('🔊 No audio response from Gemini Live session')
+          // You could add fallback text-to-speech here if needed
         }
       } else {
         console.warn('🎤 No valid response from API:', data)
@@ -559,6 +702,16 @@ export const AvatarVoiceChat: React.FC<AvatarVoiceChatProps> = ({
                  connectionState === 'connecting' ? 'Connecting...' :
                  avatarLoaded ? 'Ready to start' : 'Loading...'}
               </span>
+              
+              {/* Model Information */}
+              {currentModel && connectionState === 'connected' && (
+                <span className="text-xs text-gray-500 mt-1">
+                  {currentModel.includes('2.0-flash-live') ? 'Gemini 2.0 Flash Live' : 
+                   currentModel.includes('preview-native-audio') ? 'Gemini 2.5 Preview Audio' :
+                   currentModel.includes('thinking-dialog') ? 'Gemini 2.5 Experimental' :
+                   'Gemini Model'}
+                </span>
+              )}
             </div>
 
             {/* Voice Activity Indicator */}
