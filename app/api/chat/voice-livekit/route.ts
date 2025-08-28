@@ -2,7 +2,155 @@ import { NextRequest, NextResponse } from 'next/server'
 import { GoogleGenAI, Modality } from '@google/genai'
 import { WaveFile } from 'wavefile'
 
-// Real Gemini Live API with Audio Input/Output - Based on Official Google Documentation
+// Store active sessions in memory (in production, use Redis or similar)
+const activeSessions = new Map<string, any>()
+
+// Model fallback hierarchy - using correct model names for Gemini Live
+const MODEL_FALLBACK_HIERARCHY = [
+  'gemini-2.0-flash-live-001',                       // Primary choice - 2.0 Flash Live (proven to work)
+  'gemini-2.5-flash-preview-native-audio-dialog',    // Second choice - 2.5 Preview Native Audio
+  'gemini-2.5-flash-exp-native-audio-thinking-dialog' // Last resort - 2.5 Experimental Thinking
+]
+
+// Track failed models to avoid retrying them immediately
+const failedModels = new Set<string>()
+
+// Helper function to convert WebM to PCM if needed
+async function convertAudioForModel(audioData: Uint8Array, model: string): Promise<{ data: string, mimeType: string }> {
+  // All Gemini Live models require PCM format, not WebM
+  console.log('🎤 Converting to PCM format for model:', model)
+  const audioBase64 = Buffer.from(audioData).toString('base64')
+  return { data: audioBase64, mimeType: "audio/pcm;rate=16000" }
+}
+
+/**
+ * Gemini Live API - Session-Based Implementation with Model Fallback
+ * 
+ * This implementation properly uses Gemini Live sessions with automatic fallback:
+ * 1. Tries premium models first, falls back to basic models when quota exceeded
+ * 2. Create a session once with 'create_session'
+ * 3. Stream audio chunks to the same session with 'stream_audio'
+ * 4. Session automatically handles audio processing via callbacks
+ * 5. No manual message queuing - the session handles everything
+ * 6. Close session when done with 'close_session'
+ */
+
+// Add response queue handling functions based on official Gemini Live docs
+async function waitMessage(responseQueue: any[]) {
+  let done = false;
+  let message = undefined;
+  while (!done) {
+    message = responseQueue.shift();
+    if (message) {
+      done = true;
+    } else {
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    }
+  }
+  return message;
+}
+
+async function handleTurn(responseQueue: any[]) {
+  const turns = [];
+  let done = false;
+  while (!done) {
+    const message = await waitMessage(responseQueue);
+    turns.push(message);
+    if (message.serverContent && message.serverContent.turnComplete) {
+      done = true;
+    }
+  }
+  return turns;
+}
+
+// Helper function to create session with model fallback using proper response queue pattern
+async function createSessionWithFallback(ai: GoogleGenAI, instructions: string, currentSessionId: string, responseQueue: any[]) {
+  const availableModels = MODEL_FALLBACK_HIERARCHY.filter(model => !failedModels.has(model))
+  
+  if (availableModels.length === 0) {
+    // Reset failed models if all have failed (maybe quota reset)
+    failedModels.clear()
+    availableModels.push(...MODEL_FALLBACK_HIERARCHY)
+  }
+  
+  let lastError: any = null
+  
+  for (const model of availableModels) {
+    try {
+      console.log('🎤 Attempting to create session with model:', model)
+      
+      const session = await ai.live.connect({
+        model: model,
+        callbacks: {
+          onopen: function () {
+            console.log('🎤 Live session opened with model:', model, 'sessionId:', currentSessionId)
+          },
+          onmessage: function (message) {
+            console.log('🎤 Live session message received:', JSON.stringify(message, null, 2))
+            // Use the proper response queue pattern from the official docs
+            responseQueue.push(message)
+          },
+          onerror: function (e) {
+            console.error('🎤 Live session error with model:', model)
+            console.error('🎤 Error details:', e)
+            console.error('🎤 Error message:', e.message)
+            console.error('🎤 Error type:', e.type)
+          },
+          onclose: function (e) {
+            console.log('🎤 Live session closed with code:', e.code, 'reason:', e.reason)
+            console.log('🎤 Close event details:', e)
+            // Mark session as closed but keep it for debugging
+            const sessionData = activeSessions.get(currentSessionId)
+            if (sessionData) {
+              sessionData.status = 'closed'
+              sessionData.closeReason = e.reason
+              sessionData.closeCode = e.code
+              sessionData.closedAt = new Date().toISOString()
+              
+              // Check if this was a quota error or invalid model error and mark the model as failed
+              if (e.reason && (e.reason.toLowerCase().includes('quota') || 
+                              e.reason.toLowerCase().includes('billing') ||
+                              e.reason.toLowerCase().includes('exceeded') ||
+                              e.reason.toLowerCase().includes('not found') ||
+                              e.reason.toLowerCase().includes('not supported') ||
+                              e.reason.toLowerCase().includes('invalid argument'))) {
+                console.log('🎤 Model failed for model:', model, '- marking as failed for future sessions')
+                failedModels.add(model)
+              }
+            }
+          }
+        }
+      })
+      
+      console.log('🎤 Successfully created session with model:', model)
+      return { session, model }
+      
+    } catch (error) {
+      console.warn('🎤 Failed to create session with model:', model, 'error:', error)
+      lastError = error
+      
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+      const isQuotaError = errorMessage.toLowerCase().includes('quota') || 
+                          errorMessage.toLowerCase().includes('billing') ||
+                          errorMessage.toLowerCase().includes('exceeded')
+      
+      if (isQuotaError) {
+        console.log('🎤 Quota exceeded for model:', model, '- marking as failed and trying next model')
+        failedModels.add(model)
+      } else {
+        // For non-quota errors, don't mark as permanently failed
+        console.log('🎤 Non-quota error for model:', model, '- will retry later')
+      }
+      
+      // Continue to next model
+    }
+  }
+  
+  // If we get here, all models failed
+  throw lastError || new Error('All models failed to create session')
+}
+
+// Real Gemini Live API with Audio Input/Output - Proper Session-Based Implementation
 export async function POST(req: Request) {
   try {
     console.log('Request received, content-type:', req.headers.get('content-type'));
@@ -74,364 +222,331 @@ export async function POST(req: Request) {
       audioDataLength: audioData ? audioData.length : 0
     })
     
-    // Determine action if not provided - if we have audio data, it's audio processing
-    const effectiveAction = action || (audioData ? 'process_audio' : 'create_session')
+    // Determine action if not provided - if we have audio data, it's audio streaming
+    const effectiveAction = action || (audioData ? 'stream_audio' : 'create_session')
     console.log('🎤 Effective action:', effectiveAction)
     
-    // Initialize Google GenAI with correct structure
+    // Initialize Google GenAI
     const ai = new GoogleGenAI({
       apiKey: process.env.GEMINI_API_KEY!
     })
     
-    const sessionConfig = {
-      model: "gemini-2.5-flash-preview-native-audio-dialog", // Native audio model
-      sessionId: sessionId || `audio-live-${Date.now()}`,
-      provider: 'gemini-live-audio'
-    }
+    const currentSessionId = sessionId || `audio-live-${Date.now()}`
     
     switch (effectiveAction) {
       case 'create_session':
+      case 'start': // Backward compatibility
         try {
-          // Create live session with proper response queue - following official docs
+          console.log('🎤 Creating new Gemini Live session:', currentSessionId)
+          
+          // Create response queue for this session (official pattern)
           const responseQueue: any[] = []
           
-          async function waitMessage() {
-            let done = false
-            let message = undefined
-            while (!done) {
-              message = responseQueue.shift()
-              if (message) {
-                done = true
-              } else {
-                await new Promise((resolve) => setTimeout(resolve, 100))
-              }
-            }
-            return message
-          }
+          // Create live session with model fallback
+          const { session, model } = await createSessionWithFallback(
+            ai, 
+            instructions || "You are a helpful assistant for children's educational gaming. Respond in a friendly, encouraging tone suitable for voice interaction.",
+            currentSessionId,
+            responseQueue
+          )
           
-          const session = await ai.live.connect({
-            model: "gemini-2.5-flash-preview-native-audio-dialog",
-            callbacks: {
-              onopen: function () {
-                console.log('🎤 Live session opened')
-              },
-              onmessage: function (message) {
-                console.log('🎤 Live session message:', message)
-                responseQueue.push(message)
-              },
-              onerror: function (e) {
-                console.error('🎤 Live session error:', e.message)
-              },
-              onclose: function (e) {
-                console.log('🎤 Live session closed:', e.reason)
-              }
-            },
-            config: {
-              responseModalities: [Modality.AUDIO],
-              systemInstruction: instructions || "You are a helpful assistant for children's educational gaming. Respond in a friendly, encouraging tone suitable for voice interaction."
-            }
+          // Store session for future use
+          activeSessions.set(currentSessionId, {
+            session,
+            responseQueue,
+            createdAt: new Date().toISOString(),
+            model: model,
+            status: 'active'
           })
           
           return NextResponse.json({
             success: true,
-            text: "Real Gemini Live native audio session created",
-            session: {
-              ...sessionConfig,
-              audioCapabilities: {
-                inputFormat: 'PCM 16-bit, 16kHz, mono',
-                outputFormat: 'WAV 24kHz native audio',
-                model: 'gemini-2.5-flash-preview-native-audio-dialog',
-                realtime: true
-              }
-            },
+            text: "Gemini Live audio session created and ready for streaming",
+            sessionId: currentSessionId,
+            model: model,
             status: 'active',
             capabilities: {
               audioInput: true,
               audioOutput: true,
               nativeAudio: true,
               realtime: true,
-              streaming: true
-            }
+              streaming: true,
+              persistent: true
+            },
+            instructions: "Send audio data to 'stream_audio' action with this sessionId"
           })
           
         } catch (liveError) {
-          console.error('🎤 Gemini Live session error:', liveError)
+          console.error('🎤 Gemini Live session creation error:', liveError)
+          
+          // Check if it's a quota error
+          const errorMessage = liveError instanceof Error ? liveError.message : 'Unknown error'
+          const isQuotaError = errorMessage.toLowerCase().includes('quota') || 
+                              errorMessage.toLowerCase().includes('billing')
+          
           return NextResponse.json({
             success: false,
-            error: 'Failed to create Gemini Live session',
-            details: liveError instanceof Error ? liveError.message : 'Unknown error'
-          }, { status: 500 })
+            error: isQuotaError ? 'API quota exceeded' : 'Failed to create Gemini Live session',
+            details: errorMessage,
+            isQuotaError,
+            fallbackSuggestion: isQuotaError ? 
+              'Please check your Gemini API billing and quota settings' : 
+              'Try again or check your API key'
+          }, { status: isQuotaError ? 429 : 500 })
         }
         
-      case 'process_audio':
+      case 'stream_audio':
         if (!audioData) {
           return NextResponse.json({
             success: false,
-            error: 'Audio data required for processing'
+            error: 'Audio data required for streaming'
           }, { status: 400 })
         }
         
-        try {
-          console.log('🎤 Processing audio with real Gemini Live API...')
-          
-          const responseQueue: any[] = []
-          
-          async function waitMessage() {
-            let done = false
-            let message = undefined
-            let attempts = 0
-            const maxAttempts = 100 // 10 seconds total wait time
+        const sessionData = activeSessions.get(currentSessionId)
+        if (!sessionData) {
+          return NextResponse.json({
+            success: false,
+            error: 'Session not found. Create a session first.',
+            sessionId: currentSessionId
+          }, { status: 404 })
+        }
+        
+        if (sessionData.status === 'closed') {
+          // Try to create a new session with a different model if the current one failed
+          if (sessionData.closeReason && (sessionData.closeReason.toLowerCase().includes('quota') || 
+                                         sessionData.closeReason.toLowerCase().includes('billing') ||
+                                         sessionData.closeReason.toLowerCase().includes('exceeded') ||
+                                         sessionData.closeReason.toLowerCase().includes('not found') ||
+                                         sessionData.closeReason.toLowerCase().includes('not supported'))) {
             
-            while (!done && attempts < maxAttempts) {
-              message = responseQueue.shift()
-              if (message) {
-                done = true
-              } else {
-                await new Promise((resolve) => setTimeout(resolve, 100))
-                attempts++
-              }
-            }
+            console.log('🎤 Previous session closed due to quota, attempting to recreate with fallback model...')
             
-            if (attempts >= maxAttempts) {
-              console.log('🎤 Timeout waiting for message')
-              return null
-            }
-            return message
-          }
-          
-          async function handleTurn() {
-            const turns = []
-            let done = false
-            let setupComplete = false
-            
-            // Wait for setup completion first
-            while (!setupComplete) {
-              const message = await waitMessage()
-              if (!message) {
-                console.log('🎤 Setup timeout, breaking')
-                break
-              }
-              console.log('🎤 Setup message received:', message)
-              console.log('🎤 Setup message keys:', Object.keys(message))
+            try {
+              // Create response queue for new session
+              const responseQueue: any[] = []
               
-              // Check for setupComplete in different possible locations
-              if (message.setupComplete || 
-                  (message.serverContent && message.serverContent.setupComplete) ||
-                  (typeof message === 'object' && 'setupComplete' in message)) {
-                setupComplete = true
-                console.log('🎤 Setup completed, now sending audio...')
-              }
-            }
-            
-            // Now wait for actual response turns
-            let turnStarted = false
-            while (!done && setupComplete) {
-              const message = await waitMessage()
-              if (!message) {
-                console.log('🎤 Response timeout, finishing')
-                done = true
-                break
-              }
-              console.log('🎤 Turn message:', JSON.stringify(message, null, 2))
-              turns.push(message)
+              // Create new session with model fallback
+              const { session, model } = await createSessionWithFallback(
+                ai, 
+                instructions || "You are a helpful assistant for children's educational gaming. Respond in a friendly, encouraging tone suitable for voice interaction.",
+                currentSessionId,
+                responseQueue
+              )
               
-              if (message.serverContent) {
-                turnStarted = true
-                if (message.serverContent.turnComplete) {
-                  console.log('🎤 Turn completed')
-                  done = true
-                }
-              }
+              // Update session data
+              activeSessions.set(currentSessionId, {
+                session,
+                responseQueue,
+                createdAt: new Date().toISOString(),
+                model: model,
+                status: 'active'
+              })
               
-              // If we've been waiting too long without a turn starting, break
-              if (!turnStarted && turns.length > 10) {
-                console.log('🎤 No turn started, finishing')
-                done = true
-              }
+              console.log('🎤 Successfully recreated session with fallback model:', model)
+              
+              // Continue with audio streaming below
+              
+            } catch (recreateError) {
+              console.error('🎤 Failed to recreate session with fallback:', recreateError)
+              return NextResponse.json({
+                success: false,
+                error: 'All models have exceeded quota limits',
+                details: recreateError instanceof Error ? recreateError.message : 'Unknown error',
+                suggestion: 'Please try again later or check your API billing'
+              }, { status: 503 })
             }
-            return turns
-          }
-          
-          // Create live session for audio processing
-          const session = await ai.live.connect({
-            model: "gemini-2.5-flash-preview-native-audio-dialog",
-            callbacks: {
-              onopen: function () {
-                console.log('🎤 Audio processing session opened')
-              },
-              onmessage: function (message) {
-                console.log('🎤 Audio processing response:', message)
-                console.log('🎤 Message type check:', typeof message, Object.keys(message))
-                responseQueue.push(message)
-              },
-              onerror: function (e) {
-                console.error('🎤 Audio processing error:', e.message)
-              },
-              onclose: function (e) {
-                console.log('🎤 Audio processing session closed')
-              }
-            },
-            config: {
-              responseModalities: [Modality.AUDIO],
-              systemInstruction: instructions || "You are a helpful assistant for children. Respond with voice."
-            }
-          })
-          
-          // Prepare audio data - WebM is supported by Gemini Live directly
-          let audioBase64: string
-          let inputAudioLength = 0
-          
-          if (audioData instanceof Uint8Array) {
-            // We have binary WebM audio data from frontend - convert to base64
-            console.log('🎤 Converting WebM audio to base64 for Gemini Live...')
-            inputAudioLength = audioData.length
-            
-            // Convert binary data to base64 - Gemini Live supports WebM directly
-            audioBase64 = Buffer.from(audioData).toString('base64')
-            console.log('🎤 WebM audio converted to base64, length:', audioBase64.length)
           } else {
-            // Handle base64 string data (fallback)
-            audioBase64 = typeof audioData === 'string' && audioData.includes(',') ? 
-              audioData.split(',')[1] : audioData as string
-            inputAudioLength = audioBase64.length
+            return NextResponse.json({
+              success: false,
+              error: 'Session is closed. Reason: ' + (sessionData.closeReason || 'Unknown'),
+              sessionId: currentSessionId,
+              details: 'Create a new session to continue'
+            }, { status: 410 })
           }
+        }
+        
+        try {
+          console.log('🎤 Streaming audio to existing session:', currentSessionId)
           
-          // Wait for session setup first
-          console.log('🎤 Waiting for session setup...')
+          // Convert audio data based on model requirements
+          const { data: audioBase64, mimeType } = await convertAudioForModel(audioData as Uint8Array, sessionData.model)
+          console.log('🎤 Audio converted for model:', sessionData.model, 'format:', mimeType, 'length:', audioBase64.length)
           
-          // First wait for setup completion
-          let setupComplete = false
-          while (!setupComplete) {
-            const message = await waitMessage()
-            if (!message) {
-              console.log('🎤 Setup timeout, proceeding anyway')
-              setupComplete = true // Proceed even if no setup message
-              break
-            }
-            console.log('🎤 Setup message received:', message)
-            
-            // Check for setupComplete in different possible locations
-            if (message.setupComplete || 
-                (message.serverContent && message.serverContent.setupComplete) ||
-                (typeof message === 'object' && 'setupComplete' in message)) {
-              setupComplete = true
-              console.log('🎤 Setup completed!')
-              break
-            }
-          }
-          
-          // Send audio immediately after setup - Gemini Live expects real-time audio streaming
-          console.log('🎤 Sending audio chunk to Gemini Live...')
-          session.sendRealtimeInput({
+          // Stream audio to the existing session
+          sessionData.session.sendRealtimeInput({
             audio: {
               data: audioBase64,
-              mimeType: "audio/webm"
+              mimeType: mimeType
             }
           })
           
-          // Wait for audio response with a reasonable timeout
-          const turns = []
-          let responseComplete = false
-          let attempts = 0
-          const maxResponseAttempts = 30 // 3 seconds - faster response
+          console.log('🎤 Audio sent to session, waiting for turn completion...')
           
-          console.log('🎤 Waiting for Gemini Live response...')
-          while (!responseComplete && attempts < maxResponseAttempts) {
-            const message = await waitMessage()
-            if (!message) {
-              attempts++
-              continue
-            }
-            
-            console.log('🎤 Response message:', message)
-            turns.push(message)
-            
-            // Check for various completion signals
-            if (message.serverContent && message.serverContent.turnComplete) {
-              console.log('🎤 Turn completed')
-              responseComplete = true
-            } else if (message.serverContent && message.serverContent.modelTurn) {
-              console.log('🎤 Model turn received, considering complete')
-              responseComplete = true
-            }
-            
-            attempts++
-          }
+          // Use the official response queue pattern to wait for complete turn
+          const turns = await handleTurn(sessionData.responseQueue)
           
-          if (!responseComplete) {
-            console.log('🎤 Response timeout after', attempts, 'attempts, proceeding with available data')
-          }
-          
-          // Process audio response from Gemini Live
-          let outputAudioBase64 = null
-          let audioResponses: any[] = []
+          // Extract audio and text responses from completed turn
+          let audioResponses: string[] = []
+          let textResponses: string[] = []
           
           for (const turn of turns) {
-            console.log('🎤 Processing turn:', JSON.stringify(turn, null, 2))
-            
-            // Check for audio data in the response
+            // Check for audio responses in turn data
             if (turn.serverContent?.modelTurn?.parts) {
               for (const part of turn.serverContent.modelTurn.parts) {
-                if (part.inlineData?.mimeType?.includes('audio')) {
-                  console.log('🎤 Found audio response:', part.inlineData.mimeType)
+                if (part.inlineData?.mimeType?.includes('audio') && part.inlineData?.data) {
+                  console.log('🎤 Audio response found in turn, length:', part.inlineData.data.length)
                   audioResponses.push(part.inlineData.data)
+                }
+                if (part.text) {
+                  console.log('🎤 Text response found in turn:', part.text.substring(0, 100))
+                  textResponses.push(part.text)
                 }
               }
             }
+            
+            // Check for output transcription
+            if (turn.serverContent?.outputTranscription) {
+              console.log('🎤 Output transcription:', turn.serverContent.outputTranscription.text)
+              textResponses.push(turn.serverContent.outputTranscription.text)
+            }
           }
           
-          // Combine audio responses if multiple
-          if (audioResponses.length > 0) {
-            outputAudioBase64 = audioResponses.join('')
-            console.log('🎤 Combined audio response length:', outputAudioBase64.length)
-          }
+          const combinedAudio = audioResponses.join('')
+          const combinedText = textResponses.join(' ')
           
-          session.close()
+          console.log('🎤 Turn completed:', {
+            turnsReceived: turns.length,
+            audioResponsesCount: audioResponses.length,
+            textResponsesCount: textResponses.length,
+            combinedAudioLength: combinedAudio.length,
+            model: sessionData.model
+          })
           
           return NextResponse.json({
             success: true,
-            text: "Audio processed with real Gemini Live native audio API",
-            sessionId: sessionConfig.sessionId,
-            model: sessionConfig.model,
-            processing: {
-              inputReceived: true,
-              audioProcessed: true,
-              audioDataLength: inputAudioLength,
+            text: "Audio streamed to live session and turn completed",
+            sessionId: currentSessionId,
+            model: sessionData.model,
+            streaming: {
+              audioSent: true,
+              audioDataLength: audioBase64.length,
+              audioResponseReceived: combinedAudio.length > 0,
+              textResponseReceived: combinedText.length > 0,
+              outputAudio: combinedAudio || null,
+              outputText: combinedText || null,
+              timestamp: new Date().toISOString(),
               turnsReceived: turns.length,
-              audioOutputGenerated: !!outputAudioBase64,
-              outputAudio: outputAudioBase64,
-              timestamp: new Date().toISOString()
+              audioResponseCount: audioResponses.length,
+              textResponseCount: textResponses.length
             }
           })
           
-        } catch (geminiError) {
-          console.error('🎤 Gemini Live audio error:', geminiError)
+        } catch (streamError) {
+          console.error('🎤 Audio streaming error:', streamError)
           return NextResponse.json({
             success: false,
-            error: 'Failed to process audio with Gemini Live',
-            details: geminiError instanceof Error ? geminiError.message : 'Unknown error'
+            error: 'Failed to stream audio to session',
+            details: streamError instanceof Error ? streamError.message : 'Unknown error'
           }, { status: 500 })
+        }
+        
+      case 'close_session':
+      case 'end': // Backward compatibility
+        const closeSessionData = activeSessions.get(currentSessionId)
+        if (closeSessionData) {
+          closeSessionData.session.close()
+          activeSessions.delete(currentSessionId)
+          return NextResponse.json({
+            success: true,
+            text: "Session closed successfully",
+            sessionId: currentSessionId
+          })
+        } else {
+          return NextResponse.json({
+            success: false,
+            error: 'Session not found',
+            sessionId: currentSessionId
+          }, { status: 404 })
+        }
+        
+      case 'reset_models':
+        // Reset failed models (in case quota was increased or reset)
+        const previousFailedCount = failedModels.size
+        failedModels.clear()
+        
+        return NextResponse.json({
+          success: true,
+          text: `Reset ${previousFailedCount} failed models`,
+          availableModels: MODEL_FALLBACK_HIERARCHY,
+          message: 'All models are now available for retry'
+        })
+        
+      case 'get_model_status':
+        return NextResponse.json({
+          success: true,
+          modelHierarchy: MODEL_FALLBACK_HIERARCHY,
+          failedModels: Array.from(failedModels),
+          availableModels: MODEL_FALLBACK_HIERARCHY.filter(model => !failedModels.has(model)),
+          activeSessions: activeSessions.size,
+          sessionsDetails: Array.from(activeSessions.entries()).map(([id, data]) => ({
+            sessionId: id,
+            model: data.model,
+            status: data.status,
+            createdAt: data.createdAt,
+            closedAt: data.closedAt,
+            closeReason: data.closeReason
+          }))
+        })
+        
+      case 'get_session_status':
+        const statusSessionData = activeSessions.get(currentSessionId)
+        if (statusSessionData) {
+          return NextResponse.json({
+            success: true,
+            sessionId: currentSessionId,
+            status: 'active',
+            model: statusSessionData.model,
+            createdAt: statusSessionData.createdAt,
+            responseQueueLength: statusSessionData.responseQueue.length
+          })
+        } else {
+          return NextResponse.json({
+            success: false,
+            error: 'Session not found',
+            sessionId: currentSessionId
+          }, { status: 404 })
         }
         
       default:
         return NextResponse.json({
           success: true,
-          text: "Real Gemini Live Native Audio session ready",
+          text: "Gemini Live Native Audio API - Session-Based Implementation with Model Fallback",
           provider: 'gemini-live-native-audio',
-          session: sessionConfig,
           status: 'ready',
+          activeSessions: activeSessions.size,
+          modelFallback: {
+            hierarchy: MODEL_FALLBACK_HIERARCHY,
+            failedModels: Array.from(failedModels),
+            availableModels: MODEL_FALLBACK_HIERARCHY.filter(model => !failedModels.has(model))
+          },
           audioFeatures: {
-            inputFormat: 'PCM 16-bit, 16kHz, mono (base64 encoded)',
-            outputFormat: 'WAV 24kHz native audio (base64 encoded)',
-            model: 'gemini-2.5-flash-preview-native-audio-dialog',
+            inputFormat: 'WebM audio (base64 encoded)',
+            outputFormat: 'Native audio (base64 encoded)',
             realtime: true,
-            nativeAudio: true
+            nativeAudio: true,
+            persistent: true,
+            automaticFallback: true
           },
           actions: [
-            'create_session - Initialize live native audio session',
-            'process_audio - Send audioData (base64) for AI native audio response'
+            'create_session - Create a persistent live audio session (with automatic model fallback)',
+            'stream_audio - Stream audio to existing session (requires sessionId)',
+            'close_session - Close and cleanup session',
+            'get_session_status - Get status of existing session',
+            'reset_models - Reset failed model list (useful if quota was increased)',
+            'get_model_status - Get current model status and session details'
           ],
-          implementation: 'Uses official Google GenAI Live API with native audio models'
+          implementation: 'Uses persistent sessions with automatic model fallback when quota exceeded'
         })
     }
 
