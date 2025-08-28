@@ -91,8 +91,8 @@ export const Enhanced3DAvatarChatbot: React.FC<Enhanced3DAvatarChatbotProps> = (
         if (mesh.morphTargetInfluences && mesh.morphTargetDictionary) {
           // Apply each blend shape to the corresponding morph target
           Object.entries(blendShapes).forEach(([targetName, value]) => {
-            const index = mesh.morphTargetDictionary[targetName]
-            if (index !== undefined && typeof value === 'number') {
+            const index = mesh.morphTargetDictionary![targetName]
+            if (index !== undefined && typeof value === 'number' && mesh.morphTargetInfluences) {
               mesh.morphTargetInfluences[index] = value
             }
           })
@@ -267,11 +267,23 @@ export const Enhanced3DAvatarChatbot: React.FC<Enhanced3DAvatarChatbotProps> = (
         })
       })
 
+      // Check if response is OK
       if (!response.ok) {
         throw new Error(`Chat API error: ${response.status} ${response.statusText}`)
       }
 
+      // Check if response is JSON
+      const contentType = response.headers.get('content-type')
+      if (!contentType || !contentType.includes('application/json')) {
+        throw new Error('Server returned non-JSON response (likely an error page)')
+      }
+
       const data = await response.json()
+      
+      // Validate response data
+      if (!data || typeof data.text !== 'string') {
+        throw new Error('Invalid response format from chat API')
+      }
       
       const avatarMessage: ChatMessage = {
         id: (Date.now() + 1).toString(),
@@ -291,10 +303,23 @@ export const Enhanced3DAvatarChatbot: React.FC<Enhanced3DAvatarChatbotProps> = (
     } catch (error) {
       console.error('Chat API error:', error)
       
+      // Provide more specific error messages
+      let errorText = "I'm having trouble right now. Can you try again?"
+      
+      if (error instanceof Error) {
+        if (error.message.includes('non-JSON response')) {
+          errorText = "The chat service is having issues. Please try again in a moment."
+        } else if (error.message.includes('Failed to fetch')) {
+          errorText = "I can't connect to the chat service right now. Please check your internet connection."
+        } else if (error.message.includes('500')) {
+          errorText = "The chat service is temporarily down. Please try again later."
+        }
+      }
+      
       // Add error message
       const errorMessage: ChatMessage = {
         id: (Date.now() + 1).toString(),
-        text: "I'm having trouble right now. Can you try again?",
+        text: errorText,
         sender: 'avatar',
         timestamp: new Date()
       }

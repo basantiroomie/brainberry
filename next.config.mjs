@@ -22,9 +22,18 @@ const nextConfig = {
         util: false,
         url: false,
         querystring: false,
-        encoding: false,
       }
     }
+    
+    // Add rule to ignore encoding errors
+    config.module.rules.push({
+      test: /node_modules\/node-fetch\/lib\/index\.es\.js/,
+      resolve: {
+        fallback: {
+          encoding: false
+        }
+      }
+    })
     
     return config
   },

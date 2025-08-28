@@ -2,10 +2,9 @@ import { Crown, Trophy, MessageCircle } from "lucide-react"
 import { useEffect, useState } from "react"
 import MyAvatarTab from "../Games/MyAvatarTab"
 import ChatAssistant from "./ChatAssistant"
-import AvatarChatbot from "./AvatarChatbot"
-import Enhanced3DAvatarChatbot from "@/components/Enhanced3DAvatarChatbot"
 import { SimpleAvatarViewer } from "@/components/SimpleAvatarViewer"
 import ChildAvatarDisplay from "./ChildAvatarDisplay"
+import ChildEnhanced3DAvatarChatbot from "./ChildEnhanced3DAvatarChatbot"
 
 interface ChildProgress {
   completedAssignments: number
@@ -184,10 +183,8 @@ export default function MyStuffTab({ childProfile }: MyStuffTabProps) {
         
         <div className="bg-white border-4 border-black shadow-brutal-xl overflow-hidden max-w-4xl mx-auto" style={{ height: '700px' }}>
           {childProfile?.avatar_url ? (
-            <Enhanced3DAvatarChatbot
-              avatarUrl={childProfile.avatar_url}
-              childId={childProfile.id}
-              accessCode={childProfile.access_code}
+            <ChildEnhanced3DAvatarChatbot
+              childProfile={childProfile}
             />
           ) : (
             <div className="h-full flex flex-col">
@@ -262,22 +259,10 @@ export default function MyStuffTab({ childProfile }: MyStuffTabProps) {
             <p className="text-gray-600 mb-4">
               {childProfile?.avatar_url ? 'Talk with your 3D avatar!' : 'Ask me anything!'}
             </p>
-            <div className="mx-auto mb-4">
-              {childProfile?.avatar_url ? (
-                <ChildAvatarDisplay
-                  avatarUrl={childProfile.avatar_url}
-                  headshotUrl={childProfile.avatar_headshot_url}
-                  childName={childProfile.name || 'Your'}
-                  childId={childProfile.id}
-                  size="large"
-                  className="w-24 h-24"
-                />
-              ) : (
-                <div className="w-24 h-24 bg-gray-200 border-2 border-black rounded-full flex items-center justify-center">
-                  <span className="text-2xl">💬</span>
-                </div>
-              )}
-            </div>
+            
+            {/* THIS SECTION IS REMOVED TO AVOID REDUNDANCY */}
+            {/* <div className="mx-auto mb-4"> ... </div> */}
+
             <button 
               onClick={() => setActiveSection('chat')}
               className="bg-chart-5 text-white px-4 py-2 border-2 border-black shadow-brutal hover:shadow-brutal-lg transition-all font-bold"

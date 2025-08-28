@@ -39,20 +39,11 @@ export class AuthUtils {
     try {
       const response = await fetch(url, options)
       
-      // Check for authentication errors
-      if (this.isAuthError(response)) {
+      if (this.isAuthError(response) || this.isHtmlResponse(response)) {
         if (router) {
           this.handleAuthError(router)
         }
-        return { success: false, error: 'Authentication required' }
-      }
-      
-      // Check if we got HTML instead of JSON
-      if (this.isHtmlResponse(response)) {
-        if (router) {
-          this.handleAuthError(router)
-        }
-        return { success: false, error: 'Received HTML response, likely authentication issue' }
+        return { success: false, error: 'Authentication issue detected.' }
       }
       
       if (response.ok) {
@@ -61,14 +52,16 @@ export class AuthUtils {
           const data = await response.json()
           return { success: true, data }
         } else {
-          return { success: false, error: 'Invalid response format' }
+          // Handle cases where the response is OK but not JSON (e.g., empty response from a DELETE)
+          return { success: true, data: await response.text() }
         }
       } else {
-        return { success: false, error: `API error: ${response.status} ${response.statusText}` }
+        const errorText = await response.text()
+        return { success: false, error: `API error: ${response.status} ${response.statusText} - ${errorText}` }
       }
     } catch (error) {
       console.error('API call failed:', error)
-      return { success: false, error: error instanceof Error ? error.message : 'Unknown error' }
+      return { success: false, error: error instanceof Error ? error.message : 'Unknown network error' }
     }
   }
 }

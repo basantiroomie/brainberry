@@ -1,8 +1,6 @@
 'use client'
 
-import React, { useState, useEffect, useCallback } from 'react'
-import { ProfilePictureUtils, AvatarCodeUtils } from '@/lib/avatar-utils'
-import { AvatarUrlValidator } from '@/lib/avatar-url-validator'
+import React, { useState, useEffect } from 'react'
 import HeadshotGenerator from './HeadshotGenerator'
 
 interface ProfilePictureProps {
@@ -28,11 +26,9 @@ export const ProfilePicture: React.FC<ProfilePictureProps> = ({
   onHeadshotGenerated,
   childId
 }) => {
+  const [displayUrl, setDisplayUrl] = useState<string | null>(null)
   const [imageError, setImageError] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
-  const [generatedHeadshot, setGeneratedHeadshot] = useState<string | null>(null)
-  const [isGenerating, setIsGenerating] = useState(false)
-  const [shouldGenerateHeadshot, setShouldGenerateHeadshot] = useState(false)
 
   const sizeClasses = {
     xs: 'w-6 h-6',
@@ -50,115 +46,34 @@ export const ProfilePicture: React.FC<ProfilePictureProps> = ({
     xl: 'text-4xl'
   }
 
-  const pixelSizes = {
-    xs: 24,
-    sm: 32,
-    md: 40,
-    lg: 64,
-    xl: 96
-  }
-
-  // Auto-generate profile picture from avatar URL if headshot is not available
-  const generateProfilePicture = useCallback(async () => {
-    if (!autoGenerate || !avatarUrl || headshotUrl || isGenerating) {
-      return
-    }
-
-    setIsGenerating(true)
-    
-    try {
-      console.log('Attempting to generate profile picture from avatar URL:', avatarUrl)
-      
-      // First, try to use Ready Player Me PNG URL directly
-      let pngUrl: string | null = null
-      
-      if (avatarUrl.endsWith('.glb')) {
-        pngUrl = avatarUrl.replace('.glb', '.png')
-      } else {
-        const code = AvatarCodeUtils.extractCodeFromGlbUrl(avatarUrl)
-        if (code) {
-          pngUrl = AvatarCodeUtils.codeToPngUrl(code)
-        }
-      }
-      
-      if (pngUrl) {
-        // Test if PNG URL is accessible
-        const isAccessible = await ProfilePictureUtils.testPngUrlAccessibility(pngUrl)
-        if (isAccessible) {
-          console.log('Using Ready Player Me PNG URL directly:', pngUrl)
-          setGeneratedHeadshot(pngUrl)
-          
-          // Notify parent component
-          if (onHeadshotGenerated) {
-            onHeadshotGenerated(pngUrl)
-          }
-          
-          setIsGenerating(false)
-          return
-        }
-      }
-      
-      // Fallback: Generate from avatar URL
-      const profilePicture = await ProfilePictureUtils.generateProfilePictureWithFallback(
-        avatarUrl,
-        pixelSizes[size]
-      )
-      
-      if (profilePicture) {
-        console.log('Profile picture generated successfully')
-        setGeneratedHeadshot(profilePicture)
-        
-        // Notify parent component
-        if (onHeadshotGenerated) {
-          onHeadshotGenerated(profilePicture)
-        }
-      } else {
-        console.warn('Failed to generate profile picture from avatar URL')
-      }
-    } catch (error) {
-      console.error('Error generating profile picture:', error)
-    } finally {
-      setIsGenerating(false)
-    }
-  }, [avatarUrl, headshotUrl, autoGenerate, isGenerating, size, onHeadshotGenerated])
-
-  // Trigger profile picture generation when needed
   useEffect(() => {
-    if (!headshotUrl && avatarUrl && autoGenerate && !generatedHeadshot && !isGenerating) {
-      // First try the traditional method
-      generateProfilePicture()
-      
-      // If that fails and we have a childId, try 3D headshot generation
-      if (childId && AvatarUrlValidator.isValidAvatarUrl(avatarUrl) && avatarUrl.endsWith('.glb')) {
-        setShouldGenerateHeadshot(true)
-      }
-    }
-  }, [avatarUrl, headshotUrl, autoGenerate, generatedHeadshot, isGenerating, generateProfilePicture, childId])
+    setIsLoading(true)
+    setImageError(false)
 
-  // Determine the best URL to display (priority: headshotUrl > generatedHeadshot > avatarUrl)
-  const getDisplayUrl = (): string | null => {
-    if (headshotUrl && !imageError) return headshotUrl
-    if (generatedHeadshot && !imageError) return generatedHeadshot
-    if (avatarUrl && !imageError) {
-      // Try to convert GLB to PNG URL for direct display
-      try {
-        if (avatarUrl.endsWith('.glb')) {
-          return avatarUrl.replace('.glb', '.png')
-        }
-        const code = AvatarCodeUtils.extractCodeFromGlbUrl(avatarUrl)
-        if (code) {
-          return AvatarCodeUtils.codeToPngUrl(code)
-        }
-      } catch (error) {
-        console.warn('Could not convert avatar URL to PNG:', error)
-      }
-      return avatarUrl
-    }
-    return null
-  }
+    let finalUrl: string | null = null
 
-  const displayUrl = getDisplayUrl()
-  const hasAvatar = displayUrl && !imageError
+    // Priority 1: Use the explicit headshotUrl if provided.
+    if (headshotUrl) {
+      finalUrl = headshotUrl
+    } 
+    // Priority 2: Derive the .png URL from the .glb avatarUrl.
+    else if (avatarUrl && avatarUrl.endsWith('.glb')) {
+      finalUrl = avatarUrl.replace('.glb', '.png')
+    } 
+    // Priority 3: Use the avatarUrl if it's already a .png
+    else if (avatarUrl && avatarUrl.endsWith('.png')) {
+      finalUrl = avatarUrl
+    }
+
+    setDisplayUrl(finalUrl)
+
+    // If no direct image URL is found and auto-generation is enabled,
+    // the HeadshotGenerator component will handle it.
+    if (!finalUrl) {
+      setIsLoading(false)
+    }
+
+  }, [avatarUrl, headshotUrl])
 
   const handleImageLoad = () => {
     setIsLoading(false)
@@ -166,75 +81,43 @@ export const ProfilePicture: React.FC<ProfilePictureProps> = ({
   }
 
   const handleImageError = () => {
-    console.warn('Image failed to load:', displayUrl)
+    console.warn(`Failed to load profile picture: ${displayUrl}`)
     setImageError(true)
     setIsLoading(false)
-    
-    // If the current URL failed and we haven't tried generating yet, try generation
-    if (!generatedHeadshot && !isGenerating && autoGenerate && avatarUrl) {
-      generateProfilePicture()
-    }
   }
 
-  // Reset states when URLs change
-  useEffect(() => {
-    setImageError(false)
-    setIsLoading(true)
-    if (headshotUrl) {
-      // If we have a headshot URL, clear any generated one
-      setGeneratedHeadshot(null)
-    }
-  }, [headshotUrl, avatarUrl])
+  const handleGenerated = (generatedUrl: string) => {
+    setDisplayUrl(generatedUrl)
+    onHeadshotGenerated?.(generatedUrl)
+  }
 
-  const defaultFallback = fallbackIcon || (
-    <span className={`${iconSizes[size]} text-gray-500`}>🦸</span>
-  )
+  const showFallback = !displayUrl || imageError
+  const showGenerator = !displayUrl && !imageError && autoGenerate && avatarUrl && childId
 
   return (
     <div className={`${sizeClasses[size]} bg-gray-200 border-2 border-black rounded-full overflow-hidden flex items-center justify-center relative ${className}`}>
-      {hasAvatar && (
-        <>
-          {(isLoading || isGenerating) && (
-            <div className="absolute inset-0 flex items-center justify-center bg-gray-100">
-              <div className="w-3 h-3 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
-            </div>
-          )}
-          <img 
-            src={displayUrl}
-            alt={`${name}'s Avatar`}
-            className="w-full h-full object-cover"
-            onLoad={handleImageLoad}
-            onError={handleImageError}
-            style={{ display: imageError ? 'none' : 'block' }}
-          />
-        </>
-      )}
-      {(!hasAvatar || imageError) && !isGenerating && defaultFallback}
-      {isGenerating && !hasAvatar && (
-        <div className="absolute inset-0 flex items-center justify-center bg-gray-100">
-          <div className="w-3 h-3 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
-        </div>
+      {isLoading && !showFallback && <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-900"></div>}
+      
+      {displayUrl && !imageError && (
+        <img 
+          src={displayUrl}
+          alt={`${name}'s profile`}
+          className="w-full h-full object-cover"
+          onLoad={handleImageLoad}
+          onError={handleImageError}
+          style={{ display: isLoading ? 'none' : 'block' }}
+        />
       )}
       
-      {/* 3D Headshot Generator */}
-      {shouldGenerateHeadshot && childId && avatarUrl && (
-        <div className="absolute -bottom-8 left-0 right-0">
-          <HeadshotGenerator
-            avatarUrl={avatarUrl}
-            childId={childId}
-            onHeadshotGenerated={(headshotUrl) => {
-              setGeneratedHeadshot(headshotUrl)
-              setShouldGenerateHeadshot(false)
-              onHeadshotGenerated?.(headshotUrl)
-            }}
-            onError={(error) => {
-              console.warn('Headshot generation failed:', error)
-              setShouldGenerateHeadshot(false)
-              // Don't throw the error, just log it and continue
-            }}
-            autoGenerate={true}
-          />
-        </div>
+      {showFallback && (fallbackIcon || <span className={`${iconSizes[size]} text-gray-500`}>?</span>)}
+
+      {showGenerator && (
+        <HeadshotGenerator
+          avatarUrl={avatarUrl}
+          childId={childId}
+          onHeadshotGenerated={handleGenerated}
+          onError={() => setIsLoading(false)} // Stop loading on generation error
+        />
       )}
     </div>
   )

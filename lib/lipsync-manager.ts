@@ -1,79 +1,83 @@
-// Wawa Lipsync Manager for Avatar Lip-Sync Animation
-import { Lipsync } from 'wawa-lipsync'
+import { Lipsync, VISEMES } from 'wawa-lipsync'
 import { BlendShapeTargets, VisemeMapping, LipsyncConfig } from '@/types/avatar'
 
 /**
- * Global Lipsync Manager Instance
- * Handles real-time lip-sync animation using Wawa Lipsync library
+ * Interface for LipsyncManager to allow for SSR compatibility
  */
-export class LipsyncManager {
-  private lipsync: Lipsync
+interface ILipsyncManager {
+  setVisemeCallback(callback: (blendShapes: Partial<BlendShapeTargets>) => void): void
+  processSpeechSynthesis(utterance: SpeechSynthesisUtterance): void
+  processAudioFile(audioUrl: string): Promise<void>
+  connectMicrophone(): Promise<void>
+  stopProcessing(): void
+  isActive(): boolean
+  getCurrentViseme(): VISEMES | 'rest'
+  getAudioContext(): AudioContext | null
+  dispose(): void
+}
+
+/**
+ * Enhanced Lipsync Manager using Wawa Lipsync library
+ * Provides real-time lip-sync animation with proper audio processing
+ */
+export class LipsyncManager implements ILipsyncManager {
+  private lipsync: Lipsync | null = null
   private audioContext: AudioContext | null = null
-  private audioSource: AudioBufferSourceNode | null = null
   private isProcessing = false
   private animationFrameId: number | null = null
   private onVisemeCallback?: (blendShapes: Partial<BlendShapeTargets>) => void
+  private currentAudio: HTMLAudioElement | null = null
 
-  // Viseme to Ready Player Me morph target mapping
-  private readonly visemeToMorphTarget: VisemeMapping = {
-    'A': { jawOpen: 0.8, mouthSmile: 0.1 },
-    'E': { jawOpen: 0.5, mouthSmile: 0.6 },
-    'I': { jawOpen: 0.2, mouthSmile: 0.8 },
-    'O': { jawOpen: 0.7, mouthFunnel: 0.8 },
-    'U': { jawOpen: 0.3, mouthFunnel: 0.9 },
-    'B': { jawOpen: 0.1, mouthSmile: 0.0 },
-    'C': { jawOpen: 0.4, mouthFunnel: 0.3 },
-    'D': { jawOpen: 0.3, mouthSmile: 0.2 },
-    'F': { jawOpen: 0.2, mouthFunnel: 0.1 },
-    'G': { jawOpen: 0.4, mouthSmile: 0.1 },
-    'H': { jawOpen: 0.3, mouthSmile: 0.0 },
-    'K': { jawOpen: 0.4, mouthSmile: 0.0 },
-    'L': { jawOpen: 0.2, mouthSmile: 0.3 },
-    'M': { jawOpen: 0.0, mouthSmile: 0.0 },
-    'N': { jawOpen: 0.2, mouthSmile: 0.1 },
-    'P': { jawOpen: 0.0, mouthSmile: 0.0 },
-    'Q': { jawOpen: 0.5, mouthFunnel: 0.6 },
-    'R': { jawOpen: 0.3, mouthSmile: 0.2 },
-    'S': { jawOpen: 0.1, mouthSmile: 0.4 },
-    'T': { jawOpen: 0.2, mouthSmile: 0.1 },
-    'V': { jawOpen: 0.2, mouthFunnel: 0.2 },
-    'W': { jawOpen: 0.3, mouthFunnel: 0.7 },
-    'X': { jawOpen: 0.3, mouthSmile: 0.2 },
-    'Y': { jawOpen: 0.2, mouthSmile: 0.6 },
-    'Z': { jawOpen: 0.2, mouthSmile: 0.3 },
+  // Enhanced viseme to Ready Player Me morph target mapping
+  // Using Wawa Lipsync VISEMES enum for accurate mapping
+  private readonly visemeToMorphTarget: Record<VISEMES | 'rest', Partial<BlendShapeTargets>> = {
+    [VISEMES.sil]: { jawOpen: 0.0, mouthSmile: 0.0, mouthFunnel: 0.0 }, // Silence
+    [VISEMES.PP]: { jawOpen: 0.0, mouthSmile: 0.0, mouthFunnel: 0.0 }, // P, B, M sounds
+    [VISEMES.FF]: { jawOpen: 0.1, mouthSmile: 0.0, mouthFunnel: 0.2 }, // F, V sounds
+    [VISEMES.TH]: { jawOpen: 0.15, mouthSmile: 0.1, mouthFunnel: 0.0 }, // TH sounds
+    [VISEMES.DD]: { jawOpen: 0.3, mouthSmile: 0.2, mouthFunnel: 0.0 }, // D, T, N, L sounds
+    [VISEMES.kk]: { jawOpen: 0.4, mouthSmile: 0.0, mouthFunnel: 0.0 }, // K, G sounds
+    [VISEMES.CH]: { jawOpen: 0.2, mouthSmile: 0.3, mouthFunnel: 0.1 }, // CH, SH sounds
+    [VISEMES.SS]: { jawOpen: 0.1, mouthSmile: 0.4, mouthFunnel: 0.0 }, // S, Z sounds
+    [VISEMES.nn]: { jawOpen: 0.2, mouthSmile: 0.1, mouthFunnel: 0.0 }, // N sounds
+    [VISEMES.RR]: { jawOpen: 0.3, mouthSmile: 0.2, mouthFunnel: 0.0 }, // R sounds
+    [VISEMES.aa]: { jawOpen: 0.8, mouthSmile: 0.1, mouthFunnel: 0.0 }, // AA (father) vowel
+    [VISEMES.E]: { jawOpen: 0.5, mouthSmile: 0.7, mouthFunnel: 0.0 }, // E (bed) vowel
+    [VISEMES.I]: { jawOpen: 0.2, mouthSmile: 0.9, mouthFunnel: 0.0 }, // I (bit) vowel
+    [VISEMES.O]: { jawOpen: 0.7, mouthSmile: 0.0, mouthFunnel: 0.8 }, // O (boat) vowel
+    [VISEMES.U]: { jawOpen: 0.3, mouthSmile: 0.0, mouthFunnel: 0.9 }, // U (book) vowel
     'rest': { jawOpen: 0.0, mouthSmile: 0.0, mouthFunnel: 0.0 }
   }
 
   constructor(config?: Partial<LipsyncConfig>) {
-    this.lipsync = new Lipsync()
+    this.initializeLipsync()
     
     // Apply custom viseme mapping if provided
     if (config?.visemeToMorphTarget) {
-      this.visemeToMorphTarget = { ...this.visemeToMorphTarget, ...config.visemeToMorphTarget }
-    }
-
-    // Initialize audio context if provided
-    if (config?.audioContext) {
-      this.setAudioContext(config.audioContext)
+      Object.assign(this.visemeToMorphTarget, config.visemeToMorphTarget)
     }
   }
 
   /**
-   * Set audio context for processing
+   * Initialize the Wawa Lipsync instance
    */
-  setAudioContext(context: AudioContext) {
-    this.audioContext = context
-    // Note: Wawa Lipsync may need specific setup for audio context
-    // This will be implemented based on the library's API
-  }
-
-  /**
-   * Set audio source for lip-sync processing
-   */
-  setAudioSource(source: AudioBufferSourceNode) {
-    this.audioSource = source
-    // Connect audio source to lipsync processor
-    // Implementation depends on Wawa Lipsync API
+  private async initializeLipsync() {
+    // Only initialize on client side
+    if (typeof window === 'undefined') {
+      console.log('Skipping Wawa Lipsync initialization on server side')
+      return
+    }
+    
+    try {
+      console.log('Initializing Wawa Lipsync...')
+      this.lipsync = new Lipsync({
+        fftSize: 1024, // Good balance of accuracy and performance
+        historySize: 30 // Smooth out viseme detection
+      })
+      console.log('Wawa Lipsync initialized successfully')
+    } catch (error) {
+      console.error('Failed to initialize Wawa Lipsync:', error)
+    }
   }
 
   /**
@@ -84,13 +88,194 @@ export class LipsyncManager {
   }
 
   /**
-   * Start processing audio for lip-sync
+   * Process audio from Speech Synthesis with enhanced lip-sync
    */
-  startProcessing() {
-    if (this.isProcessing) return
+  processSpeechSynthesis(utterance: SpeechSynthesisUtterance) {
+    console.log('Setting up TTS lip-sync processing')
+    
+    let speechStartTime = 0
+    
+    utterance.onstart = () => {
+      console.log('TTS started - beginning lip-sync')
+      speechStartTime = Date.now()
+      this.isProcessing = true
+      this.startContinuousLipSync()
+    }
 
-    this.isProcessing = true
-    this.processAudioFrame()
+    utterance.onboundary = (event) => {
+      if (event.name === 'word' && this.onVisemeCallback) {
+        // Get more realistic viseme based on the word being spoken
+        const word = utterance.text.substring(event.charIndex, event.charIndex + event.charLength)
+        const viseme = this.getVisemeForWord(word)
+        const morphTargets = this.visemeToMorphTarget[viseme] || this.visemeToMorphTarget['rest']
+        
+        console.log(`Word: "${word}" -> Viseme: ${viseme}`)
+        this.onVisemeCallback(morphTargets)
+      }
+    }
+
+    utterance.onend = () => {
+      console.log('TTS ended - stopping lip-sync')
+      this.stopProcessing()
+    }
+
+    utterance.onerror = (event) => {
+      console.error('TTS error:', event.error)
+      this.stopProcessing()
+    }
+  }
+
+  /**
+   * Enhanced continuous lip-sync animation for TTS
+   */
+  private startContinuousLipSync() {
+    if (!this.isProcessing || !this.onVisemeCallback) return
+
+    // Generate more realistic mouth movements
+    const visemes = [VISEMES.aa, VISEMES.E, VISEMES.I, VISEMES.O, VISEMES.U, VISEMES.PP, VISEMES.DD, VISEMES.SS]
+    const randomViseme = visemes[Math.floor(Math.random() * visemes.length)]
+    const morphTargets = this.visemeToMorphTarget[randomViseme]
+    
+    // Apply the viseme
+    this.onVisemeCallback(morphTargets)
+    
+    // Vary the timing for more natural movement
+    const nextDelay = 80 + Math.random() * 120 // 80-200ms between movements
+    
+    setTimeout(() => {
+      if (this.isProcessing && this.onVisemeCallback) {
+        // Brief rest position between visemes
+        this.onVisemeCallback(this.visemeToMorphTarget['rest'])
+        
+        setTimeout(() => {
+          this.startContinuousLipSync()
+        }, 20 + Math.random() * 40) // 20-60ms rest
+      }
+    }, nextDelay)
+  }
+
+  /**
+   * Get appropriate viseme for a word using phonetic mapping
+   */
+  private getVisemeForWord(word: string): VISEMES | 'rest' {
+    if (!word || word.length === 0) return 'rest'
+    
+    const lowerWord = word.toLowerCase()
+    const firstChar = lowerWord.charAt(0)
+    
+    // Phonetic mapping to appropriate visemes
+    if (['a', 'ah'].some(sound => lowerWord.includes(sound))) return VISEMES.aa
+    if (['e', 'eh'].some(sound => lowerWord.includes(sound))) return VISEMES.E
+    if (['i', 'ih'].some(sound => lowerWord.includes(sound))) return VISEMES.I
+    if (['o', 'oh'].some(sound => lowerWord.includes(sound))) return VISEMES.O
+    if (['u', 'uh', 'oo'].some(sound => lowerWord.includes(sound))) return VISEMES.U
+    
+    // Consonant mapping
+    if (['p', 'b', 'm'].includes(firstChar)) return VISEMES.PP
+    if (['f', 'v'].includes(firstChar)) return VISEMES.FF
+    if (lowerWord.startsWith('th')) return VISEMES.TH
+    if (['d', 't', 'n', 'l'].includes(firstChar)) return VISEMES.DD
+    if (['k', 'g', 'c'].includes(firstChar)) return VISEMES.kk
+    if (['ch', 'sh', 'j'].some(sound => lowerWord.startsWith(sound))) return VISEMES.CH
+    if (['s', 'z'].includes(firstChar)) return VISEMES.SS
+    if (firstChar === 'r') return VISEMES.RR
+    
+    // Default to most common vowel sound
+    return VISEMES.aa
+  }
+
+  /**
+   * Process actual audio file with Wawa Lipsync
+   */
+  async processAudioFile(audioUrl: string): Promise<void> {
+    if (!this.lipsync) {
+      console.warn('Lipsync not initialized')
+      return
+    }
+
+    try {
+      console.log('Processing audio file with Wawa Lipsync:', audioUrl)
+      
+      // Create audio element
+      const audio = new Audio(audioUrl)
+      this.currentAudio = audio
+      
+      // Load and process the audio
+      await new Promise((resolve, reject) => {
+        audio.onloadeddata = resolve
+        audio.onerror = reject
+        audio.load()
+      })
+      
+      // Connect audio to Wawa Lipsync
+      this.lipsync.connectAudio(audio)
+      
+      // Start lip-sync processing
+      audio.onplay = () => {
+        this.isProcessing = true
+        this.processWithWawaLipsync()
+      }
+      
+      audio.onended = () => {
+        this.stopProcessing()
+      }
+      
+      audio.onpause = () => {
+        this.stopProcessing()
+      }
+      
+    } catch (error) {
+      console.error('Error processing audio file:', error)
+    }
+  }
+
+  /**
+   * Process audio with the actual Wawa Lipsync library
+   */
+  private processWithWawaLipsync() {
+    if (!this.lipsync || !this.isProcessing) return
+
+    try {
+      // Process current audio frame
+      this.lipsync.processAudio()
+      
+      // Get current viseme from Wawa Lipsync
+      const currentViseme = this.lipsync.viseme
+      
+      if (currentViseme && this.onVisemeCallback) {
+        const morphTargets = this.visemeToMorphTarget[currentViseme] || this.visemeToMorphTarget['rest']
+        this.onVisemeCallback(morphTargets)
+      }
+    } catch (error) {
+      console.error('Wawa Lipsync processing error:', error)
+    }
+
+    // Continue processing
+    if (this.isProcessing) {
+      this.animationFrameId = requestAnimationFrame(() => this.processWithWawaLipsync())
+    }
+  }
+
+  /**
+   * Connect microphone for real-time lip-sync
+   */
+  async connectMicrophone(): Promise<void> {
+    if (!this.lipsync) {
+      console.warn('Lipsync not initialized')
+      return
+    }
+
+    try {
+      console.log('Connecting microphone for real-time lip-sync')
+      await this.lipsync.connectMicrophone()
+      
+      this.isProcessing = true
+      this.processWithWawaLipsync()
+      
+      console.log('Microphone connected successfully')
+    } catch (error) {
+      console.error('Error connecting microphone:', error)
+    }
   }
 
   /**
@@ -108,112 +293,8 @@ export class LipsyncManager {
     if (this.onVisemeCallback) {
       this.onVisemeCallback(this.visemeToMorphTarget['rest'])
     }
-  }
-
-  /**
-   * Process audio frame and update visemes
-   */
-  private processAudioFrame() {
-    if (!this.isProcessing) return
-
-    try {
-      // Process audio with Wawa Lipsync
-      this.lipsync.processAudio()
-      
-      // Get current viseme
-      const currentViseme = this.lipsync.viseme || 'rest'
-      
-      // Map viseme to morph targets
-      const morphTargets = this.visemeToMorphTarget[currentViseme] || this.visemeToMorphTarget['rest']
-      
-      // Trigger callback with blend shapes
-      if (this.onVisemeCallback) {
-        this.onVisemeCallback(morphTargets)
-      }
-    } catch (error) {
-      console.error('Lipsync processing error:', error)
-    }
-
-    // Schedule next frame
-    this.animationFrameId = requestAnimationFrame(() => this.processAudioFrame())
-  }
-
-  /**
-   * Process audio from HTML audio element
-   */
-  processAudioElement(audioElement: HTMLAudioElement) {
-    if (!this.audioContext) {
-      this.audioContext = new AudioContext()
-    }
-
-    try {
-      // Create media element source
-      const source = this.audioContext.createMediaElementSource(audioElement)
-      
-      // Connect to destination (speakers)
-      source.connect(this.audioContext.destination)
-      
-      // Set up for lipsync processing
-      this.setAudioSource(source as any) // Type assertion for compatibility
-      
-      // Start processing when audio plays
-      audioElement.addEventListener('play', () => {
-        this.startProcessing()
-      })
-      
-      // Stop processing when audio ends
-      audioElement.addEventListener('ended', () => {
-        this.stopProcessing()
-      })
-      
-      audioElement.addEventListener('pause', () => {
-        this.stopProcessing()
-      })
-      
-    } catch (error) {
-      console.error('Error setting up audio element for lipsync:', error)
-    }
-  }
-
-  /**
-   * Process audio from Speech Synthesis
-   */
-  processSpeechSynthesis(utterance: SpeechSynthesisUtterance) {
-    // For browser TTS, we'll use word boundary events for basic lip-sync
-    // since we can't directly access the audio stream
     
-    utterance.onboundary = (event) => {
-      if (event.name === 'word' && this.onVisemeCallback) {
-        // Simulate mouth movement for word boundaries
-        const randomVisemes = ['A', 'E', 'I', 'O', 'U']
-        const randomViseme = randomVisemes[Math.floor(Math.random() * randomVisemes.length)]
-        const morphTargets = this.visemeToMorphTarget[randomViseme]
-        
-        this.onVisemeCallback(morphTargets)
-        
-        // Reset after a short delay
-        setTimeout(() => {
-          if (this.onVisemeCallback) {
-            this.onVisemeCallback(this.visemeToMorphTarget['rest'])
-          }
-        }, 100 + Math.random() * 100)
-      }
-    }
-
-    utterance.onstart = () => {
-      this.isProcessing = true
-    }
-
-    utterance.onend = () => {
-      this.stopProcessing()
-    }
-  }
-
-  /**
-   * Get current viseme
-   */
-  getCurrentViseme(): string {
-    return this.lipsync.viseme || 'rest'
+    console.log('Lip-sync processing stopped')
   }
 
   /**
@@ -224,12 +305,37 @@ export class LipsyncManager {
   }
 
   /**
+   * Get current viseme
+   */
+  getCurrentViseme(): VISEMES | 'rest' {
+    return this.lipsync?.viseme || 'rest'
+  }
+
+  /**
+   * Get current audio context
+   */
+  getAudioContext(): AudioContext | null {
+    return this.audioContext
+  }
+
+  /**
    * Cleanup resources
    */
   dispose() {
+    console.log('Disposing lipsync manager')
     this.stopProcessing()
-    this.audioContext = null
-    this.audioSource = null
+    
+    if (this.currentAudio) {
+      this.currentAudio.pause()
+      this.currentAudio = null
+    }
+    
+    if (this.audioContext && this.audioContext.state !== 'closed') {
+      this.audioContext.close()
+      this.audioContext = null
+    }
+    
+    this.lipsync = null
     this.onVisemeCallback = undefined
   }
 }
@@ -240,7 +346,23 @@ let globalLipsyncManager: LipsyncManager | null = null
 /**
  * Get or create global lipsync manager instance
  */
-export function getLipsyncManager(config?: Partial<LipsyncConfig>): LipsyncManager {
+export function getLipsyncManager(config?: Partial<LipsyncConfig>): ILipsyncManager {
+  // Only create on client side
+  if (typeof window === 'undefined') {
+    // Return a mock manager for server-side rendering
+    return {
+      setVisemeCallback: () => {},
+      processSpeechSynthesis: () => {},
+      processAudioFile: async () => {},
+      connectMicrophone: async () => {},
+      stopProcessing: () => {},
+      isActive: () => false,
+      getCurrentViseme: () => 'rest' as VISEMES | 'rest',
+      getAudioContext: () => null,
+      dispose: () => {}
+    }
+  }
+  
   if (!globalLipsyncManager) {
     globalLipsyncManager = new LipsyncManager(config)
   }
@@ -248,7 +370,7 @@ export function getLipsyncManager(config?: Partial<LipsyncConfig>): LipsyncManag
 }
 
 /**
- * Reset global lipsync manager (useful for testing)
+ * Reset global lipsync manager
  */
 export function resetLipsyncManager() {
   if (globalLipsyncManager) {

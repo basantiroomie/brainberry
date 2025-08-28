@@ -5,7 +5,6 @@ import { Canvas } from '@react-three/fiber'
 import { OrbitControls, Environment, useGLTF } from '@react-three/drei'
 import { Object3D } from 'three'
 import { AvatarViewerProps } from '@/types/avatar'
-import { AvatarViewerErrorBoundary } from './AvatarErrorBoundary'
 import { 
   avatarCacheManager, 
   getCachedAvatarModel, 
@@ -217,10 +216,7 @@ const GLBAvatar: React.FC<{
   const handleError = useCallback(async (error: any) => {
     const errorObj = error instanceof Error ? error : new Error(String(error))
     
-    logger.error('GLB avatar loading error', errorObj, 'AVATAR_VIEWER', {
-      url: modelSrc,
-      attempt: retryAttemptRef.current + 1
-    })
+    logger.error(`GLB avatar loading error (attempt ${retryAttemptRef.current + 1}) for ${modelSrc}`, errorObj, 'AVATAR_VIEWER')
 
     // Try retry mechanism
     if (retryAttemptRef.current < 2) { // Max 2 retries
@@ -401,14 +397,14 @@ const AvatarScene: React.FC<{
   // Camera configuration based on mode
   const cameraConfig = {
     full: {
-      position: [0, 1, 3] as [number, number, number],
-      target: [0, 0.5, 0] as [number, number, number],
+      position: [0, 1, 2.5] as [number, number, number], // <-- MATCH THE CHANGE
+      target: [0, 1.0, 0] as [number, number, number], // <-- RAISE THE TARGET from 0.5 to 1.0
       fov: 50
     },
     headshot: {
-      position: [0, 1.65, 0.8] as [number, number, number], // Closer to face, higher up
-      target: [0, 1.65, 0] as [number, number, number], // Focus on face level
-      fov: 25 // Tighter zoom for face-only view
+      position: [0, 1.65, 0.8] as [number, number, number],
+      target: [0, 1.6, 0] as [number, number, number], // <-- TARGET THE HEAD
+      fov: 25
     },
     profile: {
       position: [0, 1.7, 0.6] as [number, number, number], // Very close to face
@@ -643,7 +639,7 @@ export const AvatarViewer: React.FC<AvatarViewerProps> = ({
   onHeadshotCapture,
   className = ''
 }) => {
-  const canvasRef = useRef<HTMLCanvasElement>(null)
+  const canvasRef = useRef<HTMLDivElement>(null)
   const [hasValidationError, setHasValidationError] = useState(false)
   
   // Use safe avatar loading
@@ -767,11 +763,11 @@ export const AvatarViewer: React.FC<AvatarViewerProps> = ({
 
   const cameraConfig = {
     full: {
-      position: [0, 1, 3] as [number, number, number],
+      position: [0, 1, 2.5] as [number, number, number], // <-- Adjusted Z from 3 to 2.5 for a closer default
       fov: 50
     },
     headshot: {
-      position: [0, 1.6, 1.5] as [number, number, number],
+      position: [0, 1.6, 1.2] as [number, number, number], // <-- Adjusted Z from 1.5 to 1.2 for a better headshot
       fov: 35
     },
     profile: {
@@ -804,14 +800,17 @@ export const AvatarViewer: React.FC<AvatarViewerProps> = ({
           onCreated={({ gl, scene, camera }) => {
             try {
               // Safely log WebGL context info with error handling (only in development)
-              if (process.env.NODE_ENV === 'development' && gl && typeof gl.getParameter === 'function') {
-                logger.debug('WebGL context created', 'AVATAR_VIEWER', {
-                  renderer: gl.getParameter(gl.RENDERER),
-                  vendor: gl.getParameter(gl.VENDOR),
-                  version: gl.getParameter(gl.VERSION),
-                  maxTextureSize: gl.getParameter(gl.MAX_TEXTURE_SIZE),
-                  maxVertexAttribs: gl.getParameter(gl.MAX_VERTEX_ATTRIBS)
-                })
+              if (process.env.NODE_ENV === 'development' && gl && gl.getContext) {
+                const webglContext = gl.getContext()
+                if (webglContext && typeof webglContext.getParameter === 'function') {
+                  logger.debug('WebGL context created', 'AVATAR_VIEWER', {
+                    renderer: webglContext.getParameter(webglContext.RENDERER),
+                    vendor: webglContext.getParameter(webglContext.VENDOR),
+                    version: webglContext.getParameter(webglContext.VERSION),
+                    maxTextureSize: webglContext.getParameter(webglContext.MAX_TEXTURE_SIZE),
+                    maxVertexAttribs: webglContext.getParameter(webglContext.MAX_VERTEX_ATTRIBS)
+                  })
+                }
               }
             } catch (error) {
               if (process.env.NODE_ENV === 'development') {

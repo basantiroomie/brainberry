@@ -185,19 +185,19 @@ const AvatarScene: React.FC<{
   // Camera configuration
   const cameraConfig = {
     full: {
-      position: [0, 1, 3] as [number, number, number],
-      target: [0, 0.5, 0] as [number, number, number],
+      position: [0, 1, 2.5] as [number, number, number],
+      target: [0, 1.0, 0] as [number, number, number],
       fov: 50
     },
     headshot: {
-      position: [0, 1.65, 0.8] as [number, number, number],
-      target: [0, 1.65, 0] as [number, number, number],
-      fov: 25
+      position: [0, 1.8, 1.0] as [number, number, number],  // Raised Y to 1.8 for head level
+      target: [0, 1.75, 0] as [number, number, number],     // Target head/face area at 1.75
+      fov: 30
     },
     profile: {
-      position: [0, 1.7, 0.6] as [number, number, number],
-      target: [0, 1.7, 0] as [number, number, number],
-      fov: 20
+      position: [0, 1.8, 0.7] as [number, number, number],  // Raised Y to 1.8, closer for tight shot
+      target: [0, 1.75, 0] as [number, number, number],     // Target head/face area
+      fov: 25
     }
   }
 
@@ -226,8 +226,8 @@ const AvatarScene: React.FC<{
           enablePan={false}
           enableZoom={true}
           enableRotate={true}
-          minDistance={cameraMode === 'profile' ? 0.5 : cameraMode === 'headshot' ? 0.8 : 1.5}
-          maxDistance={cameraMode === 'profile' ? 1.5 : cameraMode === 'headshot' ? 2.5 : 5}
+          minDistance={cameraMode === 'profile' ? 0.6 : cameraMode === 'headshot' ? 0.9 : 1.5}
+          maxDistance={cameraMode === 'profile' ? 1.5 : cameraMode === 'headshot' ? 2.0 : 5}
         />
       )}
       
@@ -280,9 +280,21 @@ export const SimpleAvatarViewer: React.FC<SimpleAvatarViewerProps> = ({
   }
 
   const cameraConfig = {
-    full: { position: [0, 1, 3] as [number, number, number], fov: 50 },
-    headshot: { position: [0, 1.6, 1.5] as [number, number, number], fov: 35 },
-    profile: { position: [0, 1.7, 0.6] as [number, number, number], fov: 20 }
+    full: { 
+      position: [0, 1, 2.5] as [number, number, number], 
+      target: [0, 1.0, 0] as [number, number, number],
+      fov: 50 
+    },
+    headshot: { 
+      position: [0, 1.8, 1.0] as [number, number, number],  // Raised Y to 1.8 for head level, moved back slightly  
+      target: [0, 1.75, 0] as [number, number, number],     // Target head/face area at 1.75
+      fov: 30 
+    },
+    profile: { 
+      position: [0, 1.8, 0.7] as [number, number, number],  // Raised Y to 1.8, closer for tight shot
+      target: [0, 1.75, 0] as [number, number, number],     // Target head/face area
+      fov: 25 
+    }
   }
 
   const config = cameraConfig[cameraMode]
@@ -298,8 +310,9 @@ export const SimpleAvatarViewer: React.FC<SimpleAvatarViewerProps> = ({
             powerPreference: 'default',
             failIfMajorPerformanceCaveat: false
           }}
-          onCreated={({ gl }) => {
-            // WebGL context ready
+          onCreated={({ camera, gl }) => {
+            // Set camera to look at the target point
+            camera.lookAt(config.target[0], config.target[1], config.target[2])
           }}
         >
           <Suspense fallback={null}>
