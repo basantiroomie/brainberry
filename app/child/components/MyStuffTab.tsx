@@ -1,12 +1,8 @@
 import { Crown, Trophy, MessageCircle, Star, Award, Medal, Shield, Gem, ArrowLeft } from "lucide-react"
 import { useEffect, useState } from "react"
 import Image from "next/image"
-import MyAvatarTab from "../Games/MyAvatarTab"
 import ChatAssistant from "./ChatAssistant"
 import { SimpleAvatarViewer } from "@/components/SimpleAvatarViewer"
-import ChildAvatarDisplay from "./ChildAvatarDisplay"
-import { TextAvatarChat } from "./TextAvatarChat"
-import { VoiceAvatarChat } from "./VoiceAvatarChat"
 import AvatarChatCoordinator from "@/components/AvatarChatCoordinator"
 
 interface ChildProgress {
@@ -261,7 +257,7 @@ export default function MyStuffTab({ childProfile }: MyStuffTabProps) {
               />
             ) : (
               <Image
-                src="/images/avatar-showcase.jpg"
+                src="/landingpage.jpg"
                 alt="My Avatar"
                 fill
                 className="object-cover"
@@ -306,7 +302,7 @@ export default function MyStuffTab({ childProfile }: MyStuffTabProps) {
           {/* Chat Image */}
           <div className="relative h-48 bg-gradient-to-br from-green-100 to-teal-100 border-b-4 border-black">
             <Image
-              src="/images/chat-assistant.jpg"
+              src="/diverse-children-educational-games.png"
               alt="Chat Assistant"
               fill
               className="object-cover"
@@ -352,7 +348,7 @@ export default function MyStuffTab({ childProfile }: MyStuffTabProps) {
           {/* Trophy Image */}
           <div className="relative h-48 bg-gradient-to-br from-yellow-100 to-orange-100 border-b-4 border-black">
             <Image
-              src="/images/trophy-room.jpg"
+              src="/happy-child-achievement.png"
               alt="Trophy Room"
               fill
               className="object-cover"

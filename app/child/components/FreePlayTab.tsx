@@ -41,7 +41,7 @@ export default function FreePlayTab({ childProfile }: FreePlayTabProps) {
           {/* Music Image */}
           <div className="relative h-48 bg-gradient-to-br from-purple-100 to-pink-100 border-b-4 border-black">
             <Image
-              src="/images/music-maker.jpg"
+              src="/marisa-howenstine-Cq9slNxV8YU-unsplash.jpg"
               alt="Music Maker"
               fill
               className="object-cover"
@@ -84,7 +84,7 @@ export default function FreePlayTab({ childProfile }: FreePlayTabProps) {
           {/* Breathing Image */}
           <div className="relative h-48 bg-gradient-to-br from-green-100 to-blue-100 border-b-4 border-black">
             <Image
-              src="/images/breathing-buddy.jpg"
+              src="/ashton-bingham-SAHBl2UpXco-unsplash.jpg"
               alt="Breathing Buddy"
               fill
               className="object-cover"

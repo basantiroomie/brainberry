@@ -182,35 +182,35 @@ export default function PlayTab({ childId, childProfile }: PlayTabProps) {
       case 'memory':
       case 'matching_cards':
       case 'memory_cards':
-        console.log('→ Using diverse-children-educational-games.png for memory/matching')
-        return '/diverse-children-educational-games.png'
+        console.log('→ Using yuri-li-p0hDztR46cw-unsplash.jpg for memory/matching')
+        return '/yuri-li-p0hDztR46cw-unsplash.jpg'
       case 'sorting':
       case 'category_sorting':
-        console.log('→ Using therapy-gaming-tablet.png for sorting')
-        return '/therapy-gaming-tablet.png'
+        console.log('→ Using alan-rodriguez-N17Nkbsc-zY-unsplash.jpg for sorting')
+        return '/alan-rodriguez-N17Nkbsc-zY-unsplash.jpg'
       case 'expression':
       case 'emotions':
-        console.log('→ Using happy-child-achievement.png for expression')
-        return '/happy-child-achievement.png'
+        console.log('→ Using sigmund-OV44gxH71DU-unsplash.jpg for expression')
+        return '/sigmund-OV44gxH71DU-unsplash.jpg'
       case 'puzzle':
       case 'puzzles':
-        console.log('→ Using parent-therapist-brainberry.png for puzzle')
-        return '/parent-therapist-brainberry.png'
+        console.log('→ Using marisa-howenstine-Cq9slNxV8YU-unsplash.jpg for puzzle')
+        return '/marisa-howenstine-Cq9slNxV8YU-unsplash.jpg'
       case 'math':
       case 'mathematics':
-        console.log('→ Using landingpage.jpg for math')
-        return '/landingpage.jpg'
+        console.log('→ Using therapy-gaming-tablet.png for math')
+        return '/therapy-gaming-tablet.png'
       case 'reading':
       case 'language':
-        console.log('→ Using placeholder.jpg for reading')
-        return '/placeholder.jpg'
+        console.log('→ Using ashton-bingham-SAHBl2UpXco-unsplash.jpg for reading')
+        return '/ashton-bingham-SAHBl2UpXco-unsplash.jpg'
       case 'creativity':
       case 'creative':
-        console.log('→ Using diverse-children-educational-games.png for creativity')
-        return '/diverse-children-educational-games.png'
-      default:
-        console.log(`→ Using default happy-child-achievement.png for unknown type: ${gameType}`)
+        console.log('→ Using happy-child-achievement.png for creativity')
         return '/happy-child-achievement.png'
+      default:
+        console.log(`→ Using default placeholder.jpg for unknown type: ${gameType}`)
+        return '/placeholder.jpg'
     }
   }
 
@@ -223,69 +223,69 @@ export default function PlayTab({ childId, childProfile }: PlayTabProps) {
     
     // Handle Memory & Cognition categories
     if (categoryLower.includes('memory') || categoryLower.includes('cognition')) {
-      console.log('→ Using diverse-children-educational-games.png for memory/cognition mold')
-      return '/diverse-children-educational-games.png'
+      console.log('→ Using yuri-li-p0hDztR46cw-unsplash.jpg for memory/cognition mold')
+      return '/yuri-li-p0hDztR46cw-unsplash.jpg'
     }
     
     // Handle Creativity categories
     if (categoryLower.includes('creativity') || categoryLower.includes('creative')) {
-      console.log('→ Using happy-child-achievement.png for creativity mold')
-      return '/happy-child-achievement.png'
+      console.log('→ Using diverse-children-educational-games.png for creativity mold')
+      return '/diverse-children-educational-games.png'
     }
     
     // Handle Logic & Learning categories
     if (categoryLower.includes('logic') || categoryLower.includes('learning')) {
-      console.log('→ Using therapy-gaming-tablet.png for logic/learning mold')
-      return '/therapy-gaming-tablet.png'
+      console.log('→ Using alan-rodriguez-N17Nkbsc-zY-unsplash.jpg for logic/learning mold')
+      return '/alan-rodriguez-N17Nkbsc-zY-unsplash.jpg'
     }
     
     // Handle Language categories
     if (categoryLower.includes('language')) {
-      console.log('→ Using parent-therapist-brainberry.png for language mold')
-      return '/parent-therapist-brainberry.png'
+      console.log('→ Using ashton-bingham-SAHBl2UpXco-unsplash.jpg for language mold')
+      return '/ashton-bingham-SAHBl2UpXco-unsplash.jpg'
     }
     
     // Handle Math categories
     if (categoryLower.includes('math')) {
-      console.log('→ Using landingpage.jpg for math mold')
-      return '/landingpage.jpg'
+      console.log('→ Using therapy-gaming-tablet.png for math mold')
+      return '/therapy-gaming-tablet.png'
     }
     
     // Handle Emotional & Social categories
     if (categoryLower.includes('emotional') || categoryLower.includes('emotion') || categoryLower.includes('social')) {
-      console.log('→ Using happy-child-achievement.png for emotional/social mold')
-      return '/happy-child-achievement.png'
+      console.log('→ Using sigmund-OV44gxH71DU-unsplash.jpg for emotional/social mold')
+      return '/sigmund-OV44gxH71DU-unsplash.jpg'
     }
     
     // Handle Problem Solving categories
     if (categoryLower.includes('problem') || categoryLower.includes('solving')) {
-      console.log('→ Using therapy-gaming-tablet.png for problem solving mold')
-      return '/therapy-gaming-tablet.png'
+      console.log('→ Using marisa-howenstine-Cq9slNxV8YU-unsplash.jpg for problem solving mold')
+      return '/marisa-howenstine-Cq9slNxV8YU-unsplash.jpg'
     }
     
     // Exact matches for backwards compatibility
     switch (categoryLower) {
       case 'memory':
-        console.log('→ Using diverse-children-educational-games.png for memory mold')
-        return '/diverse-children-educational-games.png'
+        console.log('→ Using yuri-li-p0hDztR46cw-unsplash.jpg for memory mold')
+        return '/yuri-li-p0hDztR46cw-unsplash.jpg'
       case 'creativity':
-        console.log('→ Using happy-child-achievement.png for creativity mold')
-        return '/happy-child-achievement.png'
+        console.log('→ Using diverse-children-educational-games.png for creativity mold')
+        return '/diverse-children-educational-games.png'
       case 'problem solving':
-        console.log('→ Using therapy-gaming-tablet.png for problem solving mold')
-        return '/therapy-gaming-tablet.png'
+        console.log('→ Using marisa-howenstine-Cq9slNxV8YU-unsplash.jpg for problem solving mold')
+        return '/marisa-howenstine-Cq9slNxV8YU-unsplash.jpg'
       case 'language':
-        console.log('→ Using parent-therapist-brainberry.png for language mold')
-        return '/parent-therapist-brainberry.png'
+        console.log('→ Using ashton-bingham-SAHBl2UpXco-unsplash.jpg for language mold')
+        return '/ashton-bingham-SAHBl2UpXco-unsplash.jpg'
       case 'math':
-        console.log('→ Using landingpage.jpg for math mold')
-        return '/landingpage.jpg'
+        console.log('→ Using therapy-gaming-tablet.png for math mold')
+        return '/therapy-gaming-tablet.png'
       case 'emotional':
-        console.log('→ Using happy-child-achievement.png for emotional mold')
-        return '/happy-child-achievement.png'
+        console.log('→ Using sigmund-OV44gxH71DU-unsplash.jpg for emotional mold')
+        return '/sigmund-OV44gxH71DU-unsplash.jpg'
       default:
-        console.log(`→ Using default placeholder.jpg for unknown category: ${category}`)
-        return '/placeholder.jpg'
+        console.log(`→ Using default landingpage.jpg for unknown category: ${category}`)
+        return '/landingpage.jpg'
     }
   }
 
@@ -553,7 +553,7 @@ export default function PlayTab({ childId, childProfile }: PlayTabProps) {
                 {/* Game Image */}
                 <div className="relative h-48 bg-gradient-to-br from-pink-100 to-orange-100 border-b-4 border-black">
                   <Image
-                    src="/diverse-children-educational-games.png"
+                    src="/parent-therapist-brainberry.png"
                     alt="Canvas Coloring Game"
                     fill
                     className="object-cover"
