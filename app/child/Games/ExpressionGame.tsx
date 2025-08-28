@@ -2,7 +2,10 @@
 
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { ArrowLeft, Play, RotateCcw, Trophy } from 'lucide-react'
-import * as faceapi from 'face-api.js'
+import dynamic from 'next/dynamic'
+
+// Dynamically import face-api to avoid SSR issues
+const loadFaceApi = () => import('face-api.js')
 
 interface ExpressionGameProps {
   onBack: () => void
@@ -40,17 +43,21 @@ export default function ExpressionGame({ onBack }: ExpressionGameProps) {
   const videoRef = useRef<HTMLVideoElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const detectionIntervalRef = useRef<NodeJS.Timeout | null>(null)
+  const [faceapi, setFaceapi] = useState<any>(null)
 
   // Initialize face-api.js models
   useEffect(() => {
     const loadModels = async () => {
       try {
+        const faceApiModule = await loadFaceApi()
+        setFaceapi(faceApiModule)
+        
         const MODEL_URL = '/models'
         
         await Promise.all([
-          faceapi.nets.ssdMobilenetv1.loadFromUri(MODEL_URL),
-          faceapi.nets.faceExpressionNet.loadFromUri(MODEL_URL),
-          faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL)
+          faceApiModule.nets.ssdMobilenetv1.loadFromUri(MODEL_URL),
+          faceApiModule.nets.faceExpressionNet.loadFromUri(MODEL_URL),
+          faceApiModule.nets.faceLandmark68Net.loadFromUri(MODEL_URL)
         ])
         
         setFaceApiLoaded(true)
@@ -93,7 +100,7 @@ export default function ExpressionGame({ onBack }: ExpressionGameProps) {
 
   // Establish neutral facial expression baseline
   const establishNeutralBaseline = useCallback(async () => {
-    if (!faceApiLoaded || !videoRef.current) return
+    if (!faceApiLoaded || !videoRef.current || !faceapi) return
 
     try {
       const detections = await faceapi
@@ -106,7 +113,7 @@ export default function ExpressionGame({ onBack }: ExpressionGameProps) {
     } catch (error) {
       console.error('Error establishing neutral baseline:', error)
     }
-  }, [faceApiLoaded])
+  }, [faceApiLoaded, faceapi])
 
   // Load static expression images
   const loadExpressionImages = async () => {
@@ -160,7 +167,7 @@ export default function ExpressionGame({ onBack }: ExpressionGameProps) {
 
   // Detect facial expressions in real-time
   const detectExpression = useCallback(async () => {
-    if (!videoRef.current || !isDetecting || !faceApiLoaded) return
+    if (!videoRef.current || !isDetecting || !faceApiLoaded || !faceapi) return
 
     try {
       const detections = await faceapi
@@ -211,7 +218,7 @@ export default function ExpressionGame({ onBack }: ExpressionGameProps) {
       console.error('Error detecting expression:', error)
       setCurrentDetectedExpression('detection error')
     }
-  }, [faceApiLoaded, isDetecting, expressions, currentExpressionIndex, neutralBaseline])
+  }, [faceApiLoaded, faceapi, isDetecting, expressions, currentExpressionIndex, neutralBaseline])
 
   // Calculate expression intensity relative to baseline
   const calculateExpressionIntensity = (

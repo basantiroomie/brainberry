@@ -8,3 +8,10 @@ export { MoldValidationPanel } from './MoldValidationPanel'
 export { MoldLibrary } from './MoldLibrary'
 export { QuickStartTutorial } from './QuickStartTutorial'
 export { MoldStudioBuilder } from './MoldStudioBuilder'
+export { EnhancedVoiceAvatarChatbot } from './EnhancedVoiceAvatarChatbot'
+
+// New Chat System Components
+export { AvatarChatCoordinator } from './AvatarChatCoordinator'
+export { AvatarChatSelector } from './AvatarChatSelector'
+export { AvatarTextChat } from './AvatarTextChat'
+export { AvatarVoiceChat } from './AvatarVoiceChat'

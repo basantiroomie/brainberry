@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react'
 import { SimpleAvatarViewer } from '@/components/SimpleAvatarViewer'
-import { Enhanced3DAvatarChatbot } from '@/components/Enhanced3DAvatarChatbot'
+import { CleanVoiceAvatarChat } from '@/components/CleanVoiceAvatarChat'
 import { ChildAvatarDisplay } from '@/app/child/components/ChildAvatarDisplay'
 import { AvatarStatusIndicator } from '@/components/AvatarStatusIndicator'
 import { AvatarUrlValidator } from '@/lib/avatar-url-validator'
@@ -159,13 +159,17 @@ export default function TestAvatarPage() {
         {/* 3D Avatar Chatbot */}
         {(testAvatarUrl || childProfile?.avatar_url) && childProfile && (
           <div className="bg-white p-6 rounded-lg shadow-md">
-            <h2 className="text-xl font-bold mb-4">3D Avatar Chatbot</h2>
-            <div className="h-96 border border-gray-300 rounded-lg overflow-hidden">
-              <Enhanced3DAvatarChatbot
+            <h2 className="text-xl font-bold mb-4">🎭 Voice Avatar Chat System</h2>
+            <div className="mb-3 text-sm text-gray-600">
+              <p><strong>Text Mode:</strong> Gemini 2.0-flash-exp + Gemini TTS (with browser fallback)</p>
+              <p><strong>Voice Mode:</strong> Gemini Live 2.5-flash-preview with speech recognition</p>
+            </div>
+            <div className="h-[600px] border border-gray-300 rounded-lg overflow-hidden">
+              <CleanVoiceAvatarChat
                 avatarUrl={testAvatarUrl || childProfile.avatar_url}
                 childId={childProfile.id}
                 accessCode={childProfile.access_code}
-                onMessageSent={(message) => {
+                onMessageSent={(message: string) => {
                   console.log('Message sent to avatar:', message)
                 }}
               />

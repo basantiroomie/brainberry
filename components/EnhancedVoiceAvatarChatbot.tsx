@@ -5,7 +5,7 @@ import { SimpleAvatarViewer } from '@/components/SimpleAvatarViewer'
 import { getLipsyncManager } from '@/lib/lipsync-manager'
 import { BlendShapeTargets } from '@/types/avatar'
 import { Object3D, Mesh, SkinnedMesh } from 'three'
-import { Mic, Type, Volume2, VolumeX, Send } from 'lucide-react'
+import { Mic, MicOff, Type, Volume2, VolumeX, Send } from 'lucide-react'
 
 interface ChatMessage {
   id: string
@@ -16,18 +16,18 @@ interface ChatMessage {
   audioUrl?: string
 }
 
-interface Enhanced3DAvatarChatbotProps {
+interface EnhancedVoiceAvatarChatbotProps {
   avatarUrl: string
-  childId?: string
+  childId: string
   accessCode?: string
   onMessageSent?: (message: string) => void
 }
 
 type ChatMode = 'text' | 'voice'
 
-export const Enhanced3DAvatarChatbot: React.FC<Enhanced3DAvatarChatbotProps> = ({
+export const EnhancedVoiceAvatarChatbot: React.FC<EnhancedVoiceAvatarChatbotProps> = ({
   avatarUrl,
-  childId = "test-child-123",
+  childId,
   accessCode,
   onMessageSent
 }) => {
@@ -37,6 +37,7 @@ export const Enhanced3DAvatarChatbot: React.FC<Enhanced3DAvatarChatbotProps> = (
   const [inputMessage, setInputMessage] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [isSpeaking, setIsSpeaking] = useState(false)
+  const [isRecording, setIsRecording] = useState(false)
   const [isListening, setIsListening] = useState(false)
   const [currentBlendShapes, setCurrentBlendShapes] = useState<Partial<BlendShapeTargets>>({})
   const [avatarLoaded, setAvatarLoaded] = useState(false)
@@ -46,10 +47,12 @@ export const Enhanced3DAvatarChatbot: React.FC<Enhanced3DAvatarChatbotProps> = (
   const avatarModelRef = useRef<Object3D | null>(null)
   const lipsyncManagerRef = useRef(getLipsyncManager())
   const speechSynthesisRef = useRef<SpeechSynthesisUtterance | null>(null)
-  const recognitionRef = useRef<any>(null)
-  const sendMessageRef = useRef<((message: string) => void) | null>(null)
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null)
+  const audioChunksRef = useRef<Blob[]>([])
+  const recognitionRef = useRef<any>(null) // Using 'any' for cross-browser compatibility
   const idleAnimationRef = useRef<number | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
+  const audioContextRef = useRef<AudioContext | null>(null)
 
   // TTS Configuration
   const ttsConfig = {
@@ -63,15 +66,6 @@ export const Enhanced3DAvatarChatbot: React.FC<Enhanced3DAvatarChatbotProps> = (
       'Samantha'
     ]
   }
-
-  // Scroll to bottom of messages
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }
-
-  useEffect(() => {
-    scrollToBottom()
-  }, [messages])
 
   // Initialize speech recognition
   useEffect(() => {
@@ -98,9 +92,7 @@ export const Enhanced3DAvatarChatbot: React.FC<Enhanced3DAvatarChatbotProps> = (
             setInputMessage(transcript)
             setIsListening(false)
             if (transcript.trim()) {
-              // Force voice mode to use voice-live endpoint
-              console.log('Voice recognition complete, sending to voice-live endpoint:', transcript.trim())
-              sendVoiceMessage(transcript.trim())
+              sendMessage(transcript.trim())
             }
           }
         }
@@ -115,13 +107,31 @@ export const Enhanced3DAvatarChatbot: React.FC<Enhanced3DAvatarChatbotProps> = (
         }
       }
     }
-  }, []) // Remove sendMessage dependency
+  }, [])
+
+  // Initialize audio context for voice processing
+  useEffect(() => {
+    audioContextRef.current = new ((window as any).AudioContext || (window as any).webkitAudioContext)()
+    return () => {
+      if (audioContextRef.current) {
+        audioContextRef.current.close()
+      }
+    }
+  }, [])
+
+  // Scroll to bottom of messages
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }
+
+  useEffect(() => {
+    scrollToBottom()
+  }, [messages])
 
   // Initialize lipsync manager
   useEffect(() => {
     const lipsyncManager = lipsyncManagerRef.current
     
-    // Set up viseme callback to update avatar morph targets
     lipsyncManager.setVisemeCallback((blendShapes: Partial<BlendShapeTargets>) => {
       setCurrentBlendShapes(blendShapes)
       applyBlendShapesToAvatar(blendShapes)
@@ -136,13 +146,11 @@ export const Enhanced3DAvatarChatbot: React.FC<Enhanced3DAvatarChatbotProps> = (
   const applyBlendShapesToAvatar = useCallback((blendShapes: Partial<BlendShapeTargets>) => {
     if (!avatarModelRef.current) return
 
-    // Find the avatar mesh with morph targets
     avatarModelRef.current.traverse((child: any) => {
       if (child instanceof Mesh || child instanceof SkinnedMesh) {
         const mesh = child as Mesh | SkinnedMesh
         
         if (mesh.morphTargetInfluences && mesh.morphTargetDictionary) {
-          // Apply each blend shape to the corresponding morph target
           Object.entries(blendShapes).forEach(([targetName, value]) => {
             const index = mesh.morphTargetDictionary![targetName]
             if (index !== undefined && typeof value === 'number' && mesh.morphTargetInfluences) {
@@ -158,27 +166,17 @@ export const Enhanced3DAvatarChatbot: React.FC<Enhanced3DAvatarChatbotProps> = (
   const handleAvatarLoad = useCallback((model: Object3D) => {
     avatarModelRef.current = model
     setAvatarLoaded(true)
-    console.log('3D Avatar loaded successfully for chatbot')
-    
-    // Start idle animations
+    console.log('3D Avatar loaded successfully for voice chatbot')
     startIdleAnimations()
   }, [])
 
-  // Handle avatar load error
-  const handleAvatarError = useCallback((error: any) => {
-    console.error('3D Avatar loading error:', error)
-    setAvatarLoaded(false)
-    // Continue without avatar - chat will still work without 3D avatar
-  }, [])
-
-  // Start idle animations (blinking, subtle movements)
+  // Start idle animations
   const startIdleAnimations = useCallback(() => {
     if (isSpeaking) return
 
     const performIdleAnimation = () => {
       if (isSpeaking) return
 
-      // Random blink animation
       if (Math.random() < 0.3) {
         const blinkShapes = {
           eyeBlinkLeft: 1.0,
@@ -187,7 +185,6 @@ export const Enhanced3DAvatarChatbot: React.FC<Enhanced3DAvatarChatbotProps> = (
         
         applyBlendShapesToAvatar(blinkShapes)
         
-        // Reset blink after short duration
         setTimeout(() => {
           if (!isSpeaking) {
             applyBlendShapesToAvatar({
@@ -198,13 +195,11 @@ export const Enhanced3DAvatarChatbot: React.FC<Enhanced3DAvatarChatbotProps> = (
         }, 150)
       }
 
-      // Schedule next idle animation
       if (!isSpeaking) {
         idleAnimationRef.current = window.setTimeout(performIdleAnimation, 2000 + Math.random() * 3000)
       }
     }
 
-    // Start idle animation loop
     idleAnimationRef.current = window.setTimeout(performIdleAnimation, 1000)
   }, [isSpeaking, applyBlendShapesToAvatar])
 
@@ -220,95 +215,14 @@ export const Enhanced3DAvatarChatbot: React.FC<Enhanced3DAvatarChatbotProps> = (
   const getBestTTSVoice = useCallback(() => {
     const voices = speechSynthesis.getVoices()
     
-    // Try to find preferred voices
     for (const preferredVoice of ttsConfig.preferredVoices) {
       const voice = voices.find(v => v.name.includes(preferredVoice))
       if (voice) return voice
     }
     
-    // Fallback to first English voice
     const englishVoice = voices.find(v => v.lang.startsWith('en'))
     return englishVoice || voices[0]
   }, [])
-
-  // Speak text using TTS with lip-sync
-  const speakText = useCallback(async (text: string, facialExpression?: string) => {
-    console.log('=== SPEAK TEXT DEBUG ===')
-    console.log('Text to speak:', text)
-    console.log('Is speaking:', isSpeaking)
-    console.log('Available voices:', speechSynthesis.getVoices().length)
-    
-    if (isSpeaking) {
-      // Cancel current speech
-      speechSynthesis.cancel()
-    }
-
-    setIsSpeaking(true)
-    stopIdleAnimations()
-
-    return new Promise<void>((resolve, reject) => {
-      try {
-        const utterance = new SpeechSynthesisUtterance(text)
-        const voice = getBestTTSVoice()
-        
-        console.log('Selected voice:', voice?.name || 'default')
-        
-        if (voice) {
-          utterance.voice = voice
-        }
-        
-        utterance.rate = ttsConfig.rate
-        utterance.pitch = ttsConfig.pitch
-        utterance.volume = ttsConfig.volume
-
-        console.log('TTS Config:', { rate: utterance.rate, pitch: utterance.pitch, volume: utterance.volume })
-
-        // Set up lipsync processing for speech synthesis
-        lipsyncManagerRef.current.processSpeechSynthesis(utterance)
-
-        utterance.onstart = () => {
-          console.log('✅ TTS Started speaking:', text.substring(0, 50))
-        }
-
-        utterance.onend = () => {
-          console.log('✅ TTS Finished speaking')
-          setIsSpeaking(false)
-          
-          // Reset to neutral expression
-          const neutralShapes = {
-            jawOpen: 0.0,
-            mouthSmile: facialExpression === 'smile' ? 0.3 : 0.0,
-            mouthFunnel: 0.0
-          }
-          applyBlendShapesToAvatar(neutralShapes)
-          
-          // Restart idle animations
-          startIdleAnimations()
-          
-          resolve()
-        }
-
-        utterance.onerror = (event) => {
-          console.error('TTS error:', event.error)
-          setIsSpeaking(false)
-          startIdleAnimations()
-          reject(new Error(`TTS error: ${event.error}`))
-        }
-
-        speechSynthesisRef.current = utterance
-        
-        console.log('🔊 About to call speechSynthesis.speak()')
-        speechSynthesis.speak(utterance)
-        console.log('🔊 speechSynthesis.speak() called')
-
-      } catch (error) {
-        console.error('Failed to initialize TTS:', error)
-        setIsSpeaking(false)
-        startIdleAnimations()
-        reject(error)
-      }
-    })
-  }, [isSpeaking, getBestTTSVoice, applyBlendShapesToAvatar, startIdleAnimations, stopIdleAnimations])
 
   // Play audio with lip-sync (for Gemini TTS responses)
   const playAudioWithLipSync = useCallback(async (audioUrl: string, text: string) => {
@@ -320,10 +234,18 @@ export const Enhanced3DAvatarChatbot: React.FC<Enhanced3DAvatarChatbotProps> = (
     try {
       const audio = new Audio(audioUrl)
       
-      audio.onplay = () => {
-        console.log('Playing Gemini TTS audio with lip sync')
-        // Simple lip sync animation based on audio duration
-        const animateToAudio = () => {
+      // Create audio context for lip-sync analysis
+      if (audioContextRef.current) {
+        const source = audioContextRef.current.createMediaElementSource(audio)
+        const analyser = audioContextRef.current.createAnalyser()
+        source.connect(analyser)
+        analyser.connect(audioContextRef.current.destination)
+        
+        // Analyze audio for lip-sync
+        const bufferLength = analyser.frequencyBinCount
+        const dataArray = new Uint8Array(bufferLength)
+        
+        const updateLipSync = () => {
           if (audio.paused || audio.ended) {
             setIsSpeaking(false)
             applyBlendShapesToAvatar({
@@ -335,29 +257,21 @@ export const Enhanced3DAvatarChatbot: React.FC<Enhanced3DAvatarChatbotProps> = (
             return
           }
           
-          // Simple mouth movement animation
-          const time = audio.currentTime
-          const intensity = Math.sin(time * 10) * 0.5 + 0.5 // Oscillate between 0 and 1
+          analyser.getByteFrequencyData(dataArray)
+          const volume = dataArray.reduce((sum, value) => sum + value, 0) / bufferLength
           
+          // Convert volume to mouth movements
+          const intensity = Math.min(volume / 50, 1.0)
           applyBlendShapesToAvatar({
             jawOpen: intensity * 0.7,
             mouthSmile: intensity * 0.3,
             mouthFunnel: intensity * 0.4
           })
           
-          requestAnimationFrame(animateToAudio)
+          requestAnimationFrame(updateLipSync)
         }
-        animateToAudio()
-      }
-      
-      audio.onended = () => {
-        setIsSpeaking(false)
-        applyBlendShapesToAvatar({
-          jawOpen: 0.0,
-          mouthSmile: 0.0,
-          mouthFunnel: 0.0
-        })
-        startIdleAnimations()
+        
+        audio.onplay = () => updateLipSync()
       }
       
       await audio.play()
@@ -366,12 +280,170 @@ export const Enhanced3DAvatarChatbot: React.FC<Enhanced3DAvatarChatbotProps> = (
       console.error('Audio playback error:', error)
       setIsSpeaking(false)
       startIdleAnimations()
-      // Fallback to regular TTS
-      await speakText(text, 'neutral')
     }
-  }, [audioEnabled, avatarLoaded, applyBlendShapesToAvatar, startIdleAnimations, stopIdleAnimations, speakText])
+  }, [audioEnabled, avatarLoaded, applyBlendShapesToAvatar, startIdleAnimations, stopIdleAnimations])
 
-  // Send message to chat API - simplified for direct Gemini Live
+  // Speak text using browser TTS with lip-sync
+  const speakText = useCallback(async (text: string, facialExpression?: string) => {
+    if (!audioEnabled || isSpeaking) {
+      if (isSpeaking) speechSynthesis.cancel()
+    }
+
+    setIsSpeaking(true)
+    stopIdleAnimations()
+
+    return new Promise<void>((resolve, reject) => {
+      try {
+        const utterance = new SpeechSynthesisUtterance(text)
+        const voice = getBestTTSVoice()
+        
+        if (voice) {
+          utterance.voice = voice
+        }
+        
+        utterance.rate = ttsConfig.rate
+        utterance.pitch = ttsConfig.pitch
+        utterance.volume = ttsConfig.volume
+
+        lipsyncManagerRef.current.processSpeechSynthesis(utterance)
+
+        utterance.onstart = () => {
+          console.log('Avatar started speaking:', text.substring(0, 50))
+        }
+
+        utterance.onend = () => {
+          setIsSpeaking(false)
+          
+          const neutralShapes = {
+            jawOpen: 0.0,
+            mouthSmile: facialExpression === 'smile' ? 0.3 : 0.0,
+            mouthFunnel: 0.0
+          }
+          applyBlendShapesToAvatar(neutralShapes)
+          startIdleAnimations()
+          resolve()
+        }
+
+        utterance.onerror = (event) => {
+          console.error('TTS error:', event.error)
+          setIsSpeaking(false)
+          startIdleAnimations()
+          reject(new Error(`TTS error: ${event.error}`))
+        }
+
+        speechSynthesisRef.current = utterance
+        speechSynthesis.speak(utterance)
+
+      } catch (error) {
+        console.error('Failed to initialize TTS:', error)
+        setIsSpeaking(false)
+        startIdleAnimations()
+        reject(error)
+      }
+    })
+  }, [audioEnabled, isSpeaking, getBestTTSVoice, applyBlendShapesToAvatar, startIdleAnimations, stopIdleAnimations])
+
+  // Start voice recording
+  const startRecording = useCallback(async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      const mediaRecorder = new MediaRecorder(stream)
+      mediaRecorderRef.current = mediaRecorder
+      audioChunksRef.current = []
+
+      mediaRecorder.ondataavailable = (event) => {
+        audioChunksRef.current.push(event.data)
+      }
+
+      mediaRecorder.onstop = async () => {
+        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/wav' })
+        await sendVoiceMessage(audioBlob)
+        stream.getTracks().forEach(track => track.stop())
+      }
+
+      mediaRecorder.start()
+      setIsRecording(true)
+    } catch (error) {
+      console.error('Failed to start recording:', error)
+    }
+  }, [])
+
+  // Stop voice recording
+  const stopRecording = useCallback(() => {
+    if (mediaRecorderRef.current && isRecording) {
+      mediaRecorderRef.current.stop()
+      setIsRecording(false)
+    }
+  }, [isRecording])
+
+  // Send voice message to API
+  const sendVoiceMessage = useCallback(async (audioBlob: Blob) => {
+    setIsLoading(true)
+
+    try {
+      const formData = new FormData()
+      formData.append('audio', audioBlob)
+      formData.append('childId', childId)
+      if (accessCode) formData.append('accessCode', accessCode)
+
+      const response = await fetch('/api/chat/voice', {
+        method: 'POST',
+        body: formData
+      })
+
+      if (!response.ok) {
+        throw new Error(`Voice chat API error: ${response.status}`)
+      }
+
+      const data = await response.json()
+      
+      const userMessage: ChatMessage = {
+        id: Date.now().toString(),
+        text: data.transcription || '[Voice message]',
+        sender: 'child',
+        timestamp: new Date()
+      }
+
+      const avatarMessage: ChatMessage = {
+        id: (Date.now() + 1).toString(),
+        text: data.text,
+        sender: 'avatar',
+        timestamp: new Date(),
+        isAudioPlaying: true,
+        audioUrl: data.audioUrl
+      }
+
+      setMessages(prev => [...prev, userMessage, avatarMessage])
+      
+      if (avatarLoaded && audioEnabled) {
+        if (data.audioUrl) {
+          await playAudioWithLipSync(data.audioUrl, data.text)
+        } else {
+          await speakText(data.text, data.facialExpression)
+        }
+      }
+
+    } catch (error) {
+      console.error('Voice chat error:', error)
+      
+      const errorMessage: ChatMessage = {
+        id: (Date.now() + 1).toString(),
+        text: "I'm having trouble with voice chat right now. Try typing your message instead!",
+        sender: 'avatar',
+        timestamp: new Date()
+      }
+      
+      setMessages(prev => [...prev, errorMessage])
+      
+      if (avatarLoaded && audioEnabled) {
+        await speakText(errorMessage.text, 'neutral')
+      }
+    } finally {
+      setIsLoading(false)
+    }
+  }, [childId, accessCode, avatarLoaded, audioEnabled, playAudioWithLipSync, speakText])
+
+  // Send text message
   const sendMessage = useCallback(async (message: string) => {
     if (!message.trim() || isLoading) return
 
@@ -388,21 +460,7 @@ export const Enhanced3DAvatarChatbot: React.FC<Enhanced3DAvatarChatbotProps> = (
     onMessageSent?.(message.trim())
 
     try {
-      // Force debug the chatMode state
-      console.log('=== DEBUG VOICE MODE ===')
-      console.log('chatMode state:', chatMode)
-      console.log('typeof chatMode:', typeof chatMode)
-      console.log('chatMode === "voice":', chatMode === 'voice')
-      console.log('chatMode === "text":', chatMode === 'text')
-      
-      // Use different endpoints for text vs voice mode
-      const endpoint = chatMode === 'voice' ? '/api/chat/voice-live' : '/api/chat'
-      
-      console.log(`Current chatMode: ${chatMode}`)
-      console.log(`Selected endpoint: ${endpoint}`)
-      console.log(`Sending message to ${endpoint} in ${chatMode} mode:`, message.substring(0, 50))
-      console.log('=== END DEBUG ===')
-      
+      const endpoint = chatMode === 'voice' ? '/api/chat/voice-text' : '/api/chat'
       const response = await fetch(endpoint, {
         method: 'POST',
         headers: {
@@ -417,19 +475,10 @@ export const Enhanced3DAvatarChatbot: React.FC<Enhanced3DAvatarChatbotProps> = (
       })
 
       if (!response.ok) {
-        throw new Error(`Chat API error: ${response.status} ${response.statusText}`)
-      }
-
-      const contentType = response.headers.get('content-type')
-      if (!contentType || !contentType.includes('application/json')) {
-        throw new Error('Server returned non-JSON response')
+        throw new Error(`Chat API error: ${response.status}`)
       }
 
       const data = await response.json()
-      
-      if (!data || typeof data.text !== 'string') {
-        throw new Error('Invalid response format from chat API')
-      }
       
       const avatarMessage: ChatMessage = {
         id: (Date.now() + 1).toString(),
@@ -442,47 +491,20 @@ export const Enhanced3DAvatarChatbot: React.FC<Enhanced3DAvatarChatbotProps> = (
 
       setMessages(prev => [...prev, avatarMessage])
       
-      // Use proper audio from Gemini services
-      console.log('Audio check:', { 
-        avatarLoaded, 
-        audioEnabled, 
-        hasText: !!data.text, 
-        hasAudioUrl: !!data.audioUrl, 
-        chatMode 
-      })
-      
-      if (avatarLoaded && audioEnabled && data.text) {
-        if (data.audioUrl) {
-          // Use Gemini-generated audio (either TTS or Live)
-          console.log(`Playing ${chatMode} mode audio from Gemini:`, data.text.substring(0, 50))
+      if (avatarLoaded && audioEnabled) {
+        if (chatMode === 'voice' && data.audioUrl) {
           await playAudioWithLipSync(data.audioUrl, data.text)
         } else {
-          // Fallback to browser TTS only if Gemini audio fails
-          console.log(`Fallback to browser TTS for ${chatMode} mode:`, data.text.substring(0, 50))
-          await speakText(data.text, data.facialExpression || 'friendly')
+          await speakText(data.text, data.facialExpression)
         }
-      } else {
-        console.log('Audio skipped:', { avatarLoaded, audioEnabled, hasText: !!data.text })
       }
 
     } catch (error) {
       console.error('Chat API error:', error)
       
-      let errorText = "I'm having trouble right now. Can you try again?"
-      
-      if (error instanceof Error) {
-        if (error.message.includes('non-JSON response')) {
-          errorText = "The chat service is having issues. Please try again in a moment."
-        } else if (error.message.includes('Failed to fetch')) {
-          errorText = "I can't connect to the chat service right now. Please check your internet connection."
-        } else if (error.message.includes('500')) {
-          errorText = "The chat service is temporarily down. Please try again later."
-        }
-      }
-      
       const errorMessage: ChatMessage = {
         id: (Date.now() + 1).toString(),
-        text: errorText,
+        text: "I'm having trouble right now. Can you try again?",
         sender: 'avatar',
         timestamp: new Date()
       }
@@ -495,118 +517,30 @@ export const Enhanced3DAvatarChatbot: React.FC<Enhanced3DAvatarChatbotProps> = (
     } finally {
       setIsLoading(false)
     }
-  }, [chatMode, childId, accessCode, isLoading, onMessageSent, speakText, avatarLoaded, audioEnabled])
+  }, [chatMode, childId, accessCode, isLoading, onMessageSent, avatarLoaded, audioEnabled, playAudioWithLipSync, speakText])
 
-  // Send voice message directly to voice-live endpoint (bypassing mode confusion)
-  const sendVoiceMessage = useCallback(async (message: string) => {
-    if (!message.trim() || isLoading) return
-
-    const userMessage: ChatMessage = {
-      id: Date.now().toString(),
-      text: message.trim(),
-      sender: 'child',
-      timestamp: new Date()
-    }
-
-    setMessages(prev => [...prev, userMessage])
-    setInputMessage('')
-    setIsLoading(true)
-    onMessageSent?.(message.trim())
-
-    try {
-      console.log('🎤 VOICE MESSAGE: Sending to /api/chat/voice-live')
-      console.log('🎤 Message:', message.substring(0, 50))
-      
-      const response = await fetch('/api/chat/voice-live', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          message: message.trim(),
-          childId,
-          accessCode,
-          mode: 'voice'
-        })
-      })
-
-      if (!response.ok) {
-        throw new Error(`Voice API error: ${response.status} ${response.statusText}`)
-      }
-
-      const contentType = response.headers.get('content-type')
-      if (!contentType || !contentType.includes('application/json')) {
-        throw new Error('Server returned non-JSON response')
-      }
-
-      const data = await response.json()
-      
-      if (!data || typeof data.text !== 'string') {
-        throw new Error('Invalid response format from voice API')
-      }
-      
-      const avatarMessage: ChatMessage = {
-        id: (Date.now() + 1).toString(),
-        text: data.text,
-        sender: 'avatar',
-        timestamp: new Date(),
-        isAudioPlaying: true,
-        audioUrl: data.audioUrl
-      }
-
-      setMessages(prev => [...prev, avatarMessage])
-      
-      // Use proper audio from Gemini Live
-      console.log('🎤 Voice response received:', { 
-        hasText: !!data.text, 
-        hasAudioUrl: !!data.audioUrl, 
-        model: data.model 
-      })
-      
-      if (avatarLoaded && audioEnabled && data.text) {
-        if (data.audioUrl) {
-          console.log('🎤 Playing Gemini Live audio:', data.text.substring(0, 50))
-          await playAudioWithLipSync(data.audioUrl, data.text)
-        } else {
-          console.log('🎤 Fallback to browser TTS for voice mode:', data.text.substring(0, 50))
-          await speakText(data.text, data.facialExpression || 'friendly')
-        }
-      }
-
-    } catch (error) {
-      console.error('Voice chat error:', error)
-      
-      let errorText = "I'm having trouble with voice chat right now."
-      
-      const errorMessage: ChatMessage = {
-        id: (Date.now() + 1).toString(),
-        text: errorText,
-        sender: 'avatar',
-        timestamp: new Date()
-      }
-      
-      setMessages(prev => [...prev, errorMessage])
-      
-      if (avatarLoaded && audioEnabled) {
-        await speakText(errorMessage.text, 'neutral')
-      }
-    } finally {
-      setIsLoading(false)
-    }
-  }, [childId, accessCode, isLoading, onMessageSent, speakText, avatarLoaded, audioEnabled, playAudioWithLipSync])
-
-  // Update the ref whenever sendMessage changes
-  useEffect(() => {
-    sendMessageRef.current = sendMessage
-  }, [sendMessage])
-
-  // Start voice recognition - simplified
+  // Start voice recognition
   const startVoiceRecognition = useCallback(() => {
     if (recognitionRef.current && !isListening) {
-      console.log('Starting voice recognition for Gemini Live input')
       recognitionRef.current.start()
     }
   }, [isListening])
+
+  // Handle form submission
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault()
+    if (chatMode === 'text') {
+      sendMessage(inputMessage)
+    } else if (chatMode === 'voice' && !isRecording && !isListening) {
+      startVoiceRecognition()
+    }
+  }
+
+  // Toggle chat mode
+  const toggleChatMode = () => {
+    setChatMode(prev => prev === 'text' ? 'voice' : 'text')
+    setInputMessage('')
+  }
 
   // Toggle audio
   const toggleAudio = () => {
@@ -618,59 +552,26 @@ export const Enhanced3DAvatarChatbot: React.FC<Enhanced3DAvatarChatbotProps> = (
     }
   }
 
-  // Handle form submission - simplified logic
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault()
-    if (chatMode === 'text' && inputMessage.trim()) {
-      sendMessage(inputMessage.trim())
-    } else if (chatMode === 'voice') {
-      // In voice mode, use speech recognition for input
-      if (!isListening) {
-        startVoiceRecognition()
-      }
-    }
-  }
-
-  // Voice button click handler
-  const handleVoiceButtonClick = () => {
-    if (chatMode === 'voice') {
-      if (isListening) {
-        // Stop listening
-        if (recognitionRef.current) {
-          recognitionRef.current.stop()
-        }
-      } else {
-        // Start listening
-        startVoiceRecognition()
-      }
-    }
-  }
-
-  // Handle key press
-  const handleKeyPress = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault()
-      sendMessage(inputMessage)
-    }
-  }
-
-  // Cleanup on unmount
+  // Cleanup
   useEffect(() => {
     return () => {
       if (speechSynthesisRef.current) {
         speechSynthesis.cancel()
       }
       stopIdleAnimations()
+      if (mediaRecorderRef.current && isRecording) {
+        mediaRecorderRef.current.stop()
+      }
     }
-  }, [stopIdleAnimations])
+  }, [stopIdleAnimations, isRecording])
 
   return (
     <div className="flex flex-col h-full bg-gradient-to-b from-blue-50 to-purple-50">
-      {/* Avatar Display Header */}
+      {/* Header with mode toggle */}
       <div className="flex-shrink-0 bg-white border-b-2 border-gray-200 p-4">
         <div className="flex items-center justify-between mb-2">
           <h2 className="text-xl font-bold text-gray-800">
-            🎭 Enhanced Avatar Chat (Dual AI)
+            🎭 Enhanced Avatar Chat
           </h2>
           <div className="flex items-center space-x-2">
             <button
@@ -684,10 +585,7 @@ export const Enhanced3DAvatarChatbot: React.FC<Enhanced3DAvatarChatbotProps> = (
             </button>
             <div className="flex bg-gray-100 rounded-lg p-1">
               <button
-                onClick={() => {
-                  console.log('Switching to text mode')
-                  setChatMode('text')
-                }}
+                onClick={() => setChatMode('text')}
                 className={`flex items-center space-x-2 px-3 py-1 rounded transition-colors ${
                   chatMode === 'text' ? 'bg-white shadow-sm' : 'text-gray-600'
                 }`}
@@ -696,10 +594,7 @@ export const Enhanced3DAvatarChatbot: React.FC<Enhanced3DAvatarChatbotProps> = (
                 <span className="text-sm">Text</span>
               </button>
               <button
-                onClick={() => {
-                  console.log('Switching to voice mode')
-                  setChatMode('voice')
-                }}
+                onClick={() => setChatMode('voice')}
                 className={`flex items-center space-x-2 px-3 py-1 rounded transition-colors ${
                   chatMode === 'voice' ? 'bg-white shadow-sm' : 'text-gray-600'
                 }`}
@@ -712,8 +607,8 @@ export const Enhanced3DAvatarChatbot: React.FC<Enhanced3DAvatarChatbotProps> = (
         </div>
         <p className="text-sm text-gray-600">
           {chatMode === 'voice' 
-            ? 'Voice chat: Gemini Live AI for real-time conversations with natural speech!'
-            : 'Text chat: Enhanced Gemini AI with high-quality TTS voice responses!'
+            ? 'Your avatar uses Gemini Live AI and responds with natural voice & lip sync!'
+            : 'Your avatar responds with voice and lip sync to your text messages!'
           }
         </p>
         {!avatarLoaded && (
@@ -729,7 +624,9 @@ export const Enhanced3DAvatarChatbot: React.FC<Enhanced3DAvatarChatbotProps> = (
             enableControls={false}
             cameraMode="headshot"
             onModelLoad={handleAvatarLoad}
-            onModelError={handleAvatarError}
+            onModelError={(error) => {
+              console.error('3D Avatar loading error:', error)
+            }}
             className="w-full h-full"
           />
         ) : (
@@ -747,16 +644,15 @@ export const Enhanced3DAvatarChatbot: React.FC<Enhanced3DAvatarChatbotProps> = (
         )}
         
         {/* Status indicators */}
-        {(isSpeaking || isListening) && (
+        {(isSpeaking || isRecording || isListening) && (
           <div className="absolute top-4 right-4 bg-green-500 text-white px-3 py-1 rounded-full text-xs font-medium flex items-center space-x-2 animate-pulse">
             <div className="w-2 h-2 bg-white rounded-full animate-bounce"></div>
             <span>
-              {isSpeaking ? 'Speaking...' : 'Listening...'}
+              {isSpeaking ? 'Speaking...' : isRecording ? 'Recording...' : 'Listening...'}
             </span>
           </div>
         )}
 
-        {/* Avatar status indicator */}
         <div className="absolute top-4 left-4">
           {avatarLoaded ? (
             <div className="bg-green-500 text-white px-2 py-1 rounded-full text-xs font-medium flex items-center space-x-1">
@@ -777,7 +673,7 @@ export const Enhanced3DAvatarChatbot: React.FC<Enhanced3DAvatarChatbotProps> = (
             chatMode === 'voice' ? 'bg-purple-500 text-white' : 'bg-blue-500 text-white'
           }`}>
             {chatMode === 'voice' ? <Mic size={12} /> : <Type size={12} />}
-            <span>{chatMode === 'voice' ? 'Gemini Live' : 'Gemini + TTS'}</span>
+            <span>{chatMode === 'voice' ? 'Voice Mode' : 'Text Mode'}</span>
           </div>
         </div>
       </div>
@@ -794,7 +690,10 @@ export const Enhanced3DAvatarChatbot: React.FC<Enhanced3DAvatarChatbotProps> = (
               </div>
               <p className="text-lg font-medium text-gray-700">Hi there! 👋</p>
               <p className="text-sm text-gray-500 mt-1">
-                {avatarUrl ? 'Start chatting with your 3D avatar!' : 'Chat with me! (Ask your educator to create a 3D avatar)'}
+                {chatMode === 'voice' 
+                  ? 'Try voice chat with advanced Gemini Live AI!'
+                  : 'Start chatting with your 3D avatar!'
+                }
               </p>
             </div>
           )}
@@ -819,7 +718,9 @@ export const Enhanced3DAvatarChatbot: React.FC<Enhanced3DAvatarChatbotProps> = (
                   {message.sender === 'avatar' && message.isAudioPlaying && (
                     <div className="flex items-center space-x-1">
                       <div className="w-1 h-1 bg-green-500 rounded-full animate-pulse"></div>
-                      <span className="text-xs text-green-600">🎤</span>
+                      <span className="text-xs text-green-600">
+                        {message.audioUrl ? '🎵' : '🎤'}
+                      </span>
                     </div>
                   )}
                 </div>
@@ -837,7 +738,7 @@ export const Enhanced3DAvatarChatbot: React.FC<Enhanced3DAvatarChatbotProps> = (
                     <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
                   </div>
                   <span className="text-xs text-gray-500">
-                    {chatMode === 'voice' ? 'Gemini Live processing...' : 'Gemini + TTS processing...'}
+                    {chatMode === 'voice' ? 'AI processing...' : 'Avatar thinking...'}
                   </span>
                 </div>
               </div>
@@ -855,7 +756,6 @@ export const Enhanced3DAvatarChatbot: React.FC<Enhanced3DAvatarChatbotProps> = (
               type="text"
               value={inputMessage}
               onChange={(e) => setInputMessage(e.target.value)}
-              onKeyPress={handleKeyPress}
               placeholder={isSpeaking ? "Avatar is speaking..." : "Type your message..."}
               disabled={isLoading || isSpeaking}
               className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-100 disabled:cursor-not-allowed"
@@ -874,39 +774,27 @@ export const Enhanced3DAvatarChatbot: React.FC<Enhanced3DAvatarChatbotProps> = (
               type="text"
               value={isListening ? 'Listening...' : inputMessage}
               onChange={(e) => setInputMessage(e.target.value)}
-              onKeyPress={handleKeyPress}
               placeholder="Tap microphone to speak or type here..."
-              disabled={isListening || isLoading || isSpeaking}
+              disabled={isRecording || isListening || isLoading || isSpeaking}
               className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent disabled:bg-gray-100 disabled:cursor-not-allowed"
             />
-            {inputMessage.trim() ? (
-              <button
-                onClick={() => sendMessage(inputMessage)}
-                disabled={isLoading || isSpeaking}
-                className="px-6 py-2 bg-purple-500 text-white rounded-lg hover:bg-purple-600 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
-              >
-                <Send size={16} />
-              </button>
-            ) : (
-              <button
-                onClick={handleVoiceButtonClick}
-                disabled={isLoading || isSpeaking}
-                className={`px-6 py-2 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors ${
-                  isListening ? 'bg-red-500 hover:bg-red-600 animate-pulse' : 'bg-purple-500 hover:bg-purple-600'
-                }`}
-              >
-                <Mic size={16} />
-              </button>
-            )}
+            <button
+              onClick={inputMessage.trim() ? () => sendMessage(inputMessage) : startVoiceRecognition}
+              disabled={isLoading || isSpeaking || isListening}
+              className="px-6 py-2 bg-purple-500 text-white rounded-lg hover:bg-purple-600 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
+            >
+              {inputMessage.trim() ? <Send size={16} /> : <Mic size={16} />}
+            </button>
           </div>
         )}
         
-        {(isSpeaking || isListening) && (
+        {(isSpeaking || isRecording || isListening) && (
           <div className="mt-2 flex items-center justify-center text-sm text-gray-500">
             <div className="flex items-center space-x-2">
               <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
               <span>
                 {isSpeaking && '🎭 Avatar speaking with lip sync...'}
+                {isRecording && '🎤 Recording your voice...'}
                 {isListening && '👂 Listening for your speech...'}
               </span>
             </div>
@@ -917,4 +805,4 @@ export const Enhanced3DAvatarChatbot: React.FC<Enhanced3DAvatarChatbotProps> = (
   )
 }
 
-export default Enhanced3DAvatarChatbot
+export default EnhancedVoiceAvatarChatbot

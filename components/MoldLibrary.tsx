@@ -58,7 +58,7 @@ export function MoldLibrary({ onMoldSelect }: MoldLibraryProps) {
     })
     const entries = Object.entries(catCounts).map(([id, count]) => ({ 
       id, 
-      name: id.charAt(0).toUpperCase() + id.slice(1) + ' & ' + id.charAt(0).toUpperCase() + id.slice(1), 
+      name: id.charAt(0).toUpperCase() + id.slice(1), 
       count 
     }))
     return [

@@ -4,7 +4,9 @@ import MyAvatarTab from "../Games/MyAvatarTab"
 import ChatAssistant from "./ChatAssistant"
 import { SimpleAvatarViewer } from "@/components/SimpleAvatarViewer"
 import ChildAvatarDisplay from "./ChildAvatarDisplay"
-import ChildEnhanced3DAvatarChatbot from "./ChildEnhanced3DAvatarChatbot"
+import { TextAvatarChat } from "./TextAvatarChat"
+import { VoiceAvatarChat } from "./VoiceAvatarChat"
+import AvatarChatCoordinator from "@/components/AvatarChatCoordinator"
 
 interface ChildProgress {
   completedAssignments: number
@@ -181,10 +183,14 @@ export default function MyStuffTab({ childProfile }: MyStuffTabProps) {
           </div>
         </div>
         
+        {/* Chat Mode Toggle - Removed since new component handles mode internally */}
+        
         <div className="bg-white border-4 border-black shadow-brutal-xl overflow-hidden max-w-4xl mx-auto" style={{ height: '700px' }}>
           {childProfile?.avatar_url ? (
-            <ChildEnhanced3DAvatarChatbot
-              childProfile={childProfile}
+            <AvatarChatCoordinator
+              avatarUrl={childProfile.avatar_url}
+              childId={childProfile.id}
+              onBack={() => setActiveSection('overview')}
             />
           ) : (
             <div className="h-full flex flex-col">
