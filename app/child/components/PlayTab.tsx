@@ -182,16 +182,16 @@ export default function PlayTab({ childId, childProfile }: PlayTabProps) {
       case 'memory':
       case 'matching_cards':
       case 'memory_cards':
-        console.log('→ Using yuri-li-p0hDztR46cw-unsplash.jpg for memory/matching')
-        return '/yuri-li-p0hDztR46cw-unsplash.jpg'
+        console.log('→ Using Memory_match_game.png for memory/matching')
+        return '/Memory_match_game.png'
       case 'sorting':
       case 'category_sorting':
-        console.log('→ Using alan-rodriguez-N17Nkbsc-zY-unsplash.jpg for sorting')
-        return '/alan-rodriguez-N17Nkbsc-zY-unsplash.jpg'
+        console.log('→ Using Category_sorting_challenge.png for sorting')
+        return '/Category_sorting_challenge.png'
       case 'expression':
       case 'emotions':
-        console.log('→ Using sigmund-OV44gxH71DU-unsplash.jpg for expression')
-        return '/sigmund-OV44gxH71DU-unsplash.jpg'
+        console.log('→ Using Expression_game.png for expression')
+        return '/Expression_game.png'
       case 'puzzle':
       case 'puzzles':
         console.log('→ Using marisa-howenstine-Cq9slNxV8YU-unsplash.jpg for puzzle')
@@ -214,19 +214,32 @@ export default function PlayTab({ childId, childProfile }: PlayTabProps) {
     }
   }
 
-  // Helper function to get mold image based on category
-  function getMoldImage(category: string) {
+  // Helper function to get mold image based on category or mold name
+  function getMoldImage(category: string, moldName?: string) {
     // Debug: Log which image is being selected
-    console.log(`Getting image for mold category: ${category}`)
+    console.log(`Getting image for mold category: ${category} name: ${moldName}`)
     
     const categoryLower = category?.toLowerCase() || ''
-    
+    const nameLower = moldName?.toLowerCase() || ''
+
+    // If the mold name explicitly references sorting/category, prefer the sorting image
+    if (nameLower.includes('sort') || nameLower.includes('category') || nameLower.includes('sorting')) {
+      console.log('→ Using Category_sorting_challenge.png because mold name indicates sorting')
+      return '/Category_sorting_challenge.png'
+    }
+
     // Handle Memory & Cognition categories
     if (categoryLower.includes('memory') || categoryLower.includes('cognition')) {
-      console.log('→ Using yuri-li-p0hDztR46cw-unsplash.jpg for memory/cognition mold')
-      return '/yuri-li-p0hDztR46cw-unsplash.jpg'
+      console.log('→ Using Memory_match_game.png for memory/cognition mold')
+      return '/Memory_match_game.png'
     }
-    
+
+    // Handle Sorting categories
+    if (categoryLower.includes('sorting') || categoryLower.includes('category')) {
+      console.log('→ Using Category_sorting_challenge.png for sorting/category mold')
+      return '/Category_sorting_challenge.png'
+    }
+
     // Handle Creativity categories
     if (categoryLower.includes('creativity') || categoryLower.includes('creative')) {
       console.log('→ Using diverse-children-educational-games.png for creativity mold')
@@ -253,8 +266,8 @@ export default function PlayTab({ childId, childProfile }: PlayTabProps) {
     
     // Handle Emotional & Social categories
     if (categoryLower.includes('emotional') || categoryLower.includes('emotion') || categoryLower.includes('social')) {
-      console.log('→ Using sigmund-OV44gxH71DU-unsplash.jpg for emotional/social mold')
-      return '/sigmund-OV44gxH71DU-unsplash.jpg'
+      console.log('→ Using Expression_game.png for emotional/social mold')
+      return '/Expression_game.png'
     }
     
     // Handle Problem Solving categories
@@ -377,11 +390,11 @@ export default function PlayTab({ childId, childProfile }: PlayTabProps) {
     switch (gameType?.toLowerCase()) {
       case 'matching':
       case 'memory':
-        return 'Test your memory skills with fun matching challenges'
+        return 'Flip and match pairs of cards to sharpen memory and concentration.'
       case 'sorting':
-        return 'Organize and categorize items in this sorting adventure'
+        return 'Quickly sort items into the right categories to test your logic and organization skills.'
       case 'expression':
-        return 'Express emotions and learn about feelings'
+        return 'Create and recognize facial expressions to boost emotional awareness and fun interaction.'
       case 'puzzle':
         return 'Solve exciting puzzles and brain teasers'
       case 'math':
@@ -393,23 +406,50 @@ export default function PlayTab({ childId, childProfile }: PlayTabProps) {
     }
   }
 
-  function getMoldDescription(category: string) {
-    switch (category?.toLowerCase()) {
-      case 'memory':
-        return 'Challenge your brain with memory-building games'
-      case 'creativity':
-        return 'Express yourself through creative activities'
-      case 'problem solving':
-        return 'Develop critical thinking with puzzle challenges'
-      case 'language':
-        return 'Enhance communication and language skills'
-      case 'math':
-        return 'Master numbers through interactive learning'
-      case 'emotional':
-        return 'Learn about emotions and social skills'
-      default:
-        return 'Discover new learning adventures'
+  function getMoldDescription(category: string, moldName?: string) {
+    const categoryLower = category?.toLowerCase() || ''
+    const nameLower = moldName?.toLowerCase() || ''
+
+    // Memory / Cognition
+    if (categoryLower.includes('memory') || categoryLower.includes('cognition')) {
+      return 'Flip and match pairs of cards to sharpen memory and concentration.'
     }
+
+    // Sorting / Category games (also check mold name)
+    if (
+      categoryLower.includes('sort') ||
+      categoryLower.includes('category') ||
+      categoryLower.includes('sorting') ||
+      nameLower.includes('sort') ||
+      nameLower.includes('category') ||
+      nameLower.includes('sorting')
+    ) {
+      return 'Quickly sort items into the right categories to test your logic and organization skills.'
+    }
+
+    // Emotional / Social / Expressions
+    if (categoryLower.includes('emotion') || categoryLower.includes('emotional') || categoryLower.includes('social') || categoryLower.includes('express')) {
+      return 'Create and recognize facial expressions to boost emotional awareness and fun interaction.'
+    }
+
+    // Other exact-ish matches
+    if (categoryLower.includes('creativity')) {
+      return 'Express yourself through creative activities'
+    }
+
+    if (categoryLower.includes('problem')) {
+      return 'Develop critical thinking with puzzle challenges'
+    }
+
+    if (categoryLower.includes('language')) {
+      return 'Enhance communication and language skills'
+    }
+
+    if (categoryLower.includes('math')) {
+      return 'Master numbers through interactive learning'
+    }
+
+    return 'Discover new learning adventures'
   }
 
   // Dashboard view
@@ -419,7 +459,7 @@ export default function PlayTab({ childId, childProfile }: PlayTabProps) {
       <div className="text-center mb-8">
         <div className="inline-block transform -rotate-2 mb-4">
           <div className="bg-chart-2 text-white px-8 py-4 border-4 border-black shadow-brutal-xl font-bold text-4xl transform hover:rotate-1 transition-transform">
-             GAME WORLD! 
+             GAME WORLD!
           </div>
         </div>
         {/* Avatar Status Indicator */}
@@ -553,7 +593,7 @@ export default function PlayTab({ childId, childProfile }: PlayTabProps) {
                 {/* Game Image */}
                 <div className="relative h-48 bg-gradient-to-br from-pink-100 to-orange-100 border-b-4 border-black">
                   <Image
-                    src="/parent-therapist-brainberry.png"
+                    src="/Coloring_game.png"
                     alt="Canvas Coloring Game"
                     fill
                     className="object-cover"
@@ -616,18 +656,18 @@ export default function PlayTab({ childId, childProfile }: PlayTabProps) {
                     {/* Game Image */}
                     <div className={`relative h-48 bg-gradient-to-br ${getMoldGradient(mold.category)} border-b-4 border-black`}>
                       <Image
-                        src={getMoldImage(mold.category)}
+                        src={getMoldImage(mold.category, mold.name)}
                         alt={mold.name}
                         fill
                         className="object-cover"
                         onError={(e) => {
-                          console.error(`Mold image failed to load for ${mold.category}:`, getMoldImage(mold.category));
+                          console.error(`Mold image failed to load for ${mold.category}:`, getMoldImage(mold.category, mold.name));
                           const target = e.target as HTMLImageElement;
                           target.style.display = 'none';
                           target.nextElementSibling?.classList.remove('hidden');
                         }}
                         onLoad={() => {
-                          console.log(`Mold image loaded successfully for ${mold.category}:`, getMoldImage(mold.category));
+                          console.log(`Mold image loaded successfully for ${mold.category}:`, getMoldImage(mold.category, mold.name));
                         }}
                       />
                       <div className={`hidden absolute inset-0 flex items-center justify-center bg-gradient-to-br ${getMoldGradient(mold.category)}`}>
@@ -647,7 +687,7 @@ export default function PlayTab({ childId, childProfile }: PlayTabProps) {
                     <div className="p-6">
                       <h3 className="text-xl font-bold mb-2 text-gray-800">{mold.name}</h3>
                       <p className="text-gray-600 mb-4 text-sm leading-relaxed">
-                        {getMoldDescription(mold.category)}
+                        {getMoldDescription(mold.category, mold.name)}
                       </p>
                       
                       <button

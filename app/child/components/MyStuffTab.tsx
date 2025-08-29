@@ -302,7 +302,7 @@ export default function MyStuffTab({ childProfile }: MyStuffTabProps) {
           {/* Chat Image */}
           <div className="relative h-48 bg-gradient-to-br from-green-100 to-teal-100 border-b-4 border-black">
             <Image
-              src="/diverse-children-educational-games.png"
+              src="/Avatar_chat.png"
               alt="Chat Assistant"
               fill
               className="object-cover"
