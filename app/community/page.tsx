@@ -65,7 +65,7 @@ export default function CommunityPage() {
                 author: "Dr. Sarah Martinez",
                 date: "Aug 25, 2025",
                 category: "Expert Insights",
-                image: "/articles/sensory-processing.jpg",
+                image: "/Understanding_sensory_processing.png",
                 readTime: "8 min read"
               },
               {
@@ -74,7 +74,7 @@ export default function CommunityPage() {
                 author: "Jennifer K. (Parent)",
                 date: "Aug 23, 2025",
                 category: "Success Stories",
-                image: "/articles/emma-breakthrough.jpg",
+                image: "/Emma_first.png",
                 readTime: "5 min read"
               },
               {
@@ -83,18 +83,18 @@ export default function CommunityPage() {
                 author: "BrainBerry Team",
                 date: "Aug 20, 2025",
                 category: "Educational",
-                image: "/articles/executive-function.jpg",
+                image: "/Building_executive_function_skills.png",
                 readTime: "12 min read"
               }
             ].map((article, i) => (
               <article key={i} className="bg-white border-4 border-border shadow-brutal-xl hover:shadow-[20px_20px_0px_0px_var(--color-border)] transition-all duration-300">
                 <div className="bg-black h-48 border-b-4 border-border overflow-hidden">
                   <Image
-                    src="/placeholder-uz0c2.png"
+                    src={article.image}
                     alt={article.title}
                     width={400}
                     height={200}
-                    className="w-full h-full object-cover"
+                    className={`w-full h-full ${i === 2 ? 'object-cover object-top' : 'object-cover'}`}
                   />
                 </div>
                 <div className="p-6">
