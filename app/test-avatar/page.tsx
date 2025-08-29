@@ -98,7 +98,9 @@ export default function TestAvatarPage() {
                 avatarUrl={testAvatarUrl || childProfile?.avatar_url}
                 headshotUrl={childProfile?.avatar_headshot_url}
                 childName={childProfile?.name || 'Test Child'}
+                childId={childProfile?.id}
                 size="large"
+                autoGenerateFromAvatar={true}
               />
               <div>
                 <p className="text-sm text-gray-600">Profile Picture</p>

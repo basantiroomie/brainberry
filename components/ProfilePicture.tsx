@@ -2,6 +2,8 @@
 
 import React, { useState, useEffect } from 'react'
 import HeadshotGenerator from './HeadshotGenerator'
+import AvatarSnapshotGenerator from './AvatarSnapshotGenerator'
+import SimpleProfileGenerator from './SimpleProfileGenerator'
 
 interface ProfilePictureProps {
   avatarUrl?: string | null
@@ -13,6 +15,7 @@ interface ProfilePictureProps {
   fallbackIcon?: React.ReactNode
   onHeadshotGenerated?: (headshotUrl: string) => void
   childId?: string // Add childId for headshot generation
+  useSnapshot?: boolean // Use 3D avatar snapshot instead of headshot generation
 }
 
 export const ProfilePicture: React.FC<ProfilePictureProps> = ({
@@ -24,11 +27,13 @@ export const ProfilePicture: React.FC<ProfilePictureProps> = ({
   autoGenerate = true,
   fallbackIcon,
   onHeadshotGenerated,
-  childId
+  childId,
+  useSnapshot = true
 }) => {
   const [displayUrl, setDisplayUrl] = useState<string | null>(null)
   const [imageError, setImageError] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
+  const [avatarFailed, setAvatarFailed] = useState(false)
 
   const sizeClasses = {
     xs: 'w-6 h-6',
@@ -52,23 +57,26 @@ export const ProfilePicture: React.FC<ProfilePictureProps> = ({
 
     let finalUrl: string | null = null
 
-    // Priority 1: Use the explicit headshotUrl if provided.
-    if (headshotUrl) {
+    // Priority 1: Use the explicit headshotUrl if provided and it's a valid data URL
+    if (headshotUrl && headshotUrl.startsWith('data:image/')) {
       finalUrl = headshotUrl
     } 
-    // Priority 2: Derive the .png URL from the .glb avatarUrl.
+    // Priority 2: Try Ready Player Me PNG URL for GLB avatars with long codes
     else if (avatarUrl && avatarUrl.endsWith('.glb')) {
-      finalUrl = avatarUrl.replace('.glb', '.png')
-    } 
-    // Priority 3: Use the avatarUrl if it's already a .png
-    else if (avatarUrl && avatarUrl.endsWith('.png')) {
+      const avatarId = avatarUrl.split('/').pop()?.replace('.glb', '') || ''
+      // Only try PNG URL for long codes (24+ characters), short codes don't work
+      if (avatarId.length >= 24) {
+        finalUrl = avatarUrl.replace('.glb', '.png')
+      }
+    }
+    // Priority 3: Use the avatarUrl if it's already a valid image URL
+    else if (avatarUrl && (avatarUrl.endsWith('.png') || avatarUrl.endsWith('.jpg'))) {
       finalUrl = avatarUrl
     }
 
     setDisplayUrl(finalUrl)
 
-    // If no direct image URL is found and auto-generation is enabled,
-    // the HeadshotGenerator component will handle it.
+    // If no direct image URL is found, let the generator handle it
     if (!finalUrl) {
       setIsLoading(false)
     }
@@ -88,11 +96,20 @@ export const ProfilePicture: React.FC<ProfilePictureProps> = ({
 
   const handleGenerated = (generatedUrl: string) => {
     setDisplayUrl(generatedUrl)
+    setIsLoading(false)
     onHeadshotGenerated?.(generatedUrl)
   }
 
+  const handleAvatarError = () => {
+    console.warn('Avatar snapshot generation failed, using simple profile generator')
+    setAvatarFailed(true)
+    setIsLoading(false)
+  }
+
   const showFallback = !displayUrl || imageError
-  const showGenerator = !displayUrl && !imageError && autoGenerate && avatarUrl && childId
+  const showGenerator = !displayUrl && !imageError && autoGenerate && childId
+  const showSnapshotGenerator = useSnapshot && showGenerator && avatarUrl?.endsWith('.glb') && !avatarFailed
+  const showSimpleGenerator = showGenerator && (avatarFailed || !avatarUrl)
 
   return (
     <div className={`${sizeClasses[size]} bg-gray-200 border-2 border-black rounded-full overflow-hidden flex items-center justify-center relative ${className}`}>
@@ -111,12 +128,29 @@ export const ProfilePicture: React.FC<ProfilePictureProps> = ({
       
       {showFallback && (fallbackIcon || <span className={`${iconSizes[size]} text-gray-500`}>?</span>)}
 
-      {showGenerator && (
+      {showSnapshotGenerator ? (
+        <AvatarSnapshotGenerator
+          avatarUrl={avatarUrl}
+          onSnapshotGenerated={handleGenerated}
+          onError={handleAvatarError}
+          size={size === 'xl' ? 256 : size === 'lg' ? 128 : 64}
+          autoGenerate={true}
+          className="absolute inset-0"
+          childId={childId}
+        />
+      ) : showSimpleGenerator ? (
+        <SimpleProfileGenerator
+          childName={name}
+          childId={childId}
+          onProfileGenerated={handleGenerated}
+          size={size === 'xl' ? 256 : size === 'lg' ? 128 : 64}
+        />
+      ) : showGenerator && (
         <HeadshotGenerator
           avatarUrl={avatarUrl}
           childId={childId}
           onHeadshotGenerated={handleGenerated}
-          onError={() => setIsLoading(false)} // Stop loading on generation error
+          onError={handleAvatarError}
         />
       )}
     </div>

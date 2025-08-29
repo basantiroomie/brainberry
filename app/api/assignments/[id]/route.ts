@@ -3,11 +3,12 @@ import { createSupabaseServerClient } from '@/lib/supabase-server'
 import { assignmentUpdateSchema } from '@/lib/schemas'
 import { requireEducator } from '@/lib/supabase-server'
 
-export async function PUT(req: NextRequest, { params }: { params: { id: string } }) {
+export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { user } = await requireEducator()
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     
+    const { id } = await params
     const json = await req.json()
     const parsed = assignmentUpdateSchema.safeParse(json)
     if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 })
@@ -21,7 +22,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
         status: data.status,
         progress: data.progress
       })
-      .eq('id', params.id)
+      .eq('id', id)
       .select()
       .single()
     
@@ -37,17 +38,18 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
   }
 }
 
-export async function DELETE(_req: NextRequest, { params }: { params: { id: string } }) {
+export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { user } = await requireEducator()
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     
+    const { id } = await params
     const supabase = await createSupabaseServerClient()
     
     const { error } = await supabase
       .from('MoldAssignment')
       .delete()
-      .eq('id', params.id)
+      .eq('id', id)
     
     if (error) {
       console.error('Database error:', error)
