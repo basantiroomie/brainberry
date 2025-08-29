@@ -229,24 +229,44 @@ export default function BrainBerry() {
           </div>
           <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
             {[
-              { title: "MEMORY MATCHING", desc: "Personalized card matching games for cognitive development" },
-              { title: "EXPRESSION TRAINING", desc: "Face recognition and emotion identification activities" },
-              { title: "CREATIVE COLORING", desc: "Digital canvas for creative expression and fine motor skills" },
-              { title: "AVATAR INTERACTION", desc: "3D character interaction for social skill building" },
+              { 
+                title: "MEMORY MATCHING", 
+                desc: "Personalized card matching games for cognitive development",
+                image: "/yuri-li-p0hDztR46cw-unsplash.jpg",
+                alt: "Memory matching game"
+              },
+              { 
+                title: "EXPRESSION TRAINING", 
+                desc: "Face recognition and emotion identification activities",
+                image: "/sigmund-OV44gxH71DU-unsplash.jpg",
+                alt: "Expression training game"
+              },
+              { 
+                title: "CREATIVE COLORING", 
+                desc: "Digital canvas for creative expression and fine motor skills",
+                image: "/marisa-howenstine-Cq9slNxV8YU-unsplash.jpg",
+                alt: "Creative coloring game"
+              },
+              { 
+                title: "AVATAR INTERACTION", 
+                desc: "3D character interaction for social skill building",
+                image: "/ashton-bingham-SAHBl2UpXco-unsplash.jpg",
+                alt: "Avatar interaction game"
+              },
             ].map((gameType, i) => (
-              <div key={i}>
-                <div className="bg-black text-white border-4 border-border shadow-brutal-xl p-6 hover:shadow-[16px_16px_0px_0px_var(--color-border)] transition-all duration-300">
+              <div key={i} className="h-full">
+                <div className="bg-black text-white border-4 border-border shadow-brutal-xl p-6 hover:shadow-[16px_16px_0px_0px_var(--color-border)] transition-all duration-300 h-full flex flex-col">
                   <div className="bg-chart-1 border-2 border-border shadow-[8px_8px_0px_0px_var(--color-border)] p-4 mb-4">
                     <Image
-                      src="/placeholder-uz0c2.png"
-                      alt="Educational game"
+                      src={gameType.image}
+                      alt={gameType.alt}
                       width={100}
                       height={100}
                       className="w-full h-20 object-cover border border-border"
                     />
                   </div>
                   <h3 className="text-xl font-bold text-white mb-2">{gameType.title}</h3>
-                  <p className="text-white font-medium">{gameType.desc}</p>
+                  <p className="text-white font-medium flex-grow">{gameType.desc}</p>
                 </div>
               </div>
             ))}
@@ -275,7 +295,7 @@ export default function BrainBerry() {
                 <div className="absolute inset-0 bg-overlay flex items-end">
                   <div className="bg-chart-2 border-t-4 border-border p-6 w-full">
                     <h3 className="text-2xl font-bold text-main-foreground mb-2">FIRST BREAKTHROUGH MOMENT</h3>
-                    <button className="text-main-foreground font-medium underline">READ MORE →</button>
+                    <button className="text-main-foreground font-medium underline" suppressHydrationWarning>READ MORE →</button>
                   </div>
                 </div>
               </div>
@@ -292,7 +312,7 @@ export default function BrainBerry() {
                 <div className="absolute inset-0 bg-overlay flex items-end">
                   <div className="bg-chart-3 border-t-4 border-border p-6 w-full">
                     <h3 className="text-2xl font-bold text-main-foreground mb-2">BUILDING CONFIDENCE TOGETHER</h3>
-                    <button className="text-main-foreground font-medium underline">READ MORE →</button>
+                    <button className="text-main-foreground font-medium underline" suppressHydrationWarning>READ MORE →</button>
                   </div>
                 </div>
               </div>
@@ -313,6 +333,7 @@ export default function BrainBerry() {
               <button
                 onClick={goToLogin}
                 className="bg-chart-2 text-main-foreground px-12 py-6 border-4 border-border shadow-brutal-2xl hover:shadow-brutal-3xl transition-all font-bold text-2xl"
+                suppressHydrationWarning
               >
                 START FREE TRIAL
               </button>
@@ -399,8 +420,9 @@ export default function BrainBerry() {
                     type="email"
                     placeholder="Your email"
                     className="flex-1 px-3 py-2 border-2 border-border bg-background text-foreground font-medium text-sm mb-2 sm:mb-0"
+                    suppressHydrationWarning
                   />
-                  <button className="bg-main text-main-foreground px-4 py-2 border-2 sm:border-l-0 border-border shadow-[8px_8px_0px_0px_var(--color-border)] hover:shadow-[12px_12px_0px_0px_var(--color-border)] transition-all font-bold text-sm">
+                  <button className="bg-main text-main-foreground px-4 py-2 border-2 sm:border-l-0 border-border shadow-[8px_8px_0px_0px_var(--color-border)] hover:shadow-[12px_12px_0px_0px_var(--color-border)] transition-all font-bold text-sm" suppressHydrationWarning>
                     SUBSCRIBE
                   </button>
                 </div>
