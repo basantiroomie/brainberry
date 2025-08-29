@@ -24,12 +24,6 @@ export default function CommunityPage() {
               <span className="text-xl font-bold text-black">BRAINBERRY COMMUNITY</span>
             </Link>
             <nav className="hidden md:flex items-center space-x-8">
-              <a href="#about" className="text-black hover:text-main font-medium">
-                About
-              </a>
-              <a href="#programs" className="text-black hover:text-main font-medium">
-                Programs
-              </a>
               <a href="/community" className="text-black hover:text-main font-medium">
                 Community
               </a>
