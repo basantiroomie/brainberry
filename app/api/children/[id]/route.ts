@@ -95,17 +95,16 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       }
       
       if (updateData.avatar_headshot_url) {
-        // Allow data URLs (for generated SVG/PNG profile pictures) or Ready Player Me URLs
-        const isDataUrl = updateData.avatar_headshot_url.startsWith('data:image/')
-        const isReadyPlayerMeUrl = updateData.avatar_headshot_url.includes('readyplayer.me') && updateData.avatar_headshot_url.endsWith('.png')
-        
-        if (!isDataUrl && !isReadyPlayerMeUrl) {
-          try {
-            new URL(updateData.avatar_headshot_url)
-            // Allow any valid URL for flexibility
-          } catch {
-            return NextResponse.json({ error: 'Invalid avatar headshot URL format.' }, { status: 400 })
+        try {
+          new URL(updateData.avatar_headshot_url)
+          // Validate it's a Ready Player Me URL
+          if (!updateData.avatar_headshot_url.includes('readyplayer.me') || !updateData.avatar_headshot_url.endsWith('.png')) {
+            return NextResponse.json({ 
+              error: 'Invalid avatar headshot URL. Must be a Ready Player Me PNG URL.' 
+            }, { status: 400 })
           }
+        } catch {
+          return NextResponse.json({ error: 'Invalid avatar headshot URL format.' }, { status: 400 })
         }
       }
       

@@ -1,10 +1,9 @@
 "use client"
 
-import { useRouter, useSearchParams } from "next/navigation"
+import { useRouter } from "next/navigation"
 import { LogOut, Settings, FlaskConical } from "lucide-react"
 import { BrandLogo } from "@/components/BrandLogo"
-import { useState, useEffect, Suspense } from "react"
-import { toast } from 'sonner'
+import { useState, useEffect } from "react"
 import { MockDataProvider, useMockData } from "./components/MockDataContext"
 import DashboardTab from "./components/DashboardTab"
 import ChildrenTab from "./components/ChildrenTab"
@@ -12,9 +11,8 @@ import AnalyticsTab from "./components/AnalyticsTab"
 import AccountSettingsTab from "./components/AccountSettingsTab"
 import { createSupabaseBrowserClient } from "@/lib/supabase-browser"
 
-function EducatorDashboardContent() {
+function EducatorDashboardInner() {
   const router = useRouter()
-  const searchParams = useSearchParams()
   const [activeTab, setActiveTab] = useState<string>("dashboard")
   const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null)
   const { useMock, setUseMock } = useMockData()
@@ -39,20 +37,6 @@ function EducatorDashboardContent() {
     
     checkAuth()
   }, [router, supabase])
-
-  // Handle URL parameters for success messages and tab switching
-  useEffect(() => {
-    const tab = searchParams.get('tab')
-    const success = searchParams.get('success')
-    
-    if (tab) {
-      setActiveTab(tab)
-    }
-    
-    if (success === 'avatar-created') {
-      toast.success('Avatar created successfully! Profile picture has been automatically generated.')
-    }
-  }, [searchParams])
 
   // Show loading while checking authentication
   if (isAuthenticated === null) {
@@ -150,21 +134,6 @@ function EducatorDashboardContent() {
         {renderTabContent()}
       </div>
     </div>
-  )
-}
-
-function EducatorDashboardInner() {
-  return (
-    <Suspense fallback={
-      <div className="min-h-screen bg-gradient-to-br from-chart-1 to-chart-2 flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-black mx-auto mb-4"></div>
-          <p className="text-lg font-bold">Loading...</p>
-        </div>
-      </div>
-    }>
-      <EducatorDashboardContent />
-    </Suspense>
   )
 }
 

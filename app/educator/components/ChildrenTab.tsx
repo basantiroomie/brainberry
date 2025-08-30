@@ -1,7 +1,6 @@
 "use client"
 import { Users, User, Plus, BarChart3, Settings, Palette, Loader2, Link2, CheckCircle2, X, RotateCcw, Code } from "lucide-react"
 import { useEffect, useState, useRef } from "react"
-import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import { useMockData } from './MockDataContext'
 import { AvatarViewer } from '@/components/AvatarViewer'
@@ -67,9 +66,9 @@ function AvatarCreatorModal({ isOpen, onClose, child, onAvatarSaved }: AvatarCre
   const [saving, setSaving] = useState(false)
   const [iframeLoaded, setIframeLoaded] = useState(false)
   
-  // Ready Player Me iframe configuration - open directly with upload option
+  // Ready Player Me iframe configuration
   const rpmSubdomain = process.env.NEXT_PUBLIC_RPM_SUBDOMAIN || 'demo'
-  const iframeUrl = `https://${rpmSubdomain}.readyplayer.me/avatar?frameApi&source=selfie`
+  const iframeUrl = `https://${rpmSubdomain}.readyplayer.me/avatar?frameApi`
 
   // Reset state when modal opens/closes
   useEffect(() => {
@@ -166,7 +165,7 @@ function AvatarCreatorModal({ isOpen, onClose, child, onAvatarSaved }: AvatarCre
       
       setSaving(true)
       
-      // Update child with avatar URL using the main children endpoint
+      // Update child with avatar URLs
       const response = await fetch(`/api/children/${child.id}`, {
         method: 'PUT',
         headers: {
@@ -174,43 +173,25 @@ function AvatarCreatorModal({ isOpen, onClose, child, onAvatarSaved }: AvatarCre
         },
         body: JSON.stringify({
           avatar_url: glbUrl,
-          avatar_headshot_url: pngUrl // Include the PNG URL to satisfy schema
+          avatar_headshot_url: pngUrl,
         }),
       })
 
-      console.log('Avatar save request:', {
-        childId: child.id,
-        glbUrl,
-        pngUrl,
-        requestBody: { avatar_url: glbUrl, avatar_headshot_url: pngUrl }
-      })
-
       if (response.ok) {
-        const result = await response.json()
-        console.log('Avatar save successful:', result)
         toast.success('Avatar saved successfully!')
         onAvatarSaved()
         onClose()
       } else {
-        const responseText = await response.text()
+        const errorData = await response.json().catch(() => ({ error: 'Unknown error' }))
         console.error('Avatar save failed:', {
           status: response.status,
           statusText: response.statusText,
           childId: child.id,
-          responseText: responseText.substring(0, 500) // Log first 500 chars
+          errorData
         })
-        
-        let errorData
-        try {
-          errorData = JSON.parse(responseText)
-        } catch {
-          errorData = { error: 'Server returned invalid response' }
-        }
         
         if (response.status === 404) {
           toast.error('Child not found. Please refresh the page and try again.')
-        } else if (response.status === 401) {
-          toast.error('Authentication required. Please refresh the page and try again.')
         } else {
           toast.error(`Failed to save avatar: ${errorData.error || 'Unknown error'}`)
         }
@@ -275,12 +256,13 @@ function AvatarCreatorModal({ isOpen, onClose, child, onAvatarSaved }: AvatarCre
           {step === 'iframe' && (
             <div className="space-y-4">
               <div className="bg-blue-50 border-2 border-blue-300 p-4">
-                <h3 className="font-bold text-blue-800 mb-2">📋 Quick Start Instructions</h3>
+                <h3 className="font-bold text-blue-800 mb-2">📋 Instructions</h3>
                 <ol className="text-sm text-blue-700 space-y-1 list-decimal list-inside">
-                  <li><strong>Upload Photo:</strong> The interface will open with upload option ready - just select or drag a photo</li>
-                  <li><strong>Customize:</strong> Adjust the avatar features as desired</li>
-                  <li><strong>Save:</strong> When finished, copy the avatar link or code</li>
-                  <li><strong>Paste:</strong> Enter the code or URL in the next step to save to {child.name}'s profile</li>
+                  <li>Use the Ready Player Me interface below to create an avatar</li>
+                  <li>Take or upload a photo when prompted</li>
+                  <li>Customize the avatar as desired</li>
+                  <li>When finished, look for the <strong>"Copy the link to share"</strong> button</li>
+                  <li>Copy that URL and paste it in the next step (or just enter the 6-digit code)</li>
                 </ol>
               </div>
 
@@ -299,7 +281,6 @@ function AvatarCreatorModal({ isOpen, onClose, child, onAvatarSaved }: AvatarCre
                   className="w-full h-full border-none"
                   allow="camera *; microphone *"
                   onLoad={() => setIframeLoaded(true)}
-                  data-testid="rpm-iframe"
                 />
               </div>
 
@@ -442,7 +423,6 @@ function AvatarCreatorModal({ isOpen, onClose, child, onAvatarSaved }: AvatarCre
 }
 
 export default function ChildrenTab() {
-  const router = useRouter()
   const [selectedChild, setSelectedChild] = useState<string | null>(null)
   const [childSubTab, setChildSubTab] = useState<string>("overview")
   const [loading, setLoading] = useState(false)
@@ -649,7 +629,7 @@ export default function ChildrenTab() {
     }
   }
 
-  // Open avatar creator - use iframe modal
+  // Open avatar creator modal
   async function openAvatarCreator(childId: string) {
     // First check if child exists in current data
     const childInCurrentData = children.some(child => child.id === childId)
@@ -673,7 +653,6 @@ export default function ChildrenTab() {
       return
     }
     
-    // Open the iframe modal
     setAvatarCreatorChildId(childId)
     setShowAvatarCreator(true)
   }
@@ -707,13 +686,8 @@ export default function ChildrenTab() {
                 avatarUrl={child?.avatar_url}
                 headshotUrl={child?.avatar_headshot_url}
                 childName={child?.name || 'Child'}
-                childId={child?.id}
                 size="large"
                 autoGenerateFromAvatar={true}
-                onHeadshotGenerated={(headshotUrl) => {
-                  // Refresh children data to show the new profile picture
-                  fetchChildren()
-                }}
               />
               <div>
                 <h1 className="text-3xl font-bold">{child?.name} ({child?.age} years old)</h1>
@@ -848,50 +822,26 @@ export default function ChildrenTab() {
                     {child?.avatar_url ? 'Replace Avatar' : 'Create Avatar'}
                   </h3>
                   
-                  {/* Photo Upload for Avatar Creation */}
+                  {/* Ready Player Me Avatar Creator */}
                   <div className="bg-blue-50 border-2 border-blue-300 p-6 text-center">
                     <div className="space-y-4">
                       <div className="text-blue-800">
                         <svg className="w-16 h-16 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
                         </svg>
                       </div>
                       <div>
-                        <h4 className="font-bold text-blue-800 mb-2">
-                          {child?.avatar_url ? 'Replace with New Photo' : 'Upload Photo to Create Avatar'}
-                        </h4>
+                        <h4 className="font-bold text-blue-800 mb-2">Create 3D Avatar</h4>
                         <p className="text-sm text-blue-700 mb-4">
-                          Upload a photo of {child?.name} to automatically create a personalized 3D avatar and profile picture
+                          Use Ready Player Me to create a personalized 3D avatar for {child?.name}
                         </p>
                         <button
                           onClick={() => openAvatarCreator(child?.id || '')}
                           className="bg-chart-2 text-white px-6 py-3 border-2 border-black shadow-brutal hover:shadow-brutal-lg font-bold flex items-center space-x-2 mx-auto"
                         >
-                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-                          </svg>
-                          <span>{child?.avatar_url ? 'UPLOAD NEW PHOTO' : 'UPLOAD PHOTO'}</span>
+                          <User className="h-5 w-5" />
+                          <span>CREATE AVATAR</span>
                         </button>
-                      </div>
-                    </div>
-                  </div>
-                  
-                  {/* Process explanation */}
-                  <div className="bg-green-50 border-2 border-green-300 p-4">
-                    <h4 className="font-bold text-green-800 mb-2">✨ What happens automatically:</h4>
-                    <div className="text-sm text-green-700 space-y-1">
-                      <div className="flex items-center space-x-2">
-                        <span className="w-4 h-4 bg-green-500 text-white rounded-full flex items-center justify-center text-xs font-bold">1</span>
-                        <span>3D avatar is created from the photo</span>
-                      </div>
-                      <div className="flex items-center space-x-2">
-                        <span className="w-4 h-4 bg-green-500 text-white rounded-full flex items-center justify-center text-xs font-bold">2</span>
-                        <span>Profile picture is generated from the 3D avatar</span>
-                      </div>
-                      <div className="flex items-center space-x-2">
-                        <span className="w-4 h-4 bg-green-500 text-white rounded-full flex items-center justify-center text-xs font-bold">3</span>
-                        <span>Both are saved to {child?.name}'s profile</span>
                       </div>
                     </div>
                   </div>
@@ -1063,13 +1013,8 @@ export default function ChildrenTab() {
                 avatarUrl={child.avatar_url}
                 headshotUrl={child.avatar_headshot_url}
                 childName={child.name}
-                childId={child.id}
                 size="large"
                 autoGenerateFromAvatar={true}
-                onHeadshotGenerated={(headshotUrl) => {
-                  // Refresh children data to show the new profile picture
-                  fetchChildren()
-                }}
               />
               <div className="flex-1">
                 <h3 className="text-xl font-bold">{child.name} (Age {child.age})</h3>
