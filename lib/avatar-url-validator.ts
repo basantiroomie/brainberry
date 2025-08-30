@@ -37,7 +37,7 @@ export class AvatarUrlValidator {
   static extractAvatarCode(url: string): string | null {
     if (!this.isValidAvatarUrl(url)) return null
     
-    const match = url.match(/([A-Z0-9]{6})\.(?:glb|png)$/)
+    const match = url.match(/([A-Z0-9]{6,})\.(?:glb|png)$/)
     return match ? match[1] : null
   }
 
@@ -45,7 +45,7 @@ export class AvatarUrlValidator {
    * Generate URLs from avatar code
    */
   static codeToUrls(code: string): { glbUrl: string; pngUrl: string } | null {
-    if (!code || !/^[A-Z0-9]{6}$/.test(code)) {
+    if (!code || !/^[A-Z0-9]{6,}$/.test(code)) {
       return null
     }
     
@@ -81,7 +81,18 @@ export class AvatarUrlValidator {
     if (!sanitized) return null
     
     if (preferPng && sanitized.endsWith('.glb')) {
-      return this.glbToPngUrl(sanitized)
+      const pngUrl = this.glbToPngUrl(sanitized)
+      if (pngUrl) {
+        // Add ReadyPlayer.me 2D render parameters for zoomed-in head snapshot
+        const url = new URL(pngUrl)
+        url.searchParams.set('camera', 'portrait') // Close-up headshot view
+        url.searchParams.set('size', '512') // Higher resolution for better quality
+        url.searchParams.set('background', '255,255,255') // Clean white background
+        url.searchParams.set('quality', '95') // High quality rendering
+        // Add expression for a natural look
+        url.searchParams.set('expression', 'happy')
+        return url.toString()
+      }
     }
     
     return sanitized

@@ -56,19 +56,34 @@ export const ProfilePicture: React.FC<ProfilePictureProps> = ({
     if (headshotUrl) {
       finalUrl = headshotUrl
     } 
-    // Priority 2: Derive the .png URL from the .glb avatarUrl.
-    else if (avatarUrl && avatarUrl.endsWith('.glb')) {
-      finalUrl = avatarUrl.replace('.glb', '.png')
-    } 
-    // Priority 3: Use the avatarUrl if it's already a .png
-    else if (avatarUrl && avatarUrl.endsWith('.png')) {
-      finalUrl = avatarUrl
+    // Priority 2: Generate ReadyPlayer.me 2D render URL from avatarUrl
+    else if (avatarUrl) {
+      // Always use the ReadyPlayer.me 2D render API for profile pictures
+      if (avatarUrl.includes('models.readyplayer.me')) {
+        // Convert .glb to .png for 2D render
+        if (avatarUrl.endsWith('.glb')) {
+          finalUrl = avatarUrl.replace('.glb', '.png')
+        } else if (avatarUrl.endsWith('.png')) {
+          finalUrl = avatarUrl
+        }
+        
+        // Add query parameters for zoomed-in head snapshot
+        if (finalUrl) {
+          const url = new URL(finalUrl)
+          url.searchParams.set('camera', 'portrait') // Close-up headshot view
+          url.searchParams.set('size', '512') // Higher resolution for better quality
+          url.searchParams.set('background', '255,255,255') // Clean white background
+          url.searchParams.set('quality', '95') // High quality rendering
+          // Add expression for a natural look
+          url.searchParams.set('expression', 'happy')
+          finalUrl = url.toString()
+        }
+      }
     }
 
     setDisplayUrl(finalUrl)
 
-    // If no direct image URL is found and auto-generation is enabled,
-    // the HeadshotGenerator component will handle it.
+    // If no direct image URL is found, stop loading
     if (!finalUrl) {
       setIsLoading(false)
     }
@@ -92,7 +107,6 @@ export const ProfilePicture: React.FC<ProfilePictureProps> = ({
   }
 
   const showFallback = !displayUrl || imageError
-  const showGenerator = !displayUrl && !imageError && autoGenerate && avatarUrl && childId
 
   return (
     <div className={`${sizeClasses[size]} bg-gray-200 border-2 border-black rounded-full overflow-hidden flex items-center justify-center relative ${className}`}>
@@ -105,20 +119,16 @@ export const ProfilePicture: React.FC<ProfilePictureProps> = ({
           className="w-full h-full object-cover"
           onLoad={handleImageLoad}
           onError={handleImageError}
-          style={{ display: isLoading ? 'none' : 'block' }}
+          style={{ 
+            display: isLoading ? 'none' : 'block',
+            objectPosition: 'center top', // Focus on the top part (head area)
+            transform: 'scale(1.2)', // Slight zoom to focus more on the head
+            transformOrigin: 'center top'
+          }}
         />
       )}
       
       {showFallback && (fallbackIcon || <span className={`${iconSizes[size]} text-gray-500`}>?</span>)}
-
-      {showGenerator && (
-        <HeadshotGenerator
-          avatarUrl={avatarUrl}
-          childId={childId}
-          onHeadshotGenerated={handleGenerated}
-          onError={() => setIsLoading(false)} // Stop loading on generation error
-        />
-      )}
     </div>
   )
 }

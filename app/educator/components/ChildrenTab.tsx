@@ -8,13 +8,13 @@ import { AvatarCodeUtils } from '@/lib/avatar-utils'
 import { avatarCodeSchema } from '@/lib/schemas'
 import ChildAvatarDisplay from '@/app/child/components/ChildAvatarDisplay'
 
-interface Child { 
-  id: string; 
-  name: string; 
-  age: number; 
-  diagnosis: string; 
-  notes?: string | null; 
-  access_code?: string | null; 
+interface Child {
+  id: string;
+  name: string;
+  age: number;
+  diagnosis: string;
+  notes?: string | null;
+  access_code?: string | null;
   educator_id?: string;
   avatar_url?: string | null;
   avatar_headshot_url?: string | null;
@@ -48,7 +48,7 @@ interface AvatarCreatorModalProps {
 function AvatarCreatorModal({ isOpen, onClose, child, onAvatarSaved }: AvatarCreatorModalProps) {
   const [step, setStep] = useState<'iframe' | 'code'>('iframe')
   const [avatarCode, setAvatarCode] = useState('')
-  
+
   // Safety check - if child is null or undefined, close the modal
   useEffect(() => {
     if (isOpen && !child) {
@@ -57,7 +57,7 @@ function AvatarCreatorModal({ isOpen, onClose, child, onAvatarSaved }: AvatarCre
       onClose()
     }
   }, [isOpen, child, onClose])
-  
+
   // Don't render if child is null
   if (!child) {
     return null
@@ -65,10 +65,11 @@ function AvatarCreatorModal({ isOpen, onClose, child, onAvatarSaved }: AvatarCre
   const [codeError, setCodeError] = useState('')
   const [saving, setSaving] = useState(false)
   const [iframeLoaded, setIframeLoaded] = useState(false)
-  
+
   // Ready Player Me iframe configuration
   const rpmSubdomain = process.env.NEXT_PUBLIC_RPM_SUBDOMAIN || 'demo'
-  const iframeUrl = `https://${rpmSubdomain}.readyplayer.me/avatar?frameApi`
+  // Force the iframe to start with photo upload by adding quickStart parameter
+  const iframeUrl = `https://${rpmSubdomain}.readyplayer.me/avatar?frameApi&quickStart=true&bodyType=halfbody`
 
   // Reset state when modal opens/closes
   useEffect(() => {
@@ -85,40 +86,40 @@ function AvatarCreatorModal({ isOpen, onClose, child, onAvatarSaved }: AvatarCre
   const handleCodeChange = (value: string) => {
     setAvatarCode(value.trim())
     setCodeError('')
-    
+
     if (value.trim().length === 0) return
-    
+
     const trimmedValue = value.trim()
-    
+
     // Check if it's a URL
     if (trimmedValue.includes('models.readyplayer.me')) {
       // Extract code from URL if it's a full URL
       const urlMatch = trimmedValue.match(/models\.readyplayer\.me\/([A-Z0-9]{6,})/i)
       if (urlMatch) {
-        const extractedCode = urlMatch[1]
+        const extractedCode = urlMatch[1].replace(/\.(glb|png)$/, '')
         if (extractedCode.length >= 6) {
           // Valid URL with code
           return
         }
       }
-      
+
       if (!trimmedValue.startsWith('https://models.readyplayer.me/')) {
         setCodeError('URL should start with https://models.readyplayer.me/')
         return
       }
-      
-      if (!trimmedValue.includes('.glb')) {
-        setCodeError('URL should contain .glb extension')
+
+      if (!trimmedValue.includes('.glb') && !trimmedValue.includes('.png')) {
+        setCodeError('URL should contain .glb or .png extension')
         return
       }
     } else {
-      // Check if it's a 6-digit code
-      if (trimmedValue.length === 6) {
-        if (!/^[A-Z0-9]{6}$/i.test(trimmedValue)) {
+      // Check if it's an avatar code (6 or more characters)
+      if (trimmedValue.length >= 6) {
+        if (!/^[A-Z0-9]{6,}$/i.test(trimmedValue)) {
           setCodeError('Code should contain only letters and numbers')
         }
-      } else if (trimmedValue.length > 6) {
-        setCodeError('Code should be exactly 6 characters, or paste the full URL')
+      } else if (trimmedValue.length > 0) {
+        setCodeError('Code should be at least 6 characters, or paste the full URL')
       }
     }
   }
@@ -137,10 +138,11 @@ function AvatarCreatorModal({ isOpen, onClose, child, onAvatarSaved }: AvatarCre
 
       // Handle URL input (including partial URLs)
       if (trimmedInput.includes('models.readyplayer.me')) {
-        // Extract code from URL
+        // Extract code from URL - support longer codes too
         const urlMatch = trimmedInput.match(/models\.readyplayer\.me\/([A-Z0-9]{6,})/i)
         if (urlMatch) {
-          const extractedCode = urlMatch[1].replace(/\.(glb|png)$/, '').substring(0, 6)
+          const extractedCode = urlMatch[1].replace(/\.(glb|png)$/, '')
+          // Use the full extracted code (don't truncate to 6 characters)
           glbUrl = `https://models.readyplayer.me/${extractedCode}.glb`
           pngUrl = `https://models.readyplayer.me/${extractedCode}.png`
         } else {
@@ -148,23 +150,22 @@ function AvatarCreatorModal({ isOpen, onClose, child, onAvatarSaved }: AvatarCre
           return
         }
       } else {
-        // Handle 6-digit code
+        // Handle codes (6+ characters)
         const upperCode = trimmedInput.toUpperCase()
-        
-        // Validate code format
-        if (!/^[A-Z0-9]{6}$/.test(upperCode)) {
-          setCodeError('Code must be exactly 6 characters (letters and numbers only)')
+
+        // Validate code format - allow 6 or more characters
+        if (!/^[A-Z0-9]{6,}$/.test(upperCode)) {
+          setCodeError('Code must be at least 6 characters (letters and numbers only)')
           return
         }
-        
-        // Convert code to URLs
-        const urls = AvatarCodeUtils.codeToUrls(upperCode)
-        glbUrl = urls.glbUrl
-        pngUrl = urls.pngUrl
+
+        // Convert code to URLs using the full code
+        glbUrl = `https://models.readyplayer.me/${upperCode}.glb`
+        pngUrl = `https://models.readyplayer.me/${upperCode}.png`
       }
-      
+
       setSaving(true)
-      
+
       // Update child with avatar URLs
       const response = await fetch(`/api/children/${child.id}`, {
         method: 'PUT',
@@ -189,7 +190,7 @@ function AvatarCreatorModal({ isOpen, onClose, child, onAvatarSaved }: AvatarCre
           childId: child.id,
           errorData
         })
-        
+
         if (response.status === 404) {
           toast.error('Child not found. Please refresh the page and try again.')
         } else {
@@ -208,9 +209,9 @@ function AvatarCreatorModal({ isOpen, onClose, child, onAvatarSaved }: AvatarCre
   useEffect(() => {
     const handleMessage = (event: MessageEvent) => {
       if (event.origin !== `https://${rpmSubdomain}.readyplayer.me`) return
-      
+
       const { eventName, data } = event.data
-      
+
       switch (eventName) {
         case 'v1.frame.ready':
           setIframeLoaded(true)
@@ -258,12 +259,17 @@ function AvatarCreatorModal({ isOpen, onClose, child, onAvatarSaved }: AvatarCre
               <div className="bg-blue-50 border-2 border-blue-300 p-4">
                 <h3 className="font-bold text-blue-800 mb-2">📋 Instructions</h3>
                 <ol className="text-sm text-blue-700 space-y-1 list-decimal list-inside">
-                  <li>Use the Ready Player Me interface below to create an avatar</li>
-                  <li>Take or upload a photo when prompted</li>
-                  <li>Customize the avatar as desired</li>
+                  <li><strong>The interface will automatically prompt you to upload a photo</strong></li>
+                  <li>Take a new photo or upload an existing one from your device</li>
+                  <li>Customize the avatar appearance as desired</li>
                   <li>When finished, look for the <strong>"Copy the link to share"</strong> button</li>
-                  <li>Copy that URL and paste it in the next step (or just enter the 6-digit code)</li>
+                  <li>Copy that URL and paste it in the next step (or just enter the avatar code)</li>
                 </ol>
+                <div className="mt-3 p-2 bg-yellow-100 border border-yellow-300 rounded">
+                  <p className="text-xs text-yellow-800 font-bold">
+                    💡 Tip: The Ready Player Me interface is configured to start with photo upload for creating custom avatars
+                  </p>
+                </div>
               </div>
 
               {/* Ready Player Me Iframe */}
@@ -273,14 +279,16 @@ function AvatarCreatorModal({ isOpen, onClose, child, onAvatarSaved }: AvatarCre
                     <div className="text-center">
                       <Loader2 className="w-8 h-8 mx-auto mb-2 animate-spin text-chart-2" />
                       <p className="text-sm font-bold text-gray-600">Loading Ready Player Me...</p>
+                      <p className="text-xs text-gray-500 mt-1">The interface will prompt you to upload a photo</p>
                     </div>
                   </div>
                 )}
                 <iframe
                   src={iframeUrl}
                   className="w-full h-full border-none"
-                  allow="camera *; microphone *"
+                  allow="camera *; microphone *; fullscreen *"
                   onLoad={() => setIframeLoaded(true)}
+                  data-testid="rpm-iframe"
                 />
               </div>
 
@@ -324,10 +332,9 @@ function AvatarCreatorModal({ isOpen, onClose, child, onAvatarSaved }: AvatarCre
                       <textarea
                         value={avatarCode}
                         onChange={(e) => handleCodeChange(e.target.value)}
-                        placeholder="Paste the full URL from Ready Player Me OR enter just the 6-character code&#10;&#10;Examples:&#10;• Code: ABC123&#10;• URL: https://models.readyplayer.me/ABC123.glb"
-                        className={`w-full border-2 p-3 text-sm resize-none ${
-                          codeError ? 'border-red-500' : 'border-black'
-                        }`}
+                        placeholder="Paste the full URL from Ready Player Me OR enter the avatar code&#10;&#10;Examples:&#10;• Code: ABC123 or ABC123DEF456&#10;• URL: https://models.readyplayer.me/ABC123DEF456.glb"
+                        className={`w-full border-2 p-3 text-sm resize-none ${codeError ? 'border-red-500' : 'border-black'
+                          }`}
                         rows={4}
                         disabled={saving}
                       />
@@ -348,8 +355,8 @@ function AvatarCreatorModal({ isOpen, onClose, child, onAvatarSaved }: AvatarCre
                       <p>After creating your avatar, click the <strong>"Copy the link to share in social media"</strong> button and paste the entire URL here.</p>
                     </div>
                     <div className="bg-white p-3 rounded border">
-                      <h5 className="font-bold text-blue-600 mb-1">📝 Alternative: Enter the 6-digit code</h5>
-                      <p>Look for a 6-character code (like "ABC123") in the Ready Player Me interface and enter just that code.</p>
+                      <h5 className="font-bold text-blue-600 mb-1">📝 Alternative: Enter the avatar code</h5>
+                      <p>Look for the avatar code (6 or more characters like "ABC123" or "ABC123DEF456") in the Ready Player Me interface and enter just that code.</p>
                     </div>
                   </div>
                 </div>
@@ -365,16 +372,16 @@ function AvatarCreatorModal({ isOpen, onClose, child, onAvatarSaved }: AvatarCre
                             <span className="font-bold">3D Model:</span> {avatarCode}
                           </div>
                           <div>
-                            <span className="font-bold">Headshot:</span> {avatarCode.replace('.glb', '.png')}
+                            <span className="font-bold">Profile Picture:</span> {avatarCode.replace('.glb', '.png')}
                           </div>
                         </>
-                      ) : avatarCode.length === 6 && /^[A-Z0-9]{6}$/i.test(avatarCode) ? (
+                      ) : avatarCode.length >= 6 && /^[A-Z0-9]{6,}$/i.test(avatarCode) ? (
                         <>
                           <div>
-                            <span className="font-bold">3D Model:</span> {AvatarCodeUtils.codeToGlbUrl(avatarCode.toUpperCase())}
+                            <span className="font-bold">3D Model:</span> https://models.readyplayer.me/{avatarCode.toUpperCase()}.glb
                           </div>
                           <div>
-                            <span className="font-bold">Headshot:</span> {AvatarCodeUtils.codeToPngUrl(avatarCode.toUpperCase())}
+                            <span className="font-bold">Profile Picture:</span> https://models.readyplayer.me/{avatarCode.toUpperCase()}.png
                           </div>
                         </>
                       ) : null}
@@ -395,11 +402,10 @@ function AvatarCreatorModal({ isOpen, onClose, child, onAvatarSaved }: AvatarCre
                 <button
                   onClick={handleSaveAvatar}
                   disabled={!avatarCode || codeError || saving}
-                  className={`px-6 py-2 border-2 border-black shadow-brutal hover:shadow-brutal-lg font-bold flex items-center space-x-2 ${
-                    !avatarCode || codeError || saving
-                      ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                      : 'bg-chart-2 text-white'
-                  }`}
+                  className={`px-6 py-2 border-2 border-black shadow-brutal hover:shadow-brutal-lg font-bold flex items-center space-x-2 ${!avatarCode || codeError || saving
+                    ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                    : 'bg-chart-2 text-white'
+                    }`}
                 >
                   {saving ? (
                     <>
@@ -433,9 +439,9 @@ export default function ChildrenTab() {
   const [newChild, setNewChild] = useState({ name: '', age: '', diagnosis: 'HYBRID', accessCode: '' })
   const [assignModal, setAssignModal] = useState(false)
   const [assignMoldId, setAssignMoldId] = useState('')
-  
+
   // Avatar Creator Modal state only
-  
+
   // Avatar Creator Modal state
   const [showAvatarCreator, setShowAvatarCreator] = useState(false)
   const [avatarCreatorChildId, setAvatarCreatorChildId] = useState<string | null>(null)
@@ -461,11 +467,11 @@ export default function ChildrenTab() {
   }, [newChild.accessCode])
 
   async function fetchChildren() {
-    if (useMock) { 
-      setChildren((dataset?.children||[]) as any); 
-      return 
+    if (useMock) {
+      setChildren((dataset?.children || []) as any);
+      return
     }
-    
+
     setLoading(true)
     try {
       const res = await fetch('/api/children')
@@ -482,8 +488,8 @@ export default function ChildrenTab() {
     } catch (error) {
       console.error('Error fetching children:', error)
       toast.error('Error loading children')
-    } finally { 
-      setLoading(false) 
+    } finally {
+      setLoading(false)
     }
   }
 
@@ -520,17 +526,17 @@ export default function ChildrenTab() {
   }
   async function fetchAssignments(childId: string) {
     if (useMock) {
-      const full = (dataset?.assignments||[]).filter(a=>a.childId===childId)
+      const full = (dataset?.assignments || []).filter(a => a.childId === childId)
       // attach mold info from dataset molds
-      const moldMap = Object.fromEntries((dataset?.molds||[]).map(m=>[m.id,m]))
-      setAssignments(full.map(a => ({ ...a, mold: moldMap[a.moldId] || { id:a.moldId, name:'Unknown', difficulty:'Easy' } })) as any)
+      const moldMap = Object.fromEntries((dataset?.molds || []).map(m => [m.id, m]))
+      setAssignments(full.map(a => ({ ...a, mold: moldMap[a.moldId] || { id: a.moldId, name: 'Unknown', difficulty: 'Easy' } })) as any)
       return
     }
     const res = await fetch(`/api/assignments?childId=${childId}`)
     if (res.ok) setAssignments(await res.json())
   }
   async function fetchMolds() {
-    if (useMock) { setAllMolds((dataset?.molds||[]) as any); return }
+    if (useMock) { setAllMolds((dataset?.molds || []) as any); return }
     const res = await fetch('/api/molds')
     if (res.ok) setAllMolds(await res.json())
   }
@@ -541,30 +547,30 @@ export default function ChildrenTab() {
   async function createChild(e: React.FormEvent) {
     e.preventDefault()
     if (!newChild.name || !newChild.age || !newChild.accessCode) return
-    if (useMock) { 
-      toast.success('Mock child added'); 
-      addChild(newChild.name, Number(newChild.age), newChild.diagnosis); 
-      setChildren((dataset?.children||[]) as any); 
-      setNewChild({ name:'', age:'', diagnosis:'HYBRID', accessCode: generateAccessCode() }); 
-      return 
+    if (useMock) {
+      toast.success('Mock child added');
+      addChild(newChild.name, Number(newChild.age), newChild.diagnosis);
+      setChildren((dataset?.children || []) as any);
+      setNewChild({ name: '', age: '', diagnosis: 'HYBRID', accessCode: generateAccessCode() });
+      return
     }
     setCreating(true)
     try {
-      const res = await fetch('/api/children', { 
-        method: 'POST', 
-        headers: { 'Content-Type':'application/json' }, 
-        body: JSON.stringify({ 
-          name: newChild.name, 
-          age: Number(newChild.age), 
-          diagnosis: newChild.diagnosis, 
-          access_code: newChild.accessCode 
-        }) 
+      const res = await fetch('/api/children', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: newChild.name,
+          age: Number(newChild.age),
+          diagnosis: newChild.diagnosis,
+          access_code: newChild.accessCode
+        })
       })
-      
-      if (res.ok) { 
-        toast.success('Child created successfully!'); 
-        setNewChild({ name:'', age:'', diagnosis:'HYBRID', accessCode: generateAccessCode() }); 
-        fetchChildren() 
+
+      if (res.ok) {
+        toast.success('Child created successfully!');
+        setNewChild({ name: '', age: '', diagnosis: 'HYBRID', accessCode: generateAccessCode() });
+        fetchChildren()
       } else {
         // Get detailed error message
         const errorData = await res.json().catch(() => ({ error: 'Unknown error' }))
@@ -574,22 +580,22 @@ export default function ChildrenTab() {
     } catch (error) {
       console.error('Network error:', error)
       toast.error('Network error - check your connection')
-    } finally { 
-      setCreating(false) 
+    } finally {
+      setCreating(false)
     }
   }
 
   async function assignMold() {
     if (!assignMoldId || !selectedChild) return
-  if (useMock) { toast.success('Mock assignment created'); addAssignment(selectedChild, assignMoldId); fetchAssignments(selectedChild); setAssignModal(false); setAssignMoldId(''); return }
-    const res = await fetch('/api/assignments', { method: 'POST', headers: { 'Content-Type':'application/json' }, body: JSON.stringify({ child_id: selectedChild, mold_id: assignMoldId }) })
+    if (useMock) { toast.success('Mock assignment created'); addAssignment(selectedChild, assignMoldId); fetchAssignments(selectedChild); setAssignModal(false); setAssignMoldId(''); return }
+    const res = await fetch('/api/assignments', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ child_id: selectedChild, mold_id: assignMoldId }) })
     if (res.ok) { toast.success('Mold assigned'); setAssignModal(false); setAssignMoldId(''); fetchAssignments(selectedChild) } else toast.error('Assign failed')
   }
 
   async function updateProgress(a: Assignment, delta: number) {
     const newProgress = Math.min(100, Math.max(0, a.progress + delta))
-  if (useMock) { updateAssignmentProgress(a.id, newProgress); setAssignments(list => list.map(x=> x.id===a.id ? { ...x, progress:newProgress, status: newProgress===100 ? 'completed':'in-progress' } : x)); return }
-    const res = await fetch(`/api/assignments/${a.id}`, { method: 'PUT', headers: { 'Content-Type':'application/json' }, body: JSON.stringify({ progress: newProgress, status: newProgress===100? 'completed':'in-progress' }) })
+    if (useMock) { updateAssignmentProgress(a.id, newProgress); setAssignments(list => list.map(x => x.id === a.id ? { ...x, progress: newProgress, status: newProgress === 100 ? 'completed' : 'in-progress' } : x)); return }
+    const res = await fetch(`/api/assignments/${a.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ progress: newProgress, status: newProgress === 100 ? 'completed' : 'in-progress' }) })
     if (res.ok) { toast.success('Progress updated'); fetchAssignments(a.childId) } else toast.error('Update failed')
   }
 
@@ -602,8 +608,8 @@ export default function ChildrenTab() {
 
     if (useMock) {
       toast.success('Avatar removed (mock mode)')
-      setChildren(children.map(child => 
-        child.id === childId 
+      setChildren(children.map(child =>
+        child.id === childId
           ? { ...child, avatar_url: undefined, avatar_headshot_url: undefined }
           : child
       ))
@@ -636,7 +642,7 @@ export default function ChildrenTab() {
     if (!childInCurrentData) {
       toast.error('Child not found in current data. Refreshing...')
       await fetchChildren() // Refresh the children list
-      
+
       // Check again after refresh
       const refreshedChild = children.some(child => child.id === childId)
       if (!refreshedChild) {
@@ -644,7 +650,7 @@ export default function ChildrenTab() {
         return
       }
     }
-    
+
     // Double-check with server
     const childExistsOnServer = await validateChildExists(childId)
     if (!childExistsOnServer) {
@@ -652,7 +658,7 @@ export default function ChildrenTab() {
       fetchChildren()
       return
     }
-    
+
     setAvatarCreatorChildId(childId)
     setShowAvatarCreator(true)
   }
@@ -661,7 +667,7 @@ export default function ChildrenTab() {
   function handleAvatarSaved() {
     fetchChildren() // Refresh children data to show new avatar
   }
-  
+
   // Validate child exists before operations
   async function validateChildExists(childId: string): Promise<boolean> {
     try {
@@ -713,11 +719,10 @@ export default function ChildrenTab() {
               <button
                 key={tab}
                 onClick={() => setChildSubTab(tab)}
-                className={`px-4 py-2 border-2 border-black shadow-brutal hover:shadow-brutal-lg transition-all font-bold text-sm transform ${
-                  childSubTab === tab
-                    ? "bg-chart-2 text-white shadow-brutal-lg -rotate-1"
-                    : "bg-main text-main-foreground hover:rotate-1"
-                }`}
+                className={`px-4 py-2 border-2 border-black shadow-brutal hover:shadow-brutal-lg transition-all font-bold text-sm transform ${childSubTab === tab
+                  ? "bg-chart-2 text-white shadow-brutal-lg -rotate-1"
+                  : "bg-main text-main-foreground hover:rotate-1"
+                  }`}
               >
                 {tab.toUpperCase()}
               </button>
@@ -731,7 +736,7 @@ export default function ChildrenTab() {
             <div className="space-y-6">
               <h2 className="text-2xl font-bold">Current Goals & Games</h2>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {assignments.slice(0,2).map(a => (
+                {assignments.slice(0, 2).map(a => (
                   <div key={a.id} className="border-2 border-gray-300 p-4">
                     <h3 className="font-bold mb-1">🎯 {a.mold.name}</h3>
                     <p className="text-gray-600 text-xs mb-2">{a.mold.difficulty} • {a.status}</p>
@@ -739,7 +744,7 @@ export default function ChildrenTab() {
                     <span className="text-xs font-bold text-gray-600">{a.progress}% Complete</span>
                   </div>
                 ))}
-                {assignments.length===0 && <div className="border-2 border-dashed border-gray-300 p-4 text-center text-sm text-gray-500 font-bold">No assignments yet – go to ASSIGNMENTS tab.</div>}
+                {assignments.length === 0 && <div className="border-2 border-dashed border-gray-300 p-4 text-center text-sm text-gray-500 font-bold">No assignments yet – go to ASSIGNMENTS tab.</div>}
               </div>
             </div>
           )}
@@ -747,7 +752,7 @@ export default function ChildrenTab() {
             <div className="space-y-4">
               <div className="flex justify-between items-center">
                 <h2 className="text-2xl font-bold">Assignments</h2>
-                <button onClick={() => setAssignModal(true)} className="bg-chart-2 text-white px-4 py-2 border-2 border-black shadow-brutal font-bold text-sm flex items-center space-x-2"><Link2 className="h-4 w-4"/><span>ASSIGN</span></button>
+                <button onClick={() => setAssignModal(true)} className="bg-chart-2 text-white px-4 py-2 border-2 border-black shadow-brutal font-bold text-sm flex items-center space-x-2"><Link2 className="h-4 w-4" /><span>ASSIGN</span></button>
               </div>
               <div className="space-y-3">
                 {assignments.map(a => (
@@ -764,7 +769,7 @@ export default function ChildrenTab() {
                     </div>
                   </div>
                 ))}
-                {assignments.length===0 && <div className="p-4 border-2 border-dashed border-black text-center text-xs font-bold text-gray-500">None yet</div>}
+                {assignments.length === 0 && <div className="p-4 border-2 border-dashed border-black text-center text-xs font-bold text-gray-500">None yet</div>}
               </div>
             </div>
           )}
@@ -772,7 +777,7 @@ export default function ChildrenTab() {
           {childSubTab === "avatar" && (
             <div className="space-y-6">
               <h2 className="text-2xl font-bold">Avatar Management</h2>
-              
+
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 {/* Avatar Display */}
                 <div className="space-y-4">
@@ -795,7 +800,7 @@ export default function ChildrenTab() {
                       </div>
                     )}
                   </div>
-                  
+
                   <div className="flex space-x-2">
                     <button
                       onClick={() => openAvatarCreator(child.id)}
@@ -821,7 +826,7 @@ export default function ChildrenTab() {
                   <h3 className="text-lg font-bold">
                     {child?.avatar_url ? 'Replace Avatar' : 'Create Avatar'}
                   </h3>
-                  
+
                   {/* Ready Player Me Avatar Creator */}
                   <div className="bg-blue-50 border-2 border-blue-300 p-6 text-center">
                     <div className="space-y-4">
@@ -850,7 +855,7 @@ export default function ChildrenTab() {
             </div>
           )}
 
-      {childSubTab === "progress" && (
+          {childSubTab === "progress" && (
             <div className="space-y-6">
               <h2 className="text-2xl font-bold">Detailed Analytics</h2>
               {child && <ChildAnalytics childId={child.id} />}
@@ -955,15 +960,15 @@ export default function ChildrenTab() {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             <div>
               <label className="block text-xs font-bold mb-1">Name</label>
-              <input value={newChild.name} onChange={e=>setNewChild(c=>({...c,name:e.target.value}))} className="w-full border-2 border-black p-2 text-sm" required />
+              <input value={newChild.name} onChange={e => setNewChild(c => ({ ...c, name: e.target.value }))} className="w-full border-2 border-black p-2 text-sm" required />
             </div>
             <div>
               <label className="block text-xs font-bold mb-1">Age</label>
-              <input type="number" value={newChild.age} onChange={e=>setNewChild(c=>({...c,age:e.target.value}))} className="w-full border-2 border-black p-2 text-sm" required />
+              <input type="number" value={newChild.age} onChange={e => setNewChild(c => ({ ...c, age: e.target.value }))} className="w-full border-2 border-black p-2 text-sm" required />
             </div>
             <div>
               <label className="block text-xs font-bold mb-1">Diagnosis</label>
-              <select value={newChild.diagnosis} onChange={e=>setNewChild(c=>({...c,diagnosis:e.target.value}))} className="w-full border-2 border-black p-2 text-sm">
+              <select value={newChild.diagnosis} onChange={e => setNewChild(c => ({ ...c, diagnosis: e.target.value }))} className="w-full border-2 border-black p-2 text-sm">
                 <option value="ASD">ASD</option>
                 <option value="ADHD">ADHD</option>
                 <option value="HYBRID">HYBRID</option>
@@ -976,14 +981,14 @@ export default function ChildrenTab() {
                 <label className="block text-xs font-bold mb-1">Child Access Code</label>
                 <div className="text-2xl font-mono font-bold">{newChild.accessCode}</div>
               </div>
-              <button type="button" onClick={() => setNewChild(c => ({...c, accessCode: generateAccessCode()}))} className="bg-white text-black px-3 py-1 border-2 border-black shadow-brutal hover:shadow-brutal-lg text-xs font-bold">
+              <button type="button" onClick={() => setNewChild(c => ({ ...c, accessCode: generateAccessCode() }))} className="bg-white text-black px-3 py-1 border-2 border-black shadow-brutal hover:shadow-brutal-lg text-xs font-bold">
                 REGENERATE
               </button>
             </div>
             <p className="text-xs mt-2">Give this code to the child for login</p>
           </div>
           <div className="text-right">
-            <button disabled={creating} className="bg-chart-1 text-white px-6 py-2 border-2 border-black shadow-brutal font-bold text-sm inline-flex items-center space-x-2 disabled:opacity-50">{creating ? <Loader2 className="h-4 w-4 animate-spin"/>:<Plus className="h-4 w-4"/>}<span>ADD CHILD</span></button>
+            <button disabled={creating} className="bg-chart-1 text-white px-6 py-2 border-2 border-black shadow-brutal font-bold text-sm inline-flex items-center space-x-2 disabled:opacity-50">{creating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}<span>ADD CHILD</span></button>
           </div>
         </form>
       </div>
@@ -1035,8 +1040,8 @@ export default function ChildrenTab() {
             </div>
             <div className="flex space-x-2">
               <button onClick={() => setSelectedChild(child.id)} className="flex-1 bg-chart-2 text-white py-2 px-4 border-2 border-black shadow-brutal font-bold text-sm">VIEW PROFILE</button>
-              <button 
-                onClick={() => openAvatarCreator(child.id)} 
+              <button
+                onClick={() => openAvatarCreator(child.id)}
                 className="bg-chart-1 text-white py-2 px-3 border-2 border-black shadow-brutal font-bold text-sm hover:bg-chart-1/90 transition-colors"
                 title={child.avatar_url ? 'Replace Avatar' : 'Create Avatar'}
               >
@@ -1046,7 +1051,7 @@ export default function ChildrenTab() {
             </div>
           </div>
         ))}
-        {!loading && Array.isArray(children) && children.length===0 && (
+        {!loading && Array.isArray(children) && children.length === 0 && (
           <div className="col-span-2 text-center space-y-4 p-8">
             <div className="text-lg font-bold text-gray-700">No children found</div>
             <div className="text-sm text-gray-600">
@@ -1074,13 +1079,13 @@ export default function ChildrenTab() {
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
           <div className="bg-white border-4 border-black shadow-brutal-xl p-6 w-full max-w-md space-y-4">
             <h2 className="text-xl font-bold">Assign Mold</h2>
-            <select value={assignMoldId} onChange={e=>setAssignMoldId(e.target.value)} className="w-full border-2 border-black p-2 font-bold">
+            <select value={assignMoldId} onChange={e => setAssignMoldId(e.target.value)} className="w-full border-2 border-black p-2 font-bold">
               <option value="">Select a mold</option>
               {allMolds.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
             </select>
             <div className="flex justify-end space-x-2">
-              <button onClick={()=>{setAssignModal(false); setAssignMoldId('')}} className="px-4 py-2 border-2 border-black bg-gray-300 font-bold text-sm">CANCEL</button>
-              <button disabled={!assignMoldId} onClick={assignMold} className="px-5 py-2 border-2 border-black bg-chart-2 text-white font-bold text-sm disabled:opacity-40 inline-flex items-center space-x-2"><CheckCircle2 className="h-4 w-4"/><span>ASSIGN</span></button>
+              <button onClick={() => { setAssignModal(false); setAssignMoldId('') }} className="px-4 py-2 border-2 border-black bg-gray-300 font-bold text-sm">CANCEL</button>
+              <button disabled={!assignMoldId} onClick={assignMold} className="px-5 py-2 border-2 border-black bg-chart-2 text-white font-bold text-sm disabled:opacity-40 inline-flex items-center space-x-2"><CheckCircle2 className="h-4 w-4" /><span>ASSIGN</span></button>
             </div>
           </div>
         </div>
@@ -1112,11 +1117,11 @@ function ChildAnalytics({ childId }: { childId: string }) {
     <div className="space-y-4">
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <MetricCard label="SESSIONS" value={data.totalSessions} color="chart-1" />
-        <MetricCard label="DURATION (MIN)" value={Math.round(data.totalDuration/60)} color="chart-2" />
+        <MetricCard label="DURATION (MIN)" value={Math.round(data.totalDuration / 60)} color="chart-2" />
         <MetricCard label="AVG COMPLETION" value={data.avgCompletion + '%'} color="chart-3" />
         <MetricCard label="ENGAGEMENT" value={data.engagementRate + '%'} color="chart-4" />
       </div>
-      {data.skills?.length>0 && (
+      {data.skills?.length > 0 && (
         <div className="space-y-2">
           <h3 className="font-bold text-lg">Skill Metrics</h3>
           <div className="space-y-2">
@@ -1136,7 +1141,7 @@ function ChildAnalytics({ childId }: { childId: string }) {
 
 function MetricCard({ label, value, color }: { label: string; value: any; color: string }) {
   return (
-    <div className={`bg-white border-4 border-black shadow-brutal-xl p-4 text-center`}> 
+    <div className={`bg-white border-4 border-black shadow-brutal-xl p-4 text-center`}>
       <div className={`text-2xl font-bold text-${color} mb-1`}>{value}</div>
       <div className="text-[10px] font-bold text-gray-600 tracking-wide">{label}</div>
     </div>

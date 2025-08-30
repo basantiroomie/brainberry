@@ -33,7 +33,7 @@ export const ChildAvatarDisplay: React.FC<ChildAvatarDisplayProps> = ({
     large: 'lg' as const
   }
 
-  // Process avatar URLs to get the best display URL
+  // Process avatar URLs to get the best display URL for profile pictures
   const primaryUrl = headshotUrl || (avatarUrl ? AvatarUrlValidator.getBestDisplayUrl(avatarUrl, true) : null)
   const fallbackUrl = avatarUrl && avatarUrl !== primaryUrl ? AvatarUrlValidator.getBestDisplayUrl(avatarUrl, false) : null
 

@@ -224,10 +224,10 @@ class AvatarService {
  */
 export class AvatarCodeUtils {
   /**
-   * Validate avatar code format (6 uppercase alphanumeric characters)
+   * Validate avatar code format (6 or more uppercase alphanumeric characters)
    */
   static validateAvatarCode(code: string): boolean {
-    const avatarCodeRegex = /^[A-Z0-9]{6}$/;
+    const avatarCodeRegex = /^[A-Z0-9]{6,}$/;
     return avatarCodeRegex.test(code);
   }
 
@@ -236,7 +236,7 @@ export class AvatarCodeUtils {
    */
   static codeToGlbUrl(code: string): string {
     if (!this.validateAvatarCode(code)) {
-      throw new Error('Invalid avatar code format. Must be 6 uppercase alphanumeric characters.');
+      throw new Error('Invalid avatar code format. Must be 6 or more uppercase alphanumeric characters.');
     }
     return `https://models.readyplayer.me/${code}.glb`;
   }
@@ -246,7 +246,7 @@ export class AvatarCodeUtils {
    */
   static codeToPngUrl(code: string): string {
     if (!this.validateAvatarCode(code)) {
-      throw new Error('Invalid avatar code format. Must be 6 uppercase alphanumeric characters.');
+      throw new Error('Invalid avatar code format. Must be 6 or more uppercase alphanumeric characters.');
     }
     return `https://models.readyplayer.me/${code}.png`;
   }
@@ -256,7 +256,7 @@ export class AvatarCodeUtils {
    */
   static codeToUrls(code: string): { glbUrl: string; pngUrl: string } {
     if (!this.validateAvatarCode(code)) {
-      throw new Error('Invalid avatar code format. Must be 6 uppercase alphanumeric characters.');
+      throw new Error('Invalid avatar code format. Must be 6 or more uppercase alphanumeric characters.');
     }
     return {
       glbUrl: this.codeToGlbUrl(code),
@@ -268,7 +268,7 @@ export class AvatarCodeUtils {
    * Extract avatar code from GLB URL
    */
   static extractCodeFromGlbUrl(url: string): string | null {
-    const match = url.match(/https:\/\/models\.readyplayer\.me\/([A-Z0-9]{6})\.glb/);
+    const match = url.match(/https:\/\/models\.readyplayer\.me\/([A-Z0-9]{6,})\.glb/);
     return match ? match[1] : null;
   }
 
@@ -276,7 +276,7 @@ export class AvatarCodeUtils {
    * Extract avatar code from PNG URL
    */
   static extractCodeFromPngUrl(url: string): string | null {
-    const match = url.match(/https:\/\/models\.readyplayer\.me\/([A-Z0-9]{6})\.png/);
+    const match = url.match(/https:\/\/models\.readyplayer\.me\/([A-Z0-9]{6,})\.png/);
     return match ? match[1] : null;
   }
 }
