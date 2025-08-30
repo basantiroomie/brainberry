@@ -27,6 +27,13 @@ export class LipsyncManager implements ILipsyncManager {
   private animationFrameId: number | null = null
   private onVisemeCallback?: (blendShapes: Partial<BlendShapeTargets>) => void
   private currentAudio: HTMLAudioElement | null = null
+  // Track attached utterance listeners so we don't leak or overwrite handlers
+  private utteranceListeners = new WeakMap<SpeechSynthesisUtterance, {
+    start?: EventListenerOrEventListenerObject
+    boundary?: EventListenerOrEventListenerObject
+    end?: EventListenerOrEventListenerObject
+    error?: EventListenerOrEventListenerObject
+  }>()
 
   // Enhanced viseme to Ready Player Me morph target mapping
   // Using Wawa Lipsync VISEMES enum for accurate mapping
@@ -91,37 +98,105 @@ export class LipsyncManager implements ILipsyncManager {
    * Process audio from Speech Synthesis with enhanced lip-sync
    */
   processSpeechSynthesis(utterance: SpeechSynthesisUtterance) {
-    console.log('Setting up TTS lip-sync processing')
-    
+    console.log('Setting up TTS lip-sync processing (non-destructive listeners)')
+
+    // Remove previously attached listeners for this utterance if any
+    const existing = this.utteranceListeners.get(utterance)
+    if (existing) {
+      try {
+        if (existing.start) utterance.removeEventListener('start', existing.start)
+        if (existing.boundary) utterance.removeEventListener('boundary', existing.boundary)
+        if (existing.end) utterance.removeEventListener('end', existing.end)
+        if (existing.error) utterance.removeEventListener('error', existing.error)
+      } catch (e) {
+        // ignore
+      }
+    }
+
     let speechStartTime = 0
-    
-    utterance.onstart = () => {
+
+    const onStart = () => {
       console.log('TTS started - beginning lip-sync')
       speechStartTime = Date.now()
       this.isProcessing = true
       this.startContinuousLipSync()
     }
 
-    utterance.onboundary = (event) => {
-      if (event.name === 'word' && this.onVisemeCallback) {
-        // Get more realistic viseme based on the word being spoken
-        const word = utterance.text.substring(event.charIndex, event.charIndex + event.charLength)
-        const viseme = this.getVisemeForWord(word)
-        const morphTargets = this.visemeToMorphTarget[viseme] || this.visemeToMorphTarget['rest']
-        
-        console.log(`Word: "${word}" -> Viseme: ${viseme}`)
-        this.onVisemeCallback(morphTargets)
+    const onBoundary = (event: Event) => {
+      // boundary events may be SpeechSynthesisEvent
+      const ev = event as any
+      try {
+        if (ev.name === 'word' && this.onVisemeCallback) {
+          const charIndex = typeof ev.charIndex === 'number' ? ev.charIndex : 0
+          const charLength = typeof ev.charLength === 'number' ? ev.charLength : 0
+          const word = utterance.text.substring(charIndex, charIndex + charLength)
+          const viseme = this.getVisemeForWord(word)
+          const morphTargets = this.visemeToMorphTarget[viseme] || this.visemeToMorphTarget['rest']
+          console.log(`Word: "${word}" -> Viseme: ${viseme}`)
+          this.onVisemeCallback(morphTargets)
+        }
+      } catch (e) {
+        // swallow errors to avoid breaking TTS flow
+        console.error('Error handling boundary event for lipsync:', e)
       }
     }
 
-    utterance.onend = () => {
+    const onEnd = () => {
       console.log('TTS ended - stopping lip-sync')
       this.stopProcessing()
+
+      // cleanup listeners for this utterance
+      const refs = this.utteranceListeners.get(utterance)
+      if (refs) {
+        try {
+          if (refs.start) utterance.removeEventListener('start', refs.start)
+          if (refs.boundary) utterance.removeEventListener('boundary', refs.boundary)
+          if (refs.end) utterance.removeEventListener('end', refs.end)
+          if (refs.error) utterance.removeEventListener('error', refs.error)
+        } catch (e) {
+          // ignore
+        }
+        this.utteranceListeners.delete(utterance)
+      }
     }
 
-    utterance.onerror = (event) => {
-      console.error('TTS error:', event.error)
+    const onError = (event: any) => {
+      console.error('TTS error:', event?.error || event)
       this.stopProcessing()
+      // let onEnd handle cleanup if it fires; otherwise remove now
+      const refs = this.utteranceListeners.get(utterance)
+      if (refs) {
+        try {
+          if (refs.start) utterance.removeEventListener('start', refs.start)
+          if (refs.boundary) utterance.removeEventListener('boundary', refs.boundary)
+          if (refs.end) utterance.removeEventListener('end', refs.end)
+          if (refs.error) utterance.removeEventListener('error', refs.error)
+        } catch (e) {
+          // ignore
+        }
+        this.utteranceListeners.delete(utterance)
+      }
+    }
+
+    // Attach listeners in a non-destructive way so component-level handlers still work
+    try {
+      utterance.addEventListener('start', onStart)
+      utterance.addEventListener('boundary', onBoundary)
+      utterance.addEventListener('end', onEnd)
+      utterance.addEventListener('error', onError)
+      this.utteranceListeners.set(utterance, { start: onStart, boundary: onBoundary, end: onEnd, error: onError })
+    } catch (e) {
+      // Some browsers may not support addEventListener on SpeechSynthesisUtterance; fall back to assignment
+      // Preserve existing handlers by wrapping them
+      const prevOnStart = utterance.onstart
+      const prevOnBoundary = (utterance as any).onboundary
+      const prevOnEnd = utterance.onend
+      const prevOnError = utterance.onerror
+
+      utterance.onstart = (ev: any) => { try { onStart(); prevOnStart && prevOnStart.call(utterance, ev) } catch (e) {} }
+      ;(utterance as any).onboundary = (ev: any) => { try { onBoundary(ev); prevOnBoundary && prevOnBoundary.call(utterance, ev) } catch (e) {} }
+      utterance.onend = (ev: any) => { try { onEnd(); prevOnEnd && prevOnEnd.call(utterance, ev) } catch (e) {} }
+      utterance.onerror = (ev: any) => { try { onError(ev); prevOnError && prevOnError.call(utterance, ev) } catch (e) {} }
     }
   }
 
