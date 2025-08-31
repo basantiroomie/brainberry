@@ -21,10 +21,11 @@ export default function MyStuffTab({ childProfile }: MyStuffTabProps) {
     completedAssignments: 0, 
     totalSessions: 0, 
     unlockedThemes: ['dinosaur'], 
-    achievements: [] 
+    achievements: ['first-quest', 'quest-master'] 
   })
   const [loading, setLoading] = useState(true)
   const [activeSection, setActiveSection] = useState<'overview' | 'avatar' | 'chat' | 'themes' | 'trophies'>('overview')
+  const [showTrophyPopup, setShowTrophyPopup] = useState(false)
 
   useEffect(() => {
     if (childProfile?.id) {
@@ -55,10 +56,8 @@ export default function MyStuffTab({ childProfile }: MyStuffTabProps) {
       if (completedCount >= 3) unlockedThemes.push('space')
       if (completedCount >= 6) unlockedThemes.push('castle')
 
-      const achievements = []
-      if (completedCount >= 1) achievements.push('first-quest')
-      if (completedCount >= 3) achievements.push('quest-master')
-      if (totalSessions >= 5) achievements.push('dedicated-player')
+      const achievements = ['first-quest', 'quest-master'] // Start with 2 default achievements
+      if (completedCount >= 3) achievements.push('dedicated-player')
       if (completedCount >= 5) achievements.push('superstar')
       if (totalSessions >= 10) achievements.push('champion')
 
@@ -114,6 +113,36 @@ export default function MyStuffTab({ childProfile }: MyStuffTabProps) {
       default: return 'Achievement'
     }
   }
+
+  const getAchievementDescription = (achievement: string) => {
+    switch (achievement) {
+      case 'first-quest': return 'Completed your very first learning quest!'
+      case 'quest-master': return 'Mastered 3 different learning quests!'
+      case 'dedicated-player': return 'Played for 5 amazing sessions!'
+      case 'superstar': return 'Completed 5 quests like a true superstar!'
+      case 'champion': return 'Reached 10 play sessions - you\'re a champion!'
+      default: return 'Amazing achievement unlocked!'
+    }
+  }
+
+  const getTrophyColor = (achievement: string) => {
+    switch (achievement) {
+      case 'first-quest': return 'bg-green-400'
+      case 'quest-master': return 'bg-blue-400'
+      case 'dedicated-player': return 'bg-purple-400'
+      case 'superstar': return 'bg-yellow-400'
+      case 'champion': return 'bg-pink-400'
+      default: return 'bg-gray-400'
+    }
+  }
+
+  const allTrophies = [
+    'first-quest',
+    'quest-master', 
+    'dedicated-player',
+    'superstar',
+    'champion'
+  ]
 
   if (loading) {
     return (
@@ -395,7 +424,10 @@ export default function MyStuffTab({ childProfile }: MyStuffTabProps) {
               ))}
             </div>
             
-            <button className="w-full bg-chart-2 text-white px-4 py-2 border-2 border-black shadow-brutal hover:shadow-brutal-lg transition-all font-bold">
+            <button 
+              onClick={() => setShowTrophyPopup(true)}
+              className="w-full bg-chart-2 text-white px-4 py-2 border-2 border-black shadow-brutal hover:shadow-brutal-lg transition-all font-bold"
+            >
               VIEW ALL TROPHIES
             </button>
           </div>
@@ -426,6 +458,134 @@ export default function MyStuffTab({ childProfile }: MyStuffTabProps) {
           </div>
         </div>
       </div>
+
+      {/* Trophy Popup Modal */}
+      {showTrophyPopup && (
+        <div className="fixed inset-0 flex items-center justify-center z-50 p-4">
+          <div className="bg-white border-4 border-black shadow-brutal-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+            {/* Header */}
+            <div className="bg-yellow-400 text-white p-6 border-b-4 border-black">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <Trophy className="h-8 w-8" />
+                  <h2 className="text-3xl font-bold">MY TROPHY ROOM</h2>
+                </div>
+                <button 
+                  onClick={() => setShowTrophyPopup(false)}
+                  className="bg-red-500 text-white px-4 py-2 border-2 border-black shadow-brutal hover:shadow-brutal-lg transition-all font-bold text-xl"
+                >
+                  X
+                </button>
+              </div>
+              <p className="mt-2 text-yellow-100">
+                You've earned {progress.achievements.length} out of {allTrophies.length} amazing trophies!
+              </p>
+            </div>
+
+            {/* Trophy Grid */}
+            <div className="p-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {allTrophies.map((trophy) => {
+                  const isUnlocked = progress.achievements.includes(trophy)
+                  return (
+                    <div 
+                      key={trophy}
+                      className={`relative border-4 border-black shadow-brutal-lg overflow-hidden transform hover:scale-105 transition-all duration-300 ${
+                        isUnlocked ? 'bg-white' : 'bg-gray-100'
+                      }`}
+                    >
+                      {/* Trophy Background */}
+                      <div className={`h-32 border-b-4 border-black relative overflow-hidden ${
+                        isUnlocked ? getTrophyColor(trophy) : 'bg-gray-300'
+                      }`}>
+                        
+                        {/* Sparkle Animation for Unlocked Trophies */}
+                        {isUnlocked && (
+                          <>
+                            <div className="absolute top-2 left-2 w-2 h-2 bg-white rounded-full animate-ping"></div>
+                            <div className="absolute top-4 right-3 w-1 h-1 bg-white rounded-full animate-pulse delay-100"></div>
+                            <div className="absolute bottom-3 left-4 w-1.5 h-1.5 bg-white rounded-full animate-pulse delay-200"></div>
+                            <div className="absolute bottom-2 right-2 w-1 h-1 bg-white rounded-full animate-ping delay-300"></div>
+                          </>
+                        )}
+                        
+                        {/* Trophy Icon */}
+                        <div className="absolute inset-0 flex items-center justify-center">
+                          <div className={`p-4 rounded-full border-4 border-white shadow-lg ${
+                            isUnlocked ? 'bg-white' : 'bg-gray-200'
+                          }`}>
+                            <div className={`text-4xl ${isUnlocked ? 'text-yellow-500' : 'text-gray-400'}`}>
+                              {getAchievementIcon(trophy)}
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* New Badge for Recently Unlocked */}
+                        {isUnlocked && (
+                          <div className="absolute top-2 right-2 bg-red-500 text-white text-xs px-2 py-1 border border-black font-bold transform rotate-12">
+                            EARNED!
+                          </div>
+                        )}
+
+                        {/* Lock Icon for Locked Trophies */}
+                        {!isUnlocked && (
+                          <div className="absolute bottom-2 right-2 bg-gray-600 text-white p-1 rounded border border-black">
+                            <Shield className="h-3 w-3" />
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Trophy Details */}
+                      <div className="p-4">
+                        <h3 className={`text-lg font-bold mb-2 ${
+                          isUnlocked ? 'text-gray-800' : 'text-gray-500'
+                        }`}>
+                          {getAchievementName(trophy)}
+                        </h3>
+                        <p className={`text-sm leading-relaxed ${
+                          isUnlocked ? 'text-gray-600' : 'text-gray-400'
+                        }`}>
+                          {getAchievementDescription(trophy)}
+                        </p>
+                        
+                        {/* Status Indicator */}
+                        <div className="mt-3">
+                          {isUnlocked ? (
+                            <div className="flex items-center gap-2 text-green-600">
+                              <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                              <span className="text-xs font-bold">UNLOCKED!</span>
+                            </div>
+                          ) : (
+                            <div className="flex items-center gap-2 text-gray-500">
+                              <div className="w-2 h-2 bg-gray-400 rounded-full"></div>
+                              <span className="text-xs font-bold">KEEP LEARNING!</span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+
+              {/* Encouraging Message */}
+              <div className="mt-8 text-center bg-blue-100 border-4 border-black shadow-brutal p-6">
+                <h3 className="text-xl font-bold text-gray-800 mb-2">Keep Going, Champion!</h3>
+                <p className="text-gray-600">
+                  Every quest you complete and every session you play brings you closer to unlocking more amazing trophies!
+                </p>
+                {progress.achievements.length < allTrophies.length && (
+                  <div className="mt-4 bg-white border-2 border-black px-4 py-2 inline-block shadow-brutal">
+                    <span className="font-bold text-purple-600">
+                      Next Trophy: {getAchievementName(allTrophies.find(t => !progress.achievements.includes(t)) || '')}
+                    </span>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

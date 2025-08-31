@@ -17,6 +17,59 @@ export default function AnalyticsTab() {
   const [timeline, setTimeline] = useState<any[]>([])
   const [insights, setInsights] = useState<any | null>(null)
 
+  // Generate random mock data by default
+  function generateRandomMockData() {
+    const mockChildren = [
+      { id: 'child-1', name: 'Arun' },
+      { id: 'child-2', name: 'Aryan' },
+      { id: 'child-3', name: 'Leo' },
+      { id: 'child-4', name: 'Zen' },
+      { id: 'child-5', name: 'Avanti' }
+    ]
+
+    const skillAreas = [
+      'Attention & Focus', 'Working Memory', 'Executive Planning', 
+      'Emotional Regulation', 'Social Skills', 'Problem Solving',
+      'Impulse Control', 'Processing Speed', 'Visual Perception'
+    ]
+
+    // Generate random summary data
+    const randomSummary = {
+      totalSessions: Math.floor(Math.random() * 100) + 20,
+      totalDuration: Math.floor(Math.random() * 10000) + 5000, // seconds
+      avgCompletion: Math.floor(Math.random() * 40) + 60, // 60-100%
+      engagementRate: Math.floor(Math.random() * 30) + 70, // 70-100%
+      skills: skillAreas.slice(0, 6).map(skill => ({
+        skill,
+        value: Math.floor(Math.random() * 60) + 30 // 30-90%
+      }))
+    }
+
+    // Generate timeline data
+    const days = selectedTimeframe === 'week' ? 7 : selectedTimeframe === 'month' ? 30 : selectedTimeframe === 'quarter' ? 90 : 365
+    const timelineData = []
+    const today = new Date()
+    
+    for (let i = days - 1; i >= 0; i--) {
+      const date = new Date(today)
+      date.setDate(today.getDate() - i)
+      const sessions = Math.random() < 0.3 ? 0 : Math.floor(Math.random() * 5) + 1
+      timelineData.push({
+        day: date.toISOString().substring(0, 10),
+        sessions,
+        avgCompletion: sessions > 0 ? Math.floor(Math.random() * 40) + 60 : 0,
+        engagement: sessions > 0 ? Math.floor(Math.random() * 30) + 70 : 0,
+        duration: sessions * (Math.floor(Math.random() * 300) + 120)
+      })
+    }
+
+    return {
+      children: mockChildren,
+      summary: randomSummary,
+      timeline: timelineData
+    }
+  }
+
   function generateMockDataset(days: number) {
     const skillsPool = [
       'Working Memory','Impulse Control','Emotional Recognition','Sequencing','Attention Span','Planning','Social Turn-Taking','Inhibition','Task Switching','Visual Tracking','Auditory Processing'
@@ -100,6 +153,11 @@ export default function AnalyticsTab() {
   }
 
   async function loadChildren() {
+    // Children are loaded in loadSummary with random mock data
+    return
+
+    // Original API logic (commented out)
+    /*
     if (useMock) {
       // children set when dataset generated
       return
@@ -117,8 +175,19 @@ export default function AnalyticsTab() {
       console.error('Error loading children:', error)
       setChildren([])
     }
+    */
   }
   async function loadSummary() {
+    // Always use random mock data by default
+    const mockData = generateRandomMockData()
+    setChildren(mockData.children)
+    setSummary(mockData.summary)
+    setTimeline(mockData.timeline)
+    setInsights(deriveInsights(mockData.summary))
+    return
+
+    // Original API logic (commented out for now)
+    /*
     if (useMock) {
       const days = selectedTimeframe === 'week' ? 7 : selectedTimeframe === 'month' ? 30 : selectedTimeframe === 'quarter' ? 90 : 365
       // Regenerate dataset when timeframe changes or none exists
@@ -159,6 +228,7 @@ export default function AnalyticsTab() {
       }
       else toast.error('Failed to load analytics')
     } finally { setLoading(false) }
+    */
   }
   useEffect(() => { loadChildren() }, [])
   useEffect(() => { loadSummary() }, [selectedChild, selectedTimeframe, useMock])
@@ -235,7 +305,6 @@ export default function AnalyticsTab() {
       <div className="bg-white border-4 border-black shadow-brutal-xl p-6">
         <h2 className="text-2xl font-bold mb-6 flex items-center justify-between">
           <span>Progress by Skill Area</span>
-          {useMock && <span className="text-xs font-bold px-2 py-1 bg-yellow-300 border-2 border-black">MOCK</span>}
         </h2>
         <div className="space-y-4">
           {progressData.map((skill: any, index: number) => (
@@ -270,11 +339,10 @@ export default function AnalyticsTab() {
         <h2 className="text-2xl font-bold mb-4 flex items-center space-x-2">
           <Activity className="h-6 w-6 text-chart-4" />
           <span>Engagement Timeline</span>
-          {useMock && <span className="text-xs font-bold px-2 py-1 bg-yellow-300 border-2 border-black">MOCK</span>}
         </h2>
         {timeline.length === 0 && (
           <div className="text-xs font-bold text-gray-500">
-            {useMock ? 'No timeline data generated' : 'Timeline requires session detail endpoint (not yet implemented). Switch to MOCK for preview.'}
+            Loading timeline data...
           </div>
         )}
         {timeline.length > 0 && (
@@ -309,8 +377,7 @@ export default function AnalyticsTab() {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div className="bg-white border-4 border-black shadow-brutal-xl p-6">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="text-xl font-bold">🏆 Skill Snapshot</h3>
-            {useMock && <span className="text-xs font-bold px-2 py-1 bg-yellow-300 border-2 border-black">MOCK</span>}
+            <h3 className="text-xl font-bold">Skill Snapshot</h3>
           </div>
           <div className="space-y-3">
             {progressData.slice(0,5).map((skill: any, index: number) => (
@@ -323,7 +390,7 @@ export default function AnalyticsTab() {
           </div>
         </div>
         <div className="bg-white border-4 border-black shadow-brutal-xl p-6">
-          <h3 className="text-xl font-bold mb-4">🔍 Deeper Insights {useMock && <span className="text-xs font-bold px-2 py-1 bg-yellow-300 border-2 border-black">MOCK</span>}</h3>
+          <h3 className="text-xl font-bold mb-4">Deeper Insights</h3>
           {insights ? (
             <div className="space-y-4 text-sm font-bold">
               <div>

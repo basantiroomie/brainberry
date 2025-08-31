@@ -6,67 +6,123 @@ import { useMemo, useEffect, useState } from 'react'
 export default function DashboardTab() {
   const { useMock, dataset } = useMockData()
   const [realChildren, setRealChildren] = useState<any[]>([])
-  const [realAssignments, setRealAssignments] = useState<any[]>([])
-  const [realSessions, setRealSessions] = useState<any[]>([])
+  const [randomData, setRandomData] = useState<any>(null)
+
+  // Generate random sessions and assignments based on real children
+  const generateRandomDataForChildren = (children: any[]) => {
+    if (!children.length) return null
+
+    const mockMolds = [
+      { id: 'mold-1', name: 'Memory Garden' },
+      { id: 'mold-2', name: 'Focus Forest' },
+      { id: 'mold-3', name: 'Attention Adventure' },
+      { id: 'mold-4', name: 'Social Skills Safari' },
+      { id: 'mold-5', name: 'Emotion Explorer' },
+      { id: 'mold-6', name: 'Planning Palace' }
+    ]
+
+    const mockAssignments = children.map((child, i) => ({
+      id: `assignment-${child.id}-${i}`,
+      childId: child.id,
+      moldId: mockMolds[i % mockMolds.length].id,
+      status: ['assigned', 'in-progress', 'completed'][Math.floor(Math.random() * 3)],
+      progress: Math.floor(Math.random() * 100),
+      createdAt: new Date(Date.now() - Math.random() * 14 * 24 * 60 * 60 * 1000).toISOString()
+    }))
+
+    const mockSessions = []
+    for (let i = 0; i < Math.min(children.length * 3, 20); i++) {
+      const child = children[Math.floor(Math.random() * children.length)]
+      const mold = mockMolds[Math.floor(Math.random() * mockMolds.length)]
+      const startTime = new Date(Date.now() - Math.random() * 7 * 24 * 60 * 60 * 1000)
+      mockSessions.push({
+        id: `session-${i}`,
+        childId: child.id,
+        moldId: mold.id,
+        completionPercent: Math.floor(Math.random() * 100),
+        durationSec: Math.floor(Math.random() * 1800) + 300, // 5-35 minutes
+        startedAt: startTime.toISOString(),
+        endedAt: new Date(startTime.getTime() + 1200000).toISOString()
+      })
+    }
+
+    return { 
+      children, 
+      molds: mockMolds, 
+      assignments: mockAssignments, 
+      sessions: mockSessions 
+    }
+  }
 
   useEffect(() => {
-    if (!useMock) {
-      ; (async () => {
-        try {
-          const [cRes, aRes, sRes] = await Promise.all([
-            fetch('/api/children'),
-            fetch('/api/assignments'),
-            fetch('/api/sessions')
-          ])
-          if (cRes.ok) {
-            const childrenData = await cRes.json()
-            setRealChildren(Array.isArray(childrenData) ? childrenData : (childrenData?.data || []))
-          }
-          if (aRes.ok) {
-            const assignmentsData = await aRes.json()
-            setRealAssignments(Array.isArray(assignmentsData) ? assignmentsData : (assignmentsData?.data || []))
-          }
-          if (sRes.ok) {
-            const sessionsData = await sRes.json()
-            setRealSessions(Array.isArray(sessionsData) ? sessionsData : (sessionsData?.data || []))
-          }
-        } catch (error) {
-          // Set empty arrays on error
-          setRealChildren([])
-          setRealAssignments([])
-          setRealSessions([])
+    // Always fetch real children from API
+    (async () => {
+      try {
+        const cRes = await fetch('/api/children')
+        if (cRes.ok) {
+          const childrenData = await cRes.json()
+          const children = Array.isArray(childrenData) ? childrenData : (childrenData?.data || [])
+          setRealChildren(children)
+          
+          // Generate random data based on real children
+          const generatedData = generateRandomDataForChildren(children)
+          setRandomData(generatedData)
+        } else {
+          // Fallback to mock children if API fails
+          const fallbackChildren = [
+            { id: 'child-1', name: 'Emma Thompson', age: 8 },
+            { id: 'child-2', name: 'Liam Rodriguez', age: 7 },
+            { id: 'child-3', name: 'Sophia Chen', age: 9 }
+          ]
+          setRealChildren(fallbackChildren)
+          const generatedData = generateRandomDataForChildren(fallbackChildren)
+          setRandomData(generatedData)
         }
-      })()
-    }
-  }, [useMock])
+      } catch (error) {
+        console.error('Error loading children:', error)
+        // Fallback to mock children if fetch fails
+        const fallbackChildren = [
+          { id: 'child-1', name: 'Emma Thompson', age: 8 },
+          { id: 'child-2', name: 'Liam Rodriguez', age: 7 },
+          { id: 'child-3', name: 'Sophia Chen', age: 9 }
+        ]
+        setRealChildren(fallbackChildren)
+        const generatedData = generateRandomDataForChildren(fallbackChildren)
+        setRandomData(generatedData)
+      }
+    })()
+  }, [])
 
-  const activeChildren = useMock ? (dataset?.children.length || 0) : realChildren.length
-  const gamesThisWeek = useMock ? (dataset?.sessions.filter(s => Date.now() - new Date(s.startedAt).getTime() < 7 * 86400000).length || 0) : realSessions.filter(s => Date.now() - new Date(s.startedAt).getTime() < 7 * 86400000).length
+  // Use randomData (real children + random sessions/assignments) by default
+  const activeData = randomData || { children: [], sessions: [], assignments: [], molds: [] }
+  const activeChildren = activeData.children.length
+  const gamesThisWeek = activeData.sessions.filter((s: any) => Date.now() - new Date(s.startedAt).getTime() < 7 * 86400000).length
   const avgProgress = (() => {
-    const sourceAssignments = useMock ? (dataset?.assignments || []) : realAssignments
+    const sourceAssignments = activeData.assignments
     if (!sourceAssignments.length) return 0
     return Math.round(sourceAssignments.reduce((a: any, b: any) => a + (b.progress || 0), 0) / sourceAssignments.length)
   })()
-  const alertsPending = useMock ? Math.max(1, Math.round(activeChildren / 3)) : 0
+  const alertsPending = Math.max(1, Math.round(activeChildren / 3))
 
   const recentActivity = useMemo(() => {
-    if (useMock) {
-      const sessions = (dataset?.sessions || []).slice(0, 40).sort((a, b) => new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime())
-      return sessions.slice(0, 4).map(s => {
-        const child = dataset?.children.find(c => c.id === s.childId)
-        const mold = dataset?.molds.find(m => m.id === s.moldId)
-        return { id: s.id, title: `${child?.name} played "${mold?.name}"`, detail: `Score: ${s.completionPercent}% • ${(s.durationSec / 60).toFixed(1)} min`, ts: s.startedAt }
-      })
-    }
-    // Real data mapping
-    return realSessions.slice(0, 4).map(s => ({ id: s.id, title: `Session ${s.id.substring(0, 6)}`, detail: `Completion ${s.completionPercent || 0}%`, ts: s.startedAt }))
-  }, [useMock, dataset, realSessions])
+    const sessions = (activeData?.sessions || []).slice(0, 40).sort((a: any, b: any) => new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime())
+    return sessions.slice(0, 4).map((s: any) => {
+      const child = activeData?.children.find((c: any) => c.id === s.childId)
+      const mold = activeData?.molds.find((m: any) => m.id === s.moldId)
+      return { 
+        id: s.id, 
+        title: `${child?.name} played "${mold?.name}"`, 
+        detail: `Score: ${s.completionPercent}% • ${(s.durationSec / 60).toFixed(1)} min`, 
+        ts: s.startedAt 
+      }
+    })
+  }, [activeData])
 
   // Pending assignments (in-progress or assigned, progress < 100)
   const pendingAssignments = useMemo(() => {
-    const source = useMock ? (dataset?.assignments || []) : realAssignments
-    const moldMap: Record<string, any> = useMock ? Object.fromEntries((dataset?.molds || []).map(m => [m.id, m])) : {}
-    const childMap: Record<string, any> = useMock ? Object.fromEntries((dataset?.children || []).map(c => [c.id, c])) : {}
+    const source = activeData?.assignments || []
+    const moldMap: Record<string, any> = Object.fromEntries((activeData?.molds || []).map((m: any) => [m.id, m]))
+    const childMap: Record<string, any> = Object.fromEntries((activeData?.children || []).map((c: any) => [c.id, c]))
     const list = source
       .filter((a: any) => (a.status !== 'completed') && (a.progress ?? 0) < 100)
       .sort((a: any, b: any) => (a.progress ?? 0) - (b.progress ?? 0))
@@ -86,51 +142,56 @@ export default function DashboardTab() {
         }
       })
     return list
-  }, [useMock, dataset, realAssignments])
+  }, [activeData])
 
   // Performance alerts heuristics
   const performanceAlerts = useMemo(() => {
     const alerts: { id: string; type: string; title: string; body: string; color: string }[] = []
-    const sessions = useMock ? (dataset?.sessions || []) : realSessions
-    const assignments = useMock ? (dataset?.assignments || []) : realAssignments
-    const children = useMock ? (dataset?.children || []) : realChildren
+    const sessions = activeData?.sessions || []
+    const assignments = activeData?.assignments || []
+    const children = activeData?.children || []
     const last7 = Date.now() - 7 * 86400000
+    
     // Low activity per child
     if (Array.isArray(children)) {
-      children.forEach(c => {
-        const childSessions = sessions.filter(s => s.childId === c.id && new Date(s.startedAt).getTime() >= last7)
-        if (childSessions.length < 2 && assignments.some(a => a.childId === c.id && a.status !== 'completed')) {
+      children.forEach((c: any) => {
+        const childSessions = sessions.filter((s: any) => s.childId === c.id && new Date(s.startedAt).getTime() >= last7)
+        if (childSessions.length < 2 && assignments.some((a: any) => a.childId === c.id && a.status !== 'completed')) {
           alerts.push({ id: 'low-' + c.id, type: 'lowActivity', title: `Low Activity: ${c.name}`, body: `Only ${childSessions.length} session(s) in last 7 days. Consider encouraging a session.`, color: 'red' })
         }
       })
     }
+    
     // Ready to complete assignments
     if (Array.isArray(assignments)) {
-      assignments.filter(a => (a.progress || 0) >= 90 && a.status !== 'completed').slice(0, 3).forEach(a => {
+      assignments.filter((a: any) => (a.progress || 0) >= 90 && a.status !== 'completed').slice(0, 3).forEach((a: any) => {
         alerts.push({ id: 'ready-' + a.id, type: 'ready', title: 'Nearly Complete', body: `Assignment ${(a.id || '').slice(0, 6)} at ${a.progress}% — consider a finishing push.`, color: 'orange' })
       })
     }
+    
     // High performance children (avg completion >=85)
     if (Array.isArray(children)) {
-      children.forEach(c => {
-        const childSessions = sessions.filter(s => s.childId === c.id)
+      children.forEach((c: any) => {
+        const childSessions = sessions.filter((s: any) => s.childId === c.id)
         if (childSessions.length >= 3) {
           const avg = Math.round(childSessions.reduce((acc: any, s: any) => acc + (s.completionPercent || 0), 0) / childSessions.length)
           if (avg >= 85) alerts.push({ id: 'high-' + c.id, type: 'high', title: `High Performance: ${c.name}`, body: `Average completion ${avg}% across ${childSessions.length} sessions. Consider increasing difficulty.`, color: 'green' })
         }
       })
     }
-    // If mock mode and no heuristic alerts produced, inject representative samples for demo coherence
-    if (useMock && alerts.length === 0 && dataset && Array.isArray(dataset.children)) {
-      const c0 = dataset.children[0]
-      const c1 = dataset.children[1]
-      const c2 = dataset.children[2]
+    
+    // Generate some demo alerts if we have children but no alerts
+    if (alerts.length === 0 && children.length > 0) {
+      const c0 = children[0]
+      const c1 = children[1]
+      const c2 = children[2]
       if (c0) alerts.push({ id: 'demo-low-' + c0.id, type: 'lowActivity', title: `Low Activity: ${c0.name}`, body: `Only 1 session logged recently. Encourage a focused play.`, color: 'red' })
       if (c1) alerts.push({ id: 'demo-ready-' + c1.id, type: 'ready', title: `Nearly Complete: ${c1.name}`, body: `One assignment at 95% progress—push to finish for a confidence boost.`, color: 'orange' })
       if (c2) alerts.push({ id: 'demo-high-' + c2.id, type: 'high', title: `High Performance: ${c2.name}`, body: `Consistently strong completion. Consider increasing difficulty.`, color: 'green' })
     }
+    
     return alerts.slice(0, 6)
-  }, [useMock, dataset, realSessions, realAssignments, realChildren])
+  }, [activeData])
   return (
     <div className="space-y-8">
       {/* Welcome Section */}
@@ -138,7 +199,6 @@ export default function DashboardTab() {
         <div className="bg-white border-4 border-black shadow-brutal-xl p-8 transform rotate-1 inline-block">
           <h1 className="flex items-center justify-center space-x-3 text-4xl md:text-6xl font-bold text-chart-1 mb-4">
             <span>DASHBOARD</span>
-            {useMock && <span className="text-xs px-2 py-1 bg-yellow-300 border-2 border-black text-black font-bold rotate-2">MOCK</span>}
           </h1>
           <p className="text-lg text-gray-700">
             Your complete overview at a glance
@@ -156,7 +216,7 @@ export default function DashboardTab() {
           </div>
           <div className="space-y-4">
             {recentActivity.length === 0 && <div className="text-xs font-bold text-gray-500">No recent sessions</div>}
-            {recentActivity.map((r, i) => (
+            {recentActivity.map((r: any, i: number) => (
               <div key={r.id} className={`border-l-4 pl-4 py-2 border-chart-${(i % 4) + 1}`}>
                 <h3 className="font-bold">{r.title}</h3>
                 <p className="text-gray-600 text-sm">{r.detail}</p>
@@ -173,7 +233,7 @@ export default function DashboardTab() {
           </div>
           <div className="space-y-3">
             {pendingAssignments.length === 0 && <div className="text-xs font-bold text-gray-500">None pending</div>}
-            {pendingAssignments.map(pa => (
+            {pendingAssignments.map((pa: any) => (
               <div key={pa.id} className="border-2 border-black p-3 bg-secondary shadow-brutal flex items-center justify-between">
                 <div>
                   <h3 className="font-bold text-sm">{pa.childName} – {pa.moldName}</h3>

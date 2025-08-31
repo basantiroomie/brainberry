@@ -37,7 +37,7 @@ export default function BrainBerry() {
                 onClick={goToLogin}
                 className="bg-main text-main-foreground px-6 py-2 border-2 border-black shadow-brutal hover:shadow-brutal-lg transition-all font-bold"
               >
-                JOIN NOW
+                LOGIN
               </button>
             </nav>
           </div>
