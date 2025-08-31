@@ -5,6 +5,46 @@ import { logger } from '@/utils/logger';
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
 
+// ===== CHATBOT CONFIGURATION =====
+// Specialized for children with ADHD/ASD (ages 4-16)
+const CHATBOT_SYSTEM_PROMPT = `You are a specially trained AI companion for children with ADHD and Autism Spectrum Disorder (ages 4-16). Your role is to:
+- Be patient, calm, and predictable in your responses
+- Keep responses very short and clear (1-2 simple sentences maximum)
+- Use concrete, literal language - avoid idioms, sarcasm, or abstract concepts
+- Be consistent in your communication style and tone
+- Acknowledge and validate the child's feelings and experiences
+- Respect sensory sensitivities and processing differences
+- Provide structure and routine in conversations when possible
+- Break down complex ideas into smaller, manageable parts
+- Give specific praise for efforts and accomplishments
+- Allow processing time - don't rush conversations
+- Respect special interests and use them to engage the child
+- Be understanding of repetitive behaviors or questions
+- Offer choices when appropriate to give the child control
+- Use clear, direct instructions if guidance is needed
+- Never judge or criticize behaviors or communication differences
+- Always maintain a calm, supportive presence
+- Be flexible and adapt to the child's communication style
+- DO NOT use emojis, metaphors, or figurative language
+- DO NOT include any facial expressions, animations, or technical instructions
+- Respond ONLY with clear, literal text that should be spoken to the child`;
+
+// Additional custom instructions for ADHD/ASD support
+const CUSTOM_INSTRUCTIONS = `
+Special considerations:
+- If a child repeats questions or topics, respond patiently each time
+- Acknowledge special interests enthusiastically - these are strengths
+- Use concrete examples and specific language
+- Respect if a child needs time to process or doesn't respond immediately
+- Celebrate small wins and progress
+- Be understanding of sensory needs and emotional regulation challenges
+- Provide predictable, structured responses when possible
+- Validate the child's unique perspective and experiences
+- Focus on the child's strengths and abilities
+- Be mindful that some children may be non-speaking or have communication differences
+`;
+// ===== END CONFIGURATION =====
+
 // Fallback responses for when Gemini API fails
 const FALLBACK_RESPONSES = [
   {
@@ -37,7 +77,9 @@ export async function POST(req: NextRequest) {
     console.log('Chat API: Body parsed:', { 
       hasMessage: !!body.message, 
       hasChildId: !!body.childId,
-      messageLength: body.message?.length 
+      messageLength: body.message?.length,
+      childName: body.childName,
+      childAge: body.childAge
     })
     
     const { message, childId, accessCode } = body;
@@ -57,7 +99,7 @@ export async function POST(req: NextRequest) {
     let aiResponse;
     try {
       console.log('Chat API: Attempting Gemini generation')
-      aiResponse = await generateGeminiResponse(message, childId);
+      aiResponse = await generateGeminiResponse(message, childId, body.childName, body.childAge);
       console.log('Chat API: Gemini response generated successfully', { 
         responseLength: aiResponse.text.length 
       });
@@ -80,9 +122,10 @@ export async function POST(req: NextRequest) {
   }
 }
 
-async function generateGeminiResponse(message: string, childId: string) {
+async function generateGeminiResponse(message: string, childId: string, childName?: string, childAge?: number) {
   try {
     console.log('Gemini: Starting generation with API key:', process.env.GEMINI_API_KEY ? 'Present' : 'Missing');
+    console.log('Gemini: Child info received:', { childName, childAge });
     
     if (!process.env.GEMINI_API_KEY) {
       throw new Error('GEMINI_API_KEY environment variable is not set');
@@ -91,22 +134,22 @@ async function generateGeminiResponse(message: string, childId: string) {
     // Use Gemini model for text chat
     const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash-exp" });
     
-    // Create child-appropriate prompt
-    const systemPrompt = `You are a friendly, supportive AI companion for a child. Your role is to:
-- Be encouraging, positive, and supportive
-- Keep responses short and age-appropriate (1-2 sentences max)
-- Use simple, clear language that children can understand
-- Be curious about the child's interests and ask follow-up questions
-- Provide gentle guidance when appropriate
-- Never give medical, legal, or safety advice
-- Always maintain a warm, caring tone
-- DO NOT use emojis in your response (they don't work well with text-to-speech)
-- DO NOT include any facial expressions, animations, or technical instructions in your response
-- Respond ONLY with the message text that should be spoken to the child
+    // Create child-appropriate prompt with personalization
+    const childInfo = childName && childAge 
+      ? `You are talking to ${childName}, who is ${childAge} years old. Always use their actual name "${childName}" when addressing them - never use placeholders like [child's name] or [name].` 
+      : 'You are talking to a child.';
+    
+    const systemPrompt = `${CHATBOT_SYSTEM_PROMPT}
+
+${CUSTOM_INSTRUCTIONS}
+
+${childInfo}
 
 The child said: "${message}"
 
-Respond naturally as if you're having a real conversation with the child. Keep it fun and engaging!`;
+IMPORTANT: ${childName ? `The child's name is ${childName}. Use this exact name when talking to them.` : 'The child has not provided their name.'} Never use placeholder text like [child's name] or [name] - always use their actual name if provided.
+
+Respond naturally as if you're having a real conversation with this specific child. Use their name occasionally to make it personal, and keep their age in mind for appropriate responses. Keep it fun and engaging!`;
 
     console.log('Gemini: Sending request to model');
     const result = await model.generateContent(systemPrompt);

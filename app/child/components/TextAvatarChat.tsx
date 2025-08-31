@@ -35,11 +35,29 @@ export const TextAvatarChat: React.FC<TextAvatarChatProps> = ({
   const [isSpeaking, setIsSpeaking] = useState(false)
   const [avatarLoaded, setAvatarLoaded] = useState(false)
   const [audioEnabled, setAudioEnabled] = useState(true)
+  const [childInfo, setChildInfo] = useState<{ name?: string; age?: number }>({})
   
   // Refs
   const avatarModelRef = useRef<Object3D | null>(null)
   const lipsyncManagerRef = useRef(getLipsyncManager())
   const messagesEndRef = useRef<HTMLDivElement>(null)
+
+  // Get child information from sessionStorage
+  useEffect(() => {
+    const stored = sessionStorage.getItem('childProfile')
+    if (stored) {
+      try {
+        const profile = JSON.parse(stored)
+        setChildInfo({
+          name: profile.name,
+          age: profile.age
+        })
+        console.log('TextAvatarChat: Child info loaded:', { name: profile.name, age: profile.age })
+      } catch (error) {
+        console.error('Failed to parse child profile:', error)
+      }
+    }
+  }, [])
 
   // Scroll to bottom
   const scrollToBottom = () => {
@@ -192,7 +210,9 @@ export const TextAvatarChat: React.FC<TextAvatarChatProps> = ({
           message: message.trim(),
           childId,
           accessCode,
-          mode: 'text'
+          mode: 'text',
+          childName: childInfo.name,
+          childAge: childInfo.age
         })
       })
 

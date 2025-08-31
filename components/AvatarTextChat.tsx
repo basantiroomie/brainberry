@@ -35,6 +35,7 @@ export const AvatarTextChat: React.FC<AvatarTextChatProps> = ({
   const [isListening, setIsListening] = useState(false)
   const [avatarLoaded, setAvatarLoaded] = useState(false)
   const [audioEnabled, setAudioEnabled] = useState(true)
+  const [childInfo, setChildInfo] = useState<{ name?: string; age?: number }>({})
   
   // Refs
   const avatarModelRef = useRef<Object3D | null>(null)
@@ -42,6 +43,46 @@ export const AvatarTextChat: React.FC<AvatarTextChatProps> = ({
   const ttsServiceRef = useRef(getEnhancedTTSService())
   const recognitionRef = useRef<any>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
+
+  // Get child information from sessionStorage or API
+  useEffect(() => {
+    const fetchChildInfo = async () => {
+      // First try sessionStorage (for child dashboard)
+      const stored = sessionStorage.getItem('childProfile')
+      if (stored) {
+        try {
+          const profile = JSON.parse(stored)
+          setChildInfo({
+            name: profile.name,
+            age: profile.age
+          })
+          console.log('AvatarTextChat: Child info from sessionStorage:', { name: profile.name, age: profile.age })
+          return
+        } catch (error) {
+          console.error('Failed to parse child profile from sessionStorage:', error)
+        }
+      }
+
+      // If no sessionStorage and we have a real childId, try API
+      if (childId && childId !== "test-child-123") {
+        try {
+          const response = await fetch(`/api/children/${childId}`)
+          if (response.ok) {
+            const childData = await response.json()
+            setChildInfo({
+              name: childData.name,
+              age: childData.age
+            })
+            console.log('AvatarTextChat: Child info from API:', { name: childData.name, age: childData.age })
+          }
+        } catch (error) {
+          console.error('Failed to fetch child info from API:', error)
+        }
+      }
+    }
+    
+    fetchChildInfo()
+  }, [childId])
 
   // Initialize speech recognition
   useEffect(() => {
@@ -130,7 +171,9 @@ export const AvatarTextChat: React.FC<AvatarTextChatProps> = ({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           message: messageText,
-          childId: childId
+          childId: childId,
+          childName: childInfo.name,
+          childAge: childInfo.age
         })
       })
 
