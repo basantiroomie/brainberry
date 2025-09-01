@@ -11,6 +11,8 @@ export interface TTSResult {
   audioBuffer?: AudioBuffer
   provider: 'gemini' | 'puter' | 'browser'
   error?: string
+  optimizedText?: string
+  useBrowserTTS?: boolean
 }
 
 export class EnhancedTTSService {
@@ -69,41 +71,69 @@ export class EnhancedTTSService {
    * Gemini TTS (Premium)
    */
   private async generateGeminiTTS(text: string): Promise<TTSResult> {
-    if (!process.env.NEXT_PUBLIC_GEMINI_API_KEY) {
-      throw new Error('Gemini API key not available')
-    }
+    try {
+      const response = await fetch('/api/tts/gemini', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ text })
+      })
 
-    const response = await fetch('/api/tts/gemini', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ text })
-    })
-
-    if (!response.ok) {
-      throw new Error(`Gemini TTS API error: ${response.status}`)
-    }
-
-    const data = await response.json()
-    
-    if (data.audioUrl) {
-      return {
-        success: true,
-        audioUrl: data.audioUrl,
-        provider: 'gemini'
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: 'Unknown error' }))
+        console.warn('🔊 Gemini TTS API error:', response.status, errorData)
+        throw new Error(`Gemini TTS API error: ${response.status}`)
       }
-    } else if (data.audioData) {
-      // Convert base64 audio data to AudioBuffer
-      const audioBuffer = await this.base64ToAudioBuffer(data.audioData)
-      return {
-        success: true,
-        audioBuffer,
-        provider: 'gemini'
-      }
-    }
 
-    throw new Error('No audio data in Gemini response')
+      const data = await response.json()
+      
+      if (data.success) {
+        if (data.audioData && data.isRealAudio) {
+          // REAL Gemini TTS audio from speech generation API
+          console.log('🔊 Gemini TTS: Using REAL Gemini audio from', data.provider, 'model:', data.model)
+          const audioBlob = this.base64ToBlob(data.audioData, data.mimeType || 'audio/wav')
+          const audioUrl = URL.createObjectURL(audioBlob)
+          
+          return {
+            success: true,
+            audioUrl,
+            provider: 'gemini'
+          }
+        } else if (data.audioData) {
+          // Fallback audio data
+          console.log('🔊 Gemini TTS: Using fallback audio data from', data.provider)
+          const audioBlob = this.base64ToBlob(data.audioData, data.mimeType || 'audio/wav')
+          const audioUrl = URL.createObjectURL(audioBlob)
+          
+          return {
+            success: true,
+            audioUrl,
+            provider: 'gemini'
+          }
+        } else if (data.useBrowserTTS && data.optimizedText) {
+          // Gemini-optimized text for enhanced browser TTS
+          console.log('🔊 Gemini TTS: Using Gemini-optimized text for browser TTS')
+          return {
+            success: true,
+            optimizedText: data.optimizedText,
+            provider: 'gemini',
+            useBrowserTTS: true
+          }
+        } else if (data.audioUrl) {
+          return {
+            success: true,
+            audioUrl: data.audioUrl,
+            provider: 'gemini'
+          }
+        }
+      }
+
+      throw new Error('No audio data in Gemini response')
+    } catch (error) {
+      console.warn('🔊 Gemini TTS failed:', error)
+      throw error
+    }
   }
 
   /**
@@ -215,6 +245,18 @@ export class EnhancedTTSService {
     } else {
       throw new Error('No audio data to play')
     }
+  }
+
+  /**
+   * Convert base64 audio to Blob
+   */
+  private base64ToBlob(base64: string, mimeType: string): Blob {
+    const binaryString = atob(base64)
+    const bytes = new Uint8Array(binaryString.length)
+    for (let i = 0; i < binaryString.length; i++) {
+      bytes[i] = binaryString.charCodeAt(i)
+    }
+    return new Blob([bytes], { type: mimeType })
   }
 
   /**

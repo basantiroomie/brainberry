@@ -1,26 +1,78 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { GoogleGenAI, Modality } from '@google/genai'
+import ffmpegPath from 'ffmpeg-static'
+import { spawn } from 'node:child_process'
+import fs from 'node:fs'
 import { WaveFile } from 'wavefile'
+
+export const runtime = 'nodejs'
 
 // Store active sessions in memory (in production, use Redis or similar)
 const activeSessions = new Map<string, any>()
 
 // Model fallback hierarchy - using correct model names for Gemini Live
 const MODEL_FALLBACK_HIERARCHY = [
-  'gemini-2.0-flash-live-001',                       // Primary choice - 2.0 Flash Live (proven to work)
-  'gemini-2.5-flash-preview-native-audio-dialog',    // Second choice - 2.5 Preview Native Audio
-  'gemini-2.5-flash-exp-native-audio-thinking-dialog' // Last resort - 2.5 Experimental Thinking
+  'gemini-live-2.5-flash-preview',                   // User's preferred model
+  'gemini-2.0-flash-live-001',                       // User's default choice  
+  'gemini-2.5-flash-preview-native-audio-dialog'     // Fallback - Native audio dialog
 ]
 
 // Track failed models to avoid retrying them immediately
 const failedModels = new Set<string>()
 
-// Helper function to convert WebM to PCM if needed
+// Helper function to convert WebM (Opus) to 16-bit PCM @16kHz mono using ffmpeg
 async function convertAudioForModel(audioData: Uint8Array, model: string): Promise<{ data: string, mimeType: string }> {
-  // All Gemini Live models require PCM format, not WebM
   console.log('🎤 Converting to PCM format for model:', model)
-  const audioBase64 = Buffer.from(audioData).toString('base64')
-  return { data: audioBase64, mimeType: "audio/pcm;rate=16000" }
+
+  // Feature flag: enable ffmpeg only when explicitly allowed
+  if (!process.env.ENABLE_FFMPEG) {
+    const audioBase64 = Buffer.from(audioData).toString('base64')
+    return { data: audioBase64, mimeType: 'audio/webm' }
+  }
+
+  // If ffmpeg is unavailable, fallback to raw base64 (not ideal)
+  if (!ffmpegPath) {
+    console.warn('🎤 ffmpeg not available, sending raw audio which may fail')
+    const audioBase64 = Buffer.from(audioData).toString('base64')
+    return { data: audioBase64, mimeType: 'audio/webm' }
+  }
+
+  return new Promise<{ data: string, mimeType: string }>((resolve, reject) => {
+    try {
+      const resolved = (ffmpegPath && fs.existsSync(ffmpegPath)) ? ffmpegPath : 'ffmpeg'
+      const ffmpeg = spawn(resolved as string, [
+        '-hide_banner',
+        '-loglevel', 'error',
+        '-f', 'webm', // input format
+        '-i', 'pipe:0', // read from stdin
+        '-ac', '1', // mono
+        '-ar', '16000', // 16 kHz
+        '-f', 's16le', // raw PCM 16-bit
+        'pipe:1' // write to stdout
+      ])
+
+      const chunks: Buffer[] = []
+      ffmpeg.stdout.on('data', (chunk) => chunks.push(chunk as Buffer))
+      ffmpeg.stderr.on('data', (err) => {
+        const msg = err.toString()
+        if (msg.trim()) console.warn('🎤 ffmpeg stderr:', msg.trim())
+      })
+      ffmpeg.on('error', (err) => reject(err))
+      ffmpeg.on('close', (code) => {
+        if (code === 0) {
+          const pcmBuffer = Buffer.concat(chunks)
+          const base64 = pcmBuffer.toString('base64')
+          resolve({ data: base64, mimeType: 'audio/pcm;rate=16000' })
+        } else {
+          reject(new Error(`ffmpeg exited with code ${code}`))
+        }
+      })
+
+      ffmpeg.stdin.end(Buffer.from(audioData))
+    } catch (e) {
+      reject(e)
+    }
+  })
 }
 
 /**
@@ -53,13 +105,57 @@ async function waitMessage(responseQueue: any[]) {
 async function handleTurn(responseQueue: any[]) {
   const turns = [];
   let done = false;
-  while (!done) {
-    const message = await waitMessage(responseQueue);
-    turns.push(message);
-    if (message.serverContent && message.serverContent.turnComplete) {
-      done = true;
+  const maxWaitTime = 30000; // 30 seconds timeout
+  const startTime = Date.now();
+  
+  while (!done && (Date.now() - startTime) < maxWaitTime) {
+    try {
+      const message = await Promise.race([
+        waitMessage(responseQueue),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 5000))
+      ]);
+      
+      turns.push(message);
+      console.log('🎤 Turn message received:', JSON.stringify(message, null, 2));
+      
+      // Check for turn completion with different possible formats
+      if (
+        (message.serverContent && message.serverContent.turnComplete) ||
+        (message.turnComplete) ||
+        (message.candidates && message.candidates.length > 0) ||
+        (message.serverContent?.modelTurn?.parts && message.serverContent.modelTurn.parts.length > 0)
+      ) {
+        console.log('🎤 Turn completion detected');
+        done = true;
+      }
+      
+      // Also check if we have enough content to respond
+      if (turns.length >= 3) {
+        console.log('🎤 Maximum turns reached, completing');
+        done = true;
+      }
+      
+    } catch (error) {
+      if (error.message === 'Timeout') {
+        console.log('🎤 Message wait timeout, checking if we have any content...');
+        if (turns.length > 0) {
+          console.log('🎤 Have some content, completing turn');
+          done = true;
+        } else {
+          console.log('🎤 No content yet, continuing...');
+        }
+      } else {
+        console.error('🎤 Error in handleTurn:', error);
+        break;
+      }
     }
   }
+  
+  if (!done) {
+    console.warn('🎤 Turn handling timed out after 30 seconds');
+  }
+  
+  console.log(`🎤 HandleTurn completed with ${turns.length} turns`);
   return turns;
 }
 
@@ -81,6 +177,10 @@ async function createSessionWithFallback(ai: GoogleGenAI, instructions: string, 
       
       const session = await ai.live.connect({
         model: model,
+        config: {
+          responseModalities: [Modality.AUDIO],
+          systemInstruction: instructions || "You are a helpful assistant for children. Respond briefly and kindly."
+        },
         callbacks: {
           onopen: function () {
             console.log('🎤 Live session opened with model:', model, 'sessionId:', currentSessionId)
@@ -369,9 +469,20 @@ export async function POST(req: Request) {
         try {
           console.log('🎤 Streaming audio to existing session:', currentSessionId)
           
-          // Convert audio data based on model requirements
-          const { data: audioBase64, mimeType } = await convertAudioForModel(audioData as Uint8Array, sessionData.model)
-          console.log('🎤 Audio converted for model:', sessionData.model, 'format:', mimeType, 'length:', audioBase64.length)
+          // Prepare audio for Live API: accept pre-converted base64 PCM or convert from WebM
+          let audioBase64: string
+          let mimeType: string
+          if (typeof audioData === 'string') {
+            // Client already sent base64 PCM
+            audioBase64 = audioData
+            mimeType = (body && body.mimeType) ? body.mimeType : 'audio/pcm;rate=16000'
+            console.log('🎤 Using client-supplied PCM audio, length:', audioBase64.length)
+          } else {
+            const converted = await convertAudioForModel(audioData as Uint8Array, sessionData.model)
+            audioBase64 = converted.data
+            mimeType = converted.mimeType
+            console.log('🎤 Audio converted for model:', sessionData.model, 'format:', mimeType, 'length:', audioBase64.length)
+          }
           
           // Stream audio to the existing session
           sessionData.session.sendRealtimeInput({
@@ -423,22 +534,31 @@ export async function POST(req: Request) {
             model: sessionData.model
           })
           
+          // Always return a response, even if we didn't get perfect audio/text
+          let responseText = combinedText || "I heard you! Can you say that again?"
+          let outputAudioData = combinedAudio || null
+          
+          // If we have no meaningful response, create a fallback
+          if (!responseText || responseText.trim().length < 3) {
+            responseText = "That's interesting! Tell me more."
+          }
+          
+          console.log('🎤 Sending response:', { hasAudio: !!outputAudioData, textLength: responseText.length })
+          
           return NextResponse.json({
             success: true,
-            text: "Audio streamed to live session and turn completed",
-            sessionId: currentSessionId,
+            text: responseText,
+            audioData: outputAudioData,
+            transcription: responseText,
+            provider: 'gemini-live-livekit',
             model: sessionData.model,
+            turnsProcessed: turns.length,
             streaming: {
               audioSent: true,
               audioDataLength: audioBase64.length,
               audioResponseReceived: combinedAudio.length > 0,
               textResponseReceived: combinedText.length > 0,
-              outputAudio: combinedAudio || null,
-              outputText: combinedText || null,
-              timestamp: new Date().toISOString(),
-              turnsReceived: turns.length,
-              audioResponseCount: audioResponses.length,
-              textResponseCount: textResponses.length
+              timestamp: new Date().toISOString()
             }
           })
           

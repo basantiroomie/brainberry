@@ -32,6 +32,7 @@
     "clsx": "^2.1.1",
     "encoding": "^0.1.13",
     "face-api.js": "^0.22.2",
+    "ffmpeg-static": "^5.2.0",
     "geist": "latest",
     "jsonwebtoken": "^9.0.2",
     "locomotive-scroll": "latest",

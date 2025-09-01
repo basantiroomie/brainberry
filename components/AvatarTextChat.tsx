@@ -126,24 +126,118 @@ export const AvatarTextChat: React.FC<AvatarTextChatProps> = ({
       }
     })
     
+    // One-time debug: list available morph target names to ensure correct mapping
+    try {
+      const names: Set<string> = new Set()
+      model.traverse((child: any) => {
+        if (child && child.morphTargetDictionary) {
+          Object.keys(child.morphTargetDictionary).forEach((k) => names.add(k))
+          // Ensure materials support morph targets
+          const material = child.material
+          if (material) {
+            if (Array.isArray(material)) {
+              material.forEach((m) => { if (m) { m.morphTargets = true; m.needsUpdate = true } })
+            } else {
+              material.morphTargets = true
+              material.needsUpdate = true
+            }
+          }
+        }
+      })
+      if (names.size > 0) {
+        console.log('🧩 Avatar morph targets detected:', Array.from(names))
+      } else {
+        console.warn('🧩 No morph targets detected on avatar meshes')
+      }
+    } catch (e) {
+      // ignore
+    }
+    
     console.log('🤖 Avatar loaded for text chat with lipsync setup')
   }, [])
 
-  // Apply blend shapes to avatar
+  // Apply blend shapes to avatar (robust mapping for Ready Player Me morph targets)
   const applyBlendShapesToAvatar = useCallback((blendShapes: Partial<BlendShapeTargets>) => {
     if (!avatarModelRef.current) return
 
+    // Map canonical keys to common Ready Player Me/GLTF morph target variants
+    const keyVariants: Record<string, string[]> = {
+      jawOpen: [
+        'jawOpen', 'JawOpen', 'jaw_Open', 'mouthOpen', 'MouthOpen',
+        // RPM viseme open vowel (approx mouth open)
+        'viseme_aa', 'viseme_AA', 'viseme_A', 'aa'
+      ],
+      mouthSmile: [
+        'mouthSmile', 'MouthSmile', 'smile', 'Smile',
+        'mouthSmileLeft', 'mouthSmileRight',
+        // Smiley vowels (E/I)
+        'viseme_E', 'viseme_I'
+      ],
+      mouthFunnel: [
+        'mouthFunnel', 'MouthFunnel', 'mouthPucker', 'mouthPuckerLeft', 'mouthPuckerRight',
+        // Rounded vowels
+        'viseme_O', 'viseme_U'
+      ]
+    }
+
+    const setMorphInfluence = (mesh: any, canonicalKey: string, value: number) => {
+      const dict = mesh.morphTargetDictionary as Record<string, number>
+      const infl = mesh.morphTargetInfluences as number[]
+      const variants = keyVariants[canonicalKey] || []
+
+      // Try exact canonical key first
+      if (typeof dict[canonicalKey] === 'number') {
+        infl[dict[canonicalKey]] = value
+      }
+
+      // Apply to all available variants
+      for (const variant of variants) {
+        if (typeof dict[variant] === 'number') {
+          infl[dict[variant]] = value
+        }
+      }
+    }
+
+    let applied = false
     avatarModelRef.current.traverse((child) => {
       if (child instanceof Object3D && (child as any).morphTargetDictionary && (child as any).morphTargetInfluences) {
         const mesh = child as any
-        Object.entries(blendShapes).forEach(([key, value]) => {
-          const index = mesh.morphTargetDictionary[key]
-          if (typeof index === 'number' && typeof value === 'number') {
-            mesh.morphTargetInfluences[index] = value
+        const before = (mesh.morphTargetInfluences || []).slice()
+        // Ensure materials are configured for morph targets
+        const material = mesh.material
+        if (material) {
+          if (Array.isArray(material)) {
+            material.forEach((m: any) => { if (m) { m.morphTargets = true; m.needsUpdate = true } })
+          } else {
+            material.morphTargets = true
+            material.needsUpdate = true
           }
-        })
+        }
+        if (typeof blendShapes.jawOpen === 'number') setMorphInfluence(mesh, 'jawOpen', Math.max(0, Math.min(1, blendShapes.jawOpen)))
+        if (typeof blendShapes.mouthSmile === 'number') setMorphInfluence(mesh, 'mouthSmile', Math.max(0, Math.min(1, blendShapes.mouthSmile)))
+        if (typeof blendShapes.mouthFunnel === 'number') setMorphInfluence(mesh, 'mouthFunnel', Math.max(0, Math.min(1, blendShapes.mouthFunnel)))
+        const after = mesh.morphTargetInfluences || []
+        // Detect if anything changed
+        for (let i = 0; i < after.length; i++) {
+          if (after[i] !== before[i]) { applied = true; break }
+        }
+        // Hint renderer to update and update matrices
+        try { mesh.needsUpdate = true } catch {}
+        try { mesh.updateMatrix(); mesh.updateMatrixWorld(true) } catch {}
       }
     })
+    if (!applied) {
+      // Debug once to reveal available morph names for mapping refinement
+      console.warn('🔇 No morph targets applied for this viseme set. Logging available morph target names from avatar...')
+      const names: Set<string> = new Set()
+      avatarModelRef.current.traverse((child) => {
+        const mc = child as any
+        if (mc && mc.morphTargetDictionary) {
+          Object.keys(mc.morphTargetDictionary).forEach(k => names.add(k))
+        }
+      })
+      console.warn('🧩 Available morph targets:', Array.from(names))
+    }
   }, [])
 
   // Send text message
@@ -212,41 +306,53 @@ export const AvatarTextChat: React.FC<AvatarTextChatProps> = ({
     }
   }
 
-  // Play avatar audio response with lip-sync
+  // Play avatar audio response with Gemini TTS and lip-sync (single path to avoid double playback)
   const playAvatarResponse = async (text: string, messageId: string) => {
     if (!audioEnabled || !text.trim()) return
 
     try {
       setIsSpeaking(true)
-      
-      // Update message to show it's playing
-      setMessages(prev => prev.map(msg => 
-        msg.id === messageId 
-          ? { ...msg, isAudioPlaying: true }
-          : { ...msg, isAudioPlaying: false }
-      ))
+      console.log('🔊 AvatarTextChat: Starting Gemini TTS for:', text.substring(0, 50))
 
-      console.log('🔊 Playing TTS for text:', text.substring(0, 50) + '...')
+      // Prefer Gemini TTS
+      const ttsResponse = await fetch('/api/tts/gemini', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text })
+      })
 
-      // Generate and play audio with lip-sync
-      const ttsResult = await ttsServiceRef.current.generateSpeech(text)
-      
-      if (ttsResult.success && ttsResult.audioUrl && avatarModelRef.current) {
-        console.log('🎵 Starting lip-sync animation')
-        
-        // Process audio with lip-sync
-        await lipsyncManagerRef.current.processAudioFile(ttsResult.audioUrl)
-        
-        console.log('✅ Lip-sync animation completed')
+      const contentType = ttsResponse.headers.get('content-type') || ''
+      if (ttsResponse.ok && contentType.includes('application/json')) {
+        const ttsData = await ttsResponse.json()
+
+        if (ttsData.success && ttsData.audioData && ttsData.isRealAudio) {
+          console.log('🔊 AvatarTextChat: Using REAL Gemini TTS audio')
+          const audioBlob = base64ToBlob(ttsData.audioData, ttsData.mimeType || 'audio/wav')
+          const audioUrl = URL.createObjectURL(audioBlob)
+          await playAudioWithLipSync(audioUrl, text)
+          URL.revokeObjectURL(audioUrl)
+          return
+        }
+
+        if (ttsData.success && ttsData.useBrowserTTS && ttsData.optimizedText) {
+          console.log('🔊 AvatarTextChat: Using Gemini-optimized browser TTS')
+          await enhancedBrowserTTS(ttsData.optimizedText)
+          return
+        }
       } else {
-        console.warn('⚠️ Audio generation failed, playing without lip-sync')
+        // Avoid JSON parsing on HTML error pages (prevents "Unexpected token < ... is not valid JSON")
+        const statusText = `${ttsResponse.status} ${ttsResponse.statusText}`
+        console.warn('🔊 AvatarTextChat: Gemini TTS API not ok or non-JSON response:', statusText, contentType)
       }
+
+      // Fallback
+      console.log('🔊 AvatarTextChat: Using fallback browser TTS')
+      await enhancedBrowserTTS(text)
 
     } catch (error) {
       console.error('❌ TTS Error:', error)
     } finally {
       setIsSpeaking(false)
-      
       // Clear audio playing status
       setMessages(prev => prev.map(msg => ({ ...msg, isAudioPlaying: false })))
     }
@@ -263,6 +369,65 @@ export const AvatarTextChat: React.FC<AvatarTextChatProps> = ({
       recognitionRef.current.start()
       setIsListening(true)
     }
+  }
+
+  // Helper function to convert base64 to blob
+  const base64ToBlob = (base64: string, mimeType: string): Blob => {
+    const binaryString = atob(base64)
+    const bytes = new Uint8Array(binaryString.length)
+    for (let i = 0; i < binaryString.length; i++) {
+      bytes[i] = binaryString.charCodeAt(i)
+    }
+    return new Blob([bytes], { type: mimeType })
+  }
+
+  // Enhanced browser TTS
+  const enhancedBrowserTTS = async (text: string) => {
+    return new Promise<void>((resolve) => {
+      const utterance = new SpeechSynthesisUtterance(text)
+      utterance.rate = 0.85
+      utterance.pitch = 1.2
+      utterance.volume = 0.9
+
+      const voices = speechSynthesis.getVoices()
+      const preferredVoices = ['Google US English', 'Microsoft Zira', 'Alex', 'Samantha']
+      
+      for (const preferredName of preferredVoices) {
+        const voice = voices.find(v => v.name.includes(preferredName))
+        if (voice) {
+          utterance.voice = voice
+          break
+        }
+      }
+
+      lipsyncManagerRef.current.processSpeechSynthesis(utterance)
+      
+      utterance.onend = () => resolve()
+      utterance.onerror = () => resolve()
+      
+      speechSynthesis.speak(utterance)
+    })
+  }
+
+  // Play audio with lip sync
+  const playAudioWithLipSync = async (audioUrl: string, text: string) => {
+    return new Promise<void>((resolve) => {
+      const audio = new Audio(audioUrl)
+      
+      audio.onloadeddata = () => {
+        lipsyncManagerRef.current.processAudioFile(audioUrl)
+      }
+      
+      audio.onended = () => {
+        // Reset mouth to neutral at the end
+        applyBlendShapesToAvatar({ jawOpen: 0, mouthSmile: 0, mouthFunnel: 0 })
+        lipsyncManagerRef.current.stopProcessing()
+        resolve()
+      }
+      audio.onerror = () => resolve()
+      
+      audio.play()
+    })
   }
 
   return (

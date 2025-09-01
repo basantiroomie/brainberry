@@ -36,23 +36,23 @@ export class LipsyncManager implements ILipsyncManager {
   }>()
 
   // Enhanced viseme to Ready Player Me morph target mapping
-  // Using Wawa Lipsync VISEMES enum for accurate mapping
+  // Using comprehensive blend shape names that work with most 3D avatars
   private readonly visemeToMorphTarget: Record<VISEMES | 'rest', Partial<BlendShapeTargets>> = {
     [VISEMES.sil]: { jawOpen: 0.0, mouthSmile: 0.0, mouthFunnel: 0.0 }, // Silence
-    [VISEMES.PP]: { jawOpen: 0.0, mouthSmile: 0.0, mouthFunnel: 0.0 }, // P, B, M sounds
-    [VISEMES.FF]: { jawOpen: 0.1, mouthSmile: 0.0, mouthFunnel: 0.2 }, // F, V sounds
-    [VISEMES.TH]: { jawOpen: 0.15, mouthSmile: 0.1, mouthFunnel: 0.0 }, // TH sounds
-    [VISEMES.DD]: { jawOpen: 0.3, mouthSmile: 0.2, mouthFunnel: 0.0 }, // D, T, N, L sounds
-    [VISEMES.kk]: { jawOpen: 0.4, mouthSmile: 0.0, mouthFunnel: 0.0 }, // K, G sounds
-    [VISEMES.CH]: { jawOpen: 0.2, mouthSmile: 0.3, mouthFunnel: 0.1 }, // CH, SH sounds
-    [VISEMES.SS]: { jawOpen: 0.1, mouthSmile: 0.4, mouthFunnel: 0.0 }, // S, Z sounds
-    [VISEMES.nn]: { jawOpen: 0.2, mouthSmile: 0.1, mouthFunnel: 0.0 }, // N sounds
-    [VISEMES.RR]: { jawOpen: 0.3, mouthSmile: 0.2, mouthFunnel: 0.0 }, // R sounds
-    [VISEMES.aa]: { jawOpen: 0.8, mouthSmile: 0.1, mouthFunnel: 0.0 }, // AA (father) vowel
-    [VISEMES.E]: { jawOpen: 0.5, mouthSmile: 0.7, mouthFunnel: 0.0 }, // E (bed) vowel
-    [VISEMES.I]: { jawOpen: 0.2, mouthSmile: 0.9, mouthFunnel: 0.0 }, // I (bit) vowel
-    [VISEMES.O]: { jawOpen: 0.7, mouthSmile: 0.0, mouthFunnel: 0.8 }, // O (boat) vowel
-    [VISEMES.U]: { jawOpen: 0.3, mouthSmile: 0.0, mouthFunnel: 0.9 }, // U (book) vowel
+    [VISEMES.PP]: { jawOpen: 0.05, mouthSmile: 0.0, mouthFunnel: 0.0 }, // P, B, M sounds - slight jaw close
+    [VISEMES.FF]: { jawOpen: 0.15, mouthSmile: 0.0, mouthFunnel: 0.3 }, // F, V sounds
+    [VISEMES.TH]: { jawOpen: 0.2, mouthSmile: 0.1, mouthFunnel: 0.0 }, // TH sounds
+    [VISEMES.DD]: { jawOpen: 0.4, mouthSmile: 0.2, mouthFunnel: 0.0 }, // D, T, N, L sounds
+    [VISEMES.kk]: { jawOpen: 0.5, mouthSmile: 0.0, mouthFunnel: 0.0 }, // K, G sounds
+    [VISEMES.CH]: { jawOpen: 0.3, mouthSmile: 0.4, mouthFunnel: 0.1 }, // CH, SH sounds
+    [VISEMES.SS]: { jawOpen: 0.15, mouthSmile: 0.6, mouthFunnel: 0.0 }, // S, Z sounds
+    [VISEMES.nn]: { jawOpen: 0.25, mouthSmile: 0.1, mouthFunnel: 0.0 }, // N sounds
+    [VISEMES.RR]: { jawOpen: 0.35, mouthSmile: 0.2, mouthFunnel: 0.1 }, // R sounds
+    [VISEMES.aa]: { jawOpen: 0.9, mouthSmile: 0.1, mouthFunnel: 0.0 }, // AA (father) vowel - wide open
+    [VISEMES.E]: { jawOpen: 0.6, mouthSmile: 0.8, mouthFunnel: 0.0 }, // E (bed) vowel
+    [VISEMES.I]: { jawOpen: 0.3, mouthSmile: 1.0, mouthFunnel: 0.0 }, // I (bit) vowel - big smile
+    [VISEMES.O]: { jawOpen: 0.8, mouthSmile: 0.0, mouthFunnel: 1.0 }, // O (boat) vowel - mouth round
+    [VISEMES.U]: { jawOpen: 0.4, mouthSmile: 0.0, mouthFunnel: 1.0 }, // U (book) vowel - small round
     'rest': { jawOpen: 0.0, mouthSmile: 0.0, mouthFunnel: 0.0 }
   }
 
@@ -206,25 +206,62 @@ export class LipsyncManager implements ILipsyncManager {
   private startContinuousLipSync() {
     if (!this.isProcessing || !this.onVisemeCallback) return
 
-    // Generate more realistic mouth movements
-    const visemes = [VISEMES.aa, VISEMES.E, VISEMES.I, VISEMES.O, VISEMES.U, VISEMES.PP, VISEMES.DD, VISEMES.SS]
-    const randomViseme = visemes[Math.floor(Math.random() * visemes.length)]
-    const morphTargets = this.visemeToMorphTarget[randomViseme]
+    // Generate more realistic mouth movements with weighted probabilities
+    const visemeWeights = [
+      { viseme: VISEMES.aa, weight: 0.2 }, // Common vowel
+      { viseme: VISEMES.E, weight: 0.15 },
+      { viseme: VISEMES.I, weight: 0.15 },
+      { viseme: VISEMES.O, weight: 0.1 },
+      { viseme: VISEMES.U, weight: 0.1 },
+      { viseme: VISEMES.PP, weight: 0.05 }, // Less common
+      { viseme: VISEMES.DD, weight: 0.1 },
+      { viseme: VISEMES.SS, weight: 0.05 },
+      { viseme: VISEMES.RR, weight: 0.05 },
+      { viseme: VISEMES.nn, weight: 0.05 }
+    ]
     
-    // Apply the viseme
-    this.onVisemeCallback(morphTargets)
+    // Weighted random selection
+    let random = Math.random()
+    let selectedViseme = VISEMES.aa
+    
+    for (const { viseme, weight } of visemeWeights) {
+      random -= weight
+      if (random <= 0) {
+        selectedViseme = viseme
+        break
+      }
+    }
+    
+    const morphTargets = this.visemeToMorphTarget[selectedViseme]
+    
+    // Add some intensity variation for more natural look
+    const intensityMultiplier = 0.7 + Math.random() * 0.3 // 0.7 to 1.0
+    const adjustedMorphTargets: Partial<BlendShapeTargets> = {}
+    
+    Object.entries(morphTargets).forEach(([key, value]) => {
+      adjustedMorphTargets[key as keyof BlendShapeTargets] = (value || 0) * intensityMultiplier
+    })
+    
+    // Apply the viseme with debug logging
+    console.log(`🗣️ Lipsync: Applying viseme ${selectedViseme} with intensity ${intensityMultiplier.toFixed(2)}:`, adjustedMorphTargets)
+    this.onVisemeCallback(adjustedMorphTargets)
     
     // Vary the timing for more natural movement
-    const nextDelay = 80 + Math.random() * 120 // 80-200ms between movements
+    const nextDelay = 100 + Math.random() * 150 // 100-250ms between movements
     
     setTimeout(() => {
       if (this.isProcessing && this.onVisemeCallback) {
-        // Brief rest position between visemes
-        this.onVisemeCallback(this.visemeToMorphTarget['rest'])
+        // Brief neutral position between visemes
+        const neutralIntensity = 0.1 + Math.random() * 0.1 // Small neutral position
+        this.onVisemeCallback({
+          jawOpen: neutralIntensity,
+          mouthSmile: neutralIntensity * 0.5,
+          mouthFunnel: 0
+        })
         
         setTimeout(() => {
           this.startContinuousLipSync()
-        }, 20 + Math.random() * 40) // 20-60ms rest
+        }, 30 + Math.random() * 50) // 30-80ms neutral rest
       }
     }, nextDelay)
   }
@@ -285,19 +322,26 @@ export class LipsyncManager implements ILipsyncManager {
       // Connect audio to Wawa Lipsync
       this.lipsync.connectAudio(audio)
       
-      // Start lip-sync processing
-      audio.onplay = () => {
-        this.isProcessing = true
-        this.processWithWawaLipsync()
-      }
-      
-      audio.onended = () => {
-        this.stopProcessing()
-      }
-      
-      audio.onpause = () => {
-        this.stopProcessing()
-      }
+      // Start lip-sync processing and playback, resolve when finished
+      await new Promise<void>((resolve) => {
+        audio.onplay = () => {
+          this.isProcessing = true
+          this.processWithWawaLipsync()
+        }
+        audio.onended = () => {
+          this.stopProcessing()
+          resolve()
+        }
+        audio.onpause = () => {
+          this.stopProcessing()
+          resolve()
+        }
+        // Begin playback
+        audio.play().catch((e) => {
+          console.error('Audio play failed for lipsync:', e)
+          resolve()
+        })
+      })
       
     } catch (error) {
       console.error('Error processing audio file:', error)

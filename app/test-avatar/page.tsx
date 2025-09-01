@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react'
 import { SimpleAvatarViewer } from '@/components/SimpleAvatarViewer'
-import { CleanVoiceAvatarChat } from '@/components/CleanVoiceAvatarChat'
+import { AvatarChatCoordinator } from '@/components/AvatarChatCoordinator'
 import { ChildAvatarDisplay } from '@/app/child/components/ChildAvatarDisplay'
 import { AvatarStatusIndicator } from '@/components/AvatarStatusIndicator'
 import { AvatarUrlValidator } from '@/lib/avatar-url-validator'
@@ -165,13 +165,10 @@ export default function TestAvatarPage() {
               <p><strong>Voice Mode:</strong> Gemini Live 2.5-flash-preview with speech recognition</p>
             </div>
             <div className="h-[600px] border border-gray-300 rounded-lg overflow-hidden">
-              <CleanVoiceAvatarChat
+              <AvatarChatCoordinator 
                 avatarUrl={testAvatarUrl || childProfile.avatar_url}
                 childId={childProfile.id}
-                accessCode={childProfile.access_code}
-                onMessageSent={(message: string) => {
-                  console.log('Message sent to avatar:', message)
-                }}
+                onBack={() => console.log('Back clicked')}
               />
             </div>
           </div>
