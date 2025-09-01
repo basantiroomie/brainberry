@@ -1,9 +1,11 @@
-import { Crown, Trophy, MessageCircle, Star, Award, Medal, Shield, Gem, ArrowLeft } from "lucide-react"
+import { Crown, Trophy, MessageCircle, Star, Award, Medal, Shield, Gem, ArrowLeft, Palette, Plus } from "lucide-react"
 import { useEffect, useState } from "react"
 import Image from "next/image"
 import ChatAssistant from "./ChatAssistant"
 import { SimpleAvatarViewer } from "@/components/SimpleAvatarViewer"
 import AvatarChatCoordinator from "@/components/AvatarChatCoordinator"
+import ChildAvatarCreator from "./ChildAvatarCreator"
+import { toast } from 'sonner'
 
 interface ChildProgress {
   completedAssignments: number
@@ -26,6 +28,8 @@ export default function MyStuffTab({ childProfile }: MyStuffTabProps) {
   const [loading, setLoading] = useState(true)
   const [activeSection, setActiveSection] = useState<'overview' | 'avatar' | 'chat' | 'themes' | 'trophies'>('overview')
   const [showTrophyPopup, setShowTrophyPopup] = useState(false)
+  const [showAvatarCreator, setShowAvatarCreator] = useState(false)
+  const [refreshProfile, setRefreshProfile] = useState(0)
 
   useEffect(() => {
     if (childProfile?.id) {
@@ -160,7 +164,19 @@ export default function MyStuffTab({ childProfile }: MyStuffTabProps) {
     )
   }
 
-  // Show avatar view section (read-only)
+  // Handle avatar creation success
+  const handleAvatarSaved = () => {
+    // Trigger a refresh of the child profile
+    setRefreshProfile(prev => prev + 1)
+    toast.success('🎉 Your avatar has been saved! It will appear in your profile shortly.')
+    
+    // Update the session storage with new avatar data
+    setTimeout(() => {
+      window.location.reload() // Simple refresh to update all avatar displays
+    }, 1000)
+  }
+
+  // Show avatar view section with creation capability
   if (activeSection === 'avatar') {
     return (
       <div className="space-y-8">
@@ -181,27 +197,90 @@ export default function MyStuffTab({ childProfile }: MyStuffTabProps) {
         
         <div className="bg-white border-4 border-black shadow-brutal-xl p-6 max-w-4xl mx-auto">
           <div className="text-center mb-6">
-            <h2 className="text-2xl font-bold mb-2">Your Amazing Avatar!</h2>
-            <p className="text-gray-600">This is your special character created by your educator!</p>
+            <h2 className="text-2xl font-bold mb-2">
+              {childProfile?.avatar_url ? 'Your Amazing Avatar!' : 'Create Your Avatar!'}
+            </h2>
+            <p className="text-gray-600">
+              {childProfile?.avatar_url 
+                ? 'This is your special 3D character that represents you!' 
+                : 'Design your own unique 3D character to use in games and chats!'
+              }
+            </p>
           </div>
           
           {childProfile?.avatar_url ? (
-            <div className="bg-gray-100 border-2 border-black rounded-lg overflow-hidden" style={{ height: '500px' }}>
-              <SimpleAvatarViewer
-                avatarUrl={childProfile.avatar_url}
-                enableControls={true}
-                cameraMode="full"
-                className="w-full h-full"
-              />
+            <div className="space-y-6">
+              <div className="bg-gray-100 border-2 border-black rounded-lg overflow-hidden" style={{ height: '500px' }}>
+                <SimpleAvatarViewer
+                  avatarUrl={childProfile.avatar_url}
+                  enableControls={true}
+                  cameraMode="full"
+                  className="w-full h-full"
+                />
+              </div>
+              
+              <div className="flex justify-center space-x-4">
+                <button
+                  onClick={() => setShowAvatarCreator(true)}
+                  className="bg-chart-1 text-white px-6 py-3 border-2 border-black shadow-brutal hover:shadow-brutal-lg font-bold flex items-center space-x-2"
+                >
+                  <Palette className="h-5 w-5" />
+                  <span>CREATE NEW AVATAR</span>
+                </button>
+              </div>
+              
+              <div className="bg-blue-50 border-2 border-blue-300 p-4 rounded text-center">
+                <p className="text-sm text-blue-700">
+                  💡 You can create a new avatar anytime! Your old avatar will be replaced with the new one.
+                </p>
+              </div>
             </div>
           ) : (
-            <div className="bg-gray-100 border-2 border-black rounded-lg p-12 text-center">
-              <div className="text-6xl mb-4">🦸</div>
-              <h3 className="text-xl font-bold mb-2">No Avatar Yet!</h3>
-              <p className="text-gray-600">Ask your educator to create an avatar for you!</p>
+            <div className="space-y-6">
+              <div className="bg-gradient-to-br from-purple-100 to-blue-100 border-2 border-black rounded-lg p-12 text-center">
+                <div className="text-8xl mb-6">🎨</div>
+                <h3 className="text-2xl font-bold mb-4">Ready to Create Your Avatar?</h3>
+                <p className="text-gray-600 mb-6 text-lg">
+                  Let's make an amazing 3D character that looks just like you!
+                </p>
+                
+                <button
+                  onClick={() => setShowAvatarCreator(true)}
+                  className="bg-chart-3 text-white px-8 py-4 border-2 border-black shadow-brutal hover:shadow-brutal-lg font-bold text-xl flex items-center space-x-3 mx-auto transform hover:scale-105 transition-all"
+                >
+                  <Plus className="h-6 w-6" />
+                  <span>CREATE MY AVATAR!</span>
+                </button>
+              </div>
+              
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="bg-white border-2 border-green-300 p-4 rounded text-center">
+                  <div className="text-3xl mb-2">📸</div>
+                  <h4 className="font-bold text-green-800 mb-1">Take a Photo</h4>
+                  <p className="text-sm text-green-700">Use your camera or upload a picture</p>
+                </div>
+                <div className="bg-white border-2 border-blue-300 p-4 rounded text-center">
+                  <div className="text-3xl mb-2">🎨</div>
+                  <h4 className="font-bold text-blue-800 mb-1">Customize</h4>
+                  <p className="text-sm text-blue-700">Make it look exactly how you want</p>
+                </div>
+                <div className="bg-white border-2 border-purple-300 p-4 rounded text-center">
+                  <div className="text-3xl mb-2">🎮</div>
+                  <h4 className="font-bold text-purple-800 mb-1">Play & Chat</h4>
+                  <p className="text-sm text-purple-700">Use your avatar in games and conversations</p>
+                </div>
+              </div>
             </div>
           )}
         </div>
+
+        {/* Avatar Creator Modal */}
+        <ChildAvatarCreator
+          isOpen={showAvatarCreator}
+          onClose={() => setShowAvatarCreator(false)}
+          childProfile={childProfile}
+          onAvatarSaved={handleAvatarSaved}
+        />
       </div>
     )
   }
@@ -317,12 +396,24 @@ export default function MyStuffTab({ childProfile }: MyStuffTabProps) {
               {childProfile?.avatar_url ? 'View and interact with your amazing 3D character!' : 'Ask your educator to create your special avatar!'}
             </p>
             
-            <button 
-              onClick={() => setActiveSection('avatar')}
-              className="w-full bg-chart-3 text-white px-4 py-2 border-2 border-black shadow-brutal hover:shadow-brutal-lg transition-all font-bold"
-            >
-              {childProfile?.avatar_url ? 'VIEW AVATAR' : 'NO AVATAR YET'}
-            </button>
+            <div className="space-y-2">
+              <button 
+                onClick={() => setActiveSection('avatar')}
+                className="w-full bg-chart-3 text-white px-4 py-2 border-2 border-black shadow-brutal hover:shadow-brutal-lg transition-all font-bold"
+              >
+                {childProfile?.avatar_url ? 'VIEW AVATAR' : 'VIEW AVATAR CREATOR'}
+              </button>
+              
+              {!childProfile?.avatar_url && (
+                <button
+                  onClick={() => setShowAvatarCreator(true)}
+                  className="w-full bg-chart-1 text-white px-4 py-2 border-2 border-black shadow-brutal hover:shadow-brutal-lg transition-all font-bold flex items-center justify-center space-x-2"
+                >
+                  <Plus className="h-4 w-4" />
+                  <span>CREATE NOW!</span>
+                </button>
+              )}
+            </div>
           </div>
         </div>
 
@@ -586,6 +677,14 @@ export default function MyStuffTab({ childProfile }: MyStuffTabProps) {
           </div>
         </div>
       )}
+
+      {/* Avatar Creator Modal */}
+      <ChildAvatarCreator
+        isOpen={showAvatarCreator}
+        onClose={() => setShowAvatarCreator(false)}
+        childProfile={childProfile}
+        onAvatarSaved={handleAvatarSaved}
+      />
     </div>
   )
 }

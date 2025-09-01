@@ -1,11 +1,9 @@
 "use client"
-import { Users, User, Plus, BarChart3, Settings, Palette, Loader2, Link2, CheckCircle2, X, RotateCcw, Code } from "lucide-react"
-import { useEffect, useState, useRef } from "react"
+import { Users, User, Plus, BarChart3, Settings, X, Link2, CheckCircle2, RotateCcw, Loader2 } from "lucide-react"
+import { useEffect, useState } from "react"
 import { toast } from 'sonner'
 import { useMockData } from './MockDataContext'
 import { AvatarViewer } from '@/components/AvatarViewer'
-import { AvatarCodeUtils } from '@/lib/avatar-utils'
-import { avatarCodeSchema } from '@/lib/schemas'
 import ChildAvatarDisplay from '@/app/child/components/ChildAvatarDisplay'
 
 interface Child {
@@ -37,397 +35,6 @@ function generateAccessCode(): string {
   return result
 }
 
-// Avatar Creator Modal Component
-interface AvatarCreatorModalProps {
-  isOpen: boolean
-  onClose: () => void
-  child: Child | null
-  onAvatarSaved: () => void
-}
-
-function AvatarCreatorModal({ isOpen, onClose, child, onAvatarSaved }: AvatarCreatorModalProps) {
-  const [step, setStep] = useState<'iframe' | 'code'>('iframe')
-  const [avatarCode, setAvatarCode] = useState('')
-
-  // Safety check - if child is null or undefined, close the modal
-  useEffect(() => {
-    if (isOpen && !child) {
-      console.error('AvatarCreatorModal opened without valid child')
-      toast.error('Child data not available. Please try again.')
-      onClose()
-    }
-  }, [isOpen, child, onClose])
-
-  // Don't render if child is null
-  if (!child) {
-    return null
-  }
-  const [codeError, setCodeError] = useState('')
-  const [saving, setSaving] = useState(false)
-  const [iframeLoaded, setIframeLoaded] = useState(false)
-
-  // Ready Player Me iframe configuration
-  const rpmSubdomain = process.env.NEXT_PUBLIC_RPM_SUBDOMAIN || 'demo'
-  // Force the iframe to start with photo upload by adding quickStart parameter
-  const iframeUrl = `https://${rpmSubdomain}.readyplayer.me/avatar?frameApi&quickStart=true&bodyType=halfbody`
-
-  // Reset state when modal opens/closes
-  useEffect(() => {
-    if (isOpen) {
-      setStep('iframe')
-      setAvatarCode('')
-      setCodeError('')
-      setSaving(false)
-      setIframeLoaded(false)
-    }
-  }, [isOpen])
-
-  // Handle avatar code/URL input with improved validation
-  const handleCodeChange = (value: string) => {
-    setAvatarCode(value.trim())
-    setCodeError('')
-
-    if (value.trim().length === 0) return
-
-    const trimmedValue = value.trim()
-
-    // Check if it's a URL
-    if (trimmedValue.includes('models.readyplayer.me')) {
-      // Extract code from URL if it's a full URL
-      const urlMatch = trimmedValue.match(/models\.readyplayer\.me\/([A-Z0-9]{6,})/i)
-      if (urlMatch) {
-        const extractedCode = urlMatch[1].replace(/\.(glb|png)$/, '')
-        if (extractedCode.length >= 6) {
-          // Valid URL with code
-          return
-        }
-      }
-
-      if (!trimmedValue.startsWith('https://models.readyplayer.me/')) {
-        setCodeError('URL should start with https://models.readyplayer.me/')
-        return
-      }
-
-      if (!trimmedValue.includes('.glb') && !trimmedValue.includes('.png')) {
-        setCodeError('URL should contain .glb or .png extension')
-        return
-      }
-    } else {
-      // Check if it's an avatar code (6 or more characters)
-      if (trimmedValue.length >= 6) {
-        if (!/^[A-Z0-9]{6,}$/i.test(trimmedValue)) {
-          setCodeError('Code should contain only letters and numbers')
-        }
-      } else if (trimmedValue.length > 0) {
-        setCodeError('Code should be at least 6 characters, or paste the full URL')
-      }
-    }
-  }
-
-  // Save avatar with improved code/URL handling
-  const handleSaveAvatar = async () => {
-    if (!avatarCode.trim()) {
-      setCodeError('Please enter an avatar code or URL')
-      return
-    }
-
-    try {
-      let glbUrl: string
-      let pngUrl: string
-      const trimmedInput = avatarCode.trim()
-
-      // Handle URL input (including partial URLs)
-      if (trimmedInput.includes('models.readyplayer.me')) {
-        // Extract code from URL - support longer codes too
-        const urlMatch = trimmedInput.match(/models\.readyplayer\.me\/([A-Z0-9]{6,})/i)
-        if (urlMatch) {
-          const extractedCode = urlMatch[1].replace(/\.(glb|png)$/, '')
-          // Use the full extracted code (don't truncate to 6 characters)
-          glbUrl = `https://models.readyplayer.me/${extractedCode}.glb`
-          pngUrl = `https://models.readyplayer.me/${extractedCode}.png`
-        } else {
-          setCodeError('Could not extract avatar code from URL')
-          return
-        }
-      } else {
-        // Handle codes (6+ characters)
-        const upperCode = trimmedInput.toUpperCase()
-
-        // Validate code format - allow 6 or more characters
-        if (!/^[A-Z0-9]{6,}$/.test(upperCode)) {
-          setCodeError('Code must be at least 6 characters (letters and numbers only)')
-          return
-        }
-
-        // Convert code to URLs using the full code
-        glbUrl = `https://models.readyplayer.me/${upperCode}.glb`
-        pngUrl = `https://models.readyplayer.me/${upperCode}.png`
-      }
-
-      setSaving(true)
-
-      // Update child with avatar URLs
-      const response = await fetch(`/api/children/${child.id}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          avatar_url: glbUrl,
-          avatar_headshot_url: pngUrl,
-        }),
-      })
-
-      if (response.ok) {
-        toast.success('Avatar saved successfully!')
-        onAvatarSaved()
-        onClose()
-      } else {
-        const errorData = await response.json().catch(() => ({ error: 'Unknown error' }))
-        console.error('Avatar save failed:', {
-          status: response.status,
-          statusText: response.statusText,
-          childId: child.id,
-          errorData
-        })
-
-        if (response.status === 404) {
-          toast.error('Child not found. Please refresh the page and try again.')
-        } else {
-          toast.error(`Failed to save avatar: ${errorData.error || 'Unknown error'}`)
-        }
-      }
-    } catch (error) {
-      console.error('Avatar save error:', error)
-      toast.error('Error saving avatar')
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  // Handle iframe messages from Ready Player Me
-  useEffect(() => {
-    const handleMessage = (event: MessageEvent) => {
-      if (event.origin !== `https://${rpmSubdomain}.readyplayer.me`) return
-
-      const { eventName, data } = event.data
-
-      switch (eventName) {
-        case 'v1.frame.ready':
-          setIframeLoaded(true)
-          break
-        case 'v1.avatar.exported':
-          // Avatar creation completed, move to code input step
-          setStep('code')
-          toast.success('Avatar created! Please enter the avatar code to save it.')
-          break
-        case 'v1.user.set':
-          console.log('User set in Ready Player Me:', data)
-          break
-      }
-    }
-
-    if (isOpen) {
-      window.addEventListener('message', handleMessage)
-      return () => window.removeEventListener('message', handleMessage)
-    }
-  }, [isOpen, rpmSubdomain])
-
-  if (!isOpen) return null
-
-  return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white border-4 border-black shadow-brutal-xl max-w-4xl w-full max-h-[90vh] overflow-hidden">
-        {/* Modal Header */}
-        <div className="bg-chart-2 text-white p-4 border-b-4 border-black">
-          <div className="flex items-center justify-between">
-            <h2 className="text-xl font-bold">Create Avatar for {child.name}</h2>
-            <button
-              onClick={onClose}
-              className="bg-white text-black p-2 border-2 border-black shadow-brutal hover:shadow-brutal-lg"
-              disabled={saving}
-            >
-              <X className="h-4 w-4" />
-            </button>
-          </div>
-        </div>
-
-        {/* Modal Content */}
-        <div className="p-6 max-h-[calc(90vh-120px)] overflow-y-auto">
-          {step === 'iframe' && (
-            <div className="space-y-4">
-              <div className="bg-blue-50 border-2 border-blue-300 p-4">
-                <h3 className="font-bold text-blue-800 mb-2">📋 Instructions</h3>
-                <ol className="text-sm text-blue-700 space-y-1 list-decimal list-inside">
-                  <li><strong>The interface will automatically prompt you to upload a photo</strong></li>
-                  <li>Take a new photo or upload an existing one from your device</li>
-                  <li>Customize the avatar appearance as desired</li>
-                  <li>When finished, look for the <strong>"Copy the link to share"</strong> button</li>
-                  <li>Copy that URL and paste it in the next step (or just enter the avatar code)</li>
-                </ol>
-                <div className="mt-3 p-2 bg-yellow-100 border border-yellow-300 rounded">
-                  <p className="text-xs text-yellow-800 font-bold">
-                    💡 Tip: The Ready Player Me interface is configured to start with photo upload for creating custom avatars
-                  </p>
-                </div>
-              </div>
-
-              {/* Ready Player Me Iframe */}
-              <div className="relative bg-gray-100 border-2 border-black" style={{ height: '600px' }}>
-                {!iframeLoaded && (
-                  <div className="absolute inset-0 flex items-center justify-center bg-gray-100">
-                    <div className="text-center">
-                      <Loader2 className="w-8 h-8 mx-auto mb-2 animate-spin text-chart-2" />
-                      <p className="text-sm font-bold text-gray-600">Loading Ready Player Me...</p>
-                      <p className="text-xs text-gray-500 mt-1">The interface will prompt you to upload a photo</p>
-                    </div>
-                  </div>
-                )}
-                <iframe
-                  src={iframeUrl}
-                  className="w-full h-full border-none"
-                  allow="camera *; microphone *; fullscreen *"
-                  onLoad={() => setIframeLoaded(true)}
-                  data-testid="rpm-iframe"
-                />
-              </div>
-
-              <div className="flex justify-between">
-                <button
-                  onClick={onClose}
-                  className="bg-gray-500 text-white px-4 py-2 border-2 border-black shadow-brutal hover:shadow-brutal-lg font-bold"
-                  disabled={saving}
-                >
-                  CANCEL
-                </button>
-                <button
-                  onClick={() => setStep('code')}
-                  className="bg-chart-1 text-white px-4 py-2 border-2 border-black shadow-brutal hover:shadow-brutal-lg font-bold"
-                >
-                  SKIP TO CODE ENTRY
-                </button>
-              </div>
-            </div>
-          )}
-
-          {step === 'code' && (
-            <div className="space-y-6">
-              <div className="bg-green-50 border-2 border-green-300 p-4">
-                <h3 className="font-bold text-green-800 mb-2">✅ Avatar Ready!</h3>
-                <p className="text-sm text-green-700">
-                  Now you can save the avatar to {child.name}'s profile. You have two options:
-                </p>
-                <ul className="text-sm text-green-700 mt-2 list-disc list-inside space-y-1">
-                  <li><strong>Enter the 6-digit code</strong> (like "ABC123")</li>
-                  <li><strong>Paste the entire URL</strong> from the "Copy the link" button</li>
-                </ul>
-              </div>
-
-              {/* Avatar Code/URL Input */}
-              <div className="space-y-4">
-                <div>
-                  <label className="block font-bold mb-2">Avatar Code or URL</label>
-                  <div className="flex items-center space-x-3">
-                    <div className="flex-1">
-                      <textarea
-                        value={avatarCode}
-                        onChange={(e) => handleCodeChange(e.target.value)}
-                        placeholder="Paste the full URL from Ready Player Me OR enter the avatar code&#10;&#10;Examples:&#10;• Code: ABC123 or ABC123DEF456&#10;• URL: https://models.readyplayer.me/ABC123DEF456.glb"
-                        className={`w-full border-2 p-3 text-sm resize-none ${codeError ? 'border-red-500' : 'border-black'
-                          }`}
-                        rows={4}
-                        disabled={saving}
-                      />
-                      {codeError && (
-                        <p className="text-red-600 text-sm mt-1 font-bold">{codeError}</p>
-                      )}
-                    </div>
-                    <Code className="h-6 w-6 text-gray-400" />
-                  </div>
-                </div>
-
-                {/* Input Format Help */}
-                <div className="bg-blue-50 border-2 border-blue-300 p-4">
-                  <h4 className="font-bold text-blue-800 mb-2">💡 How to get your avatar:</h4>
-                  <div className="text-sm text-blue-700 space-y-2">
-                    <div className="bg-white p-3 rounded border">
-                      <h5 className="font-bold text-green-600 mb-1">✅ Easiest: Copy the full URL</h5>
-                      <p>After creating your avatar, click the <strong>"Copy the link to share in social media"</strong> button and paste the entire URL here.</p>
-                    </div>
-                    <div className="bg-white p-3 rounded border">
-                      <h5 className="font-bold text-blue-600 mb-1">📝 Alternative: Enter the avatar code</h5>
-                      <p>Look for the avatar code (6 or more characters like "ABC123" or "ABC123DEF456") in the Ready Player Me interface and enter just that code.</p>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Preview URLs */}
-                {avatarCode && !codeError && (
-                  <div className="bg-blue-50 border-2 border-blue-300 p-4">
-                    <h4 className="font-bold mb-2">Preview URLs:</h4>
-                    <div className="space-y-1 text-sm font-mono break-all">
-                      {avatarCode.startsWith('https://models.readyplayer.me/') ? (
-                        <>
-                          <div>
-                            <span className="font-bold">3D Model:</span> {avatarCode}
-                          </div>
-                          <div>
-                            <span className="font-bold">Profile Picture:</span> {avatarCode.replace('.glb', '.png')}
-                          </div>
-                        </>
-                      ) : avatarCode.length >= 6 && /^[A-Z0-9]{6,}$/i.test(avatarCode) ? (
-                        <>
-                          <div>
-                            <span className="font-bold">3D Model:</span> https://models.readyplayer.me/{avatarCode.toUpperCase()}.glb
-                          </div>
-                          <div>
-                            <span className="font-bold">Profile Picture:</span> https://models.readyplayer.me/{avatarCode.toUpperCase()}.png
-                          </div>
-                        </>
-                      ) : null}
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* Action Buttons */}
-              <div className="flex justify-between">
-                <button
-                  onClick={() => setStep('iframe')}
-                  className="bg-gray-500 text-white px-4 py-2 border-2 border-black shadow-brutal hover:shadow-brutal-lg font-bold"
-                  disabled={saving}
-                >
-                  ← BACK TO CREATOR
-                </button>
-                <button
-                  onClick={handleSaveAvatar}
-                  disabled={!avatarCode || codeError || saving}
-                  className={`px-6 py-2 border-2 border-black shadow-brutal hover:shadow-brutal-lg font-bold flex items-center space-x-2 ${!avatarCode || codeError || saving
-                    ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                    : 'bg-chart-2 text-white'
-                    }`}
-                >
-                  {saving ? (
-                    <>
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                      <span>SAVING...</span>
-                    </>
-                  ) : (
-                    <>
-                      <CheckCircle2 className="h-4 w-4" />
-                      <span>SAVE AVATAR</span>
-                    </>
-                  )}
-                </button>
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
-  )
-}
-
 export default function ChildrenTab() {
   const [selectedChild, setSelectedChild] = useState<string | null>(null)
   const [childSubTab, setChildSubTab] = useState<string>("overview")
@@ -440,11 +47,8 @@ export default function ChildrenTab() {
   const [assignModal, setAssignModal] = useState(false)
   const [assignMoldId, setAssignMoldId] = useState('')
 
-  // Avatar Creator Modal state only
-
-  // Avatar Creator Modal state
-  const [showAvatarCreator, setShowAvatarCreator] = useState(false)
-  const [avatarCreatorChildId, setAvatarCreatorChildId] = useState<string | null>(null)
+  // Avatar management state (view only)
+  // Avatar creation is now handled on child platform
 
   const { useMock, dataset, addChild, addAssignment, updateAssignmentProgress } = useMockData()
 
@@ -602,12 +206,12 @@ export default function ChildrenTab() {
   // Avatar management functions
 
   async function removeAvatar(childId: string) {
-    if (!confirm('Are you sure you want to remove this avatar?')) {
+    if (!confirm('Are you sure you want to delete this child\'s avatar? This action cannot be undone.')) {
       return
     }
 
     if (useMock) {
-      toast.success('Avatar removed (mock mode)')
+      toast.success('Avatar deleted (mock mode)')
       setChildren(children.map(child =>
         child.id === childId
           ? { ...child, avatar_url: undefined, avatar_headshot_url: undefined }
@@ -617,67 +221,31 @@ export default function ChildrenTab() {
     }
 
     try {
-      const response = await fetch('/api/avatars/remove', {
-        method: 'DELETE',
+      // Update child to remove avatar URLs
+      const response = await fetch(`/api/children/${childId}`, {
+        method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ childId })
+        body: JSON.stringify({
+          avatar_url: null,
+          avatar_headshot_url: null,
+        }),
       })
 
       if (response.ok) {
-        toast.success('Avatar removed successfully')
-        fetchChildren()
+        toast.success('Avatar deleted successfully')
+        fetchChildren() // Refresh to show updated state
       } else {
-        toast.error('Failed to remove avatar')
+        const errorData = await response.json().catch(() => ({ error: 'Unknown error' }))
+        toast.error(`Failed to delete avatar: ${errorData.error || 'Unknown error'}`)
       }
     } catch (error) {
-      console.error('Avatar removal error:', error)
-      toast.error('Error removing avatar')
+      console.error('Avatar deletion error:', error)
+      toast.error('Error deleting avatar')
     }
   }
 
-  // Open avatar creator modal
-  async function openAvatarCreator(childId: string) {
-    // First check if child exists in current data
-    const childInCurrentData = children.some(child => child.id === childId)
-    if (!childInCurrentData) {
-      toast.error('Child not found in current data. Refreshing...')
-      await fetchChildren() // Refresh the children list
-
-      // Check again after refresh
-      const refreshedChild = children.some(child => child.id === childId)
-      if (!refreshedChild) {
-        toast.error('Child not found. It may have been deleted.')
-        return
-      }
-    }
-
-    // Double-check with server
-    const childExistsOnServer = await validateChildExists(childId)
-    if (!childExistsOnServer) {
-      toast.error('Child not found on server. Please refresh the page.')
-      fetchChildren()
-      return
-    }
-
-    setAvatarCreatorChildId(childId)
-    setShowAvatarCreator(true)
-  }
-
-  // Handle avatar saved from modal
-  function handleAvatarSaved() {
-    fetchChildren() // Refresh children data to show new avatar
-  }
-
-  // Validate child exists before operations
-  async function validateChildExists(childId: string): Promise<boolean> {
-    try {
-      const response = await fetch(`/api/children/${childId}`)
-      return response.ok
-    } catch (error) {
-      console.error('Error validating child existence:', error)
-      return false
-    }
-  }
+  // Avatar creation is now handled on child platform
+  // Educators can only view and delete avatars
 
   if (selectedChild) {
     const child = Array.isArray(children) ? children.find(c => c.id === selectedChild) : undefined
@@ -699,8 +267,12 @@ export default function ChildrenTab() {
                 <h1 className="text-3xl font-bold">{child?.name} ({child?.age} years old)</h1>
                 <p className="text-gray-600 text-sm">Diagnosis: {child?.diagnosis}</p>
                 {child?.avatar_url && (
-                  <div className="mt-1 bg-green-500 text-white px-2 py-1 border border-black inline-block">
-                    <span className="text-xs font-bold">🎭 Avatar Active</span>
+                  <div className="mt-2 bg-gradient-to-r from-green-500 to-emerald-600 text-white px-4 py-2 border-2 border-black shadow-brutal inline-block transform -rotate-1">
+                    <span className="text-sm font-bold flex items-center">
+                      <span className="animate-spin mr-2">🎭</span>
+                      Avatar Active & Ready!
+                      <span className="ml-2 animate-bounce">🚀</span>
+                    </span>
                   </div>
                 )}
               </div>
@@ -776,7 +348,16 @@ export default function ChildrenTab() {
 
           {childSubTab === "avatar" && (
             <div className="space-y-6">
-              <h2 className="text-2xl font-bold">Avatar Management</h2>
+              <div className="bg-gradient-to-r from-purple-100 to-blue-100 border-4 border-purple-400 shadow-brutal-xl p-4 rounded-lg transform -rotate-1">
+                <h2 className="text-3xl font-bold text-purple-800 flex items-center justify-center">
+                  <span className="mr-3 text-4xl animate-spin">🎭</span>
+                  Avatar Management Center
+                  <span className="ml-3 text-4xl animate-bounce">✨</span>
+                </h2>
+                <p className="text-center text-purple-700 font-semibold mt-2">
+                  Manage child-created avatars and permissions
+                </p>
+              </div>
 
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 {/* Avatar Display */}
@@ -791,64 +372,149 @@ export default function ChildrenTab() {
                         className="w-full h-full"
                       />
                     ) : (
-                      <div className="flex items-center justify-center w-full h-full">
-                        <div className="text-center">
-                          <User className="w-16 h-16 mx-auto mb-4 text-gray-400" />
-                          <p className="text-gray-600 font-bold">No avatar created yet</p>
-                          <p className="text-sm text-gray-500 mt-1">Upload a photo to create an avatar</p>
+                      <div className="flex items-center justify-center w-full h-full bg-gradient-to-br from-gray-50 to-blue-50">
+                        <div className="text-center p-6">
+                          <div className="relative mb-4">
+                            <User className="w-20 h-20 mx-auto text-gray-300" />
+                            <div className="absolute -top-2 -right-2 bg-yellow-400 text-black px-2 py-1 rounded-full text-xs font-bold animate-pulse">
+                              NEW!
+                            </div>
+                          </div>
+                          <div className="bg-white border-2 border-blue-300 p-4 rounded-lg shadow-lg">
+                            <p className="text-gray-800 font-bold mb-2 flex items-center justify-center">
+                              <span className="mr-2">🎨</span>
+                              No avatar created yet
+                              <span className="ml-2">✨</span>
+                            </p>
+                            <p className="text-sm text-blue-600 font-semibold bg-blue-50 p-2 rounded">
+                              🚀 Child can now create their own avatar from "My Stuff" section!
+                            </p>
+                          </div>
                         </div>
                       </div>
                     )}
                   </div>
 
-                  <div className="flex space-x-2">
-                    <button
-                      onClick={() => openAvatarCreator(child.id)}
-                      className="bg-chart-2 text-white px-4 py-2 border-2 border-black shadow-brutal hover:shadow-brutal-lg font-bold text-sm flex items-center space-x-2"
-                    >
-                      <User className="h-4 w-4" />
-                      <span>{child?.avatar_url ? 'REPLACE AVATAR' : 'CREATE AVATAR'}</span>
-                    </button>
-                    {child?.avatar_url && (
+                  {child?.avatar_url && (
+                    <div className="flex space-x-2">
                       <button
                         onClick={() => removeAvatar(child.id)}
                         className="bg-red-500 text-white px-4 py-2 border-2 border-black shadow-brutal hover:shadow-brutal-lg font-bold text-sm flex items-center space-x-2"
                       >
                         <X className="h-4 w-4" />
-                        <span>REMOVE AVATAR</span>
+                        <span>DELETE AVATAR</span>
                       </button>
-                    )}
-                  </div>
+                    </div>
+                  )}
                 </div>
 
-                {/* Avatar Creation Interface */}
+                {/* Avatar Information */}
                 <div className="space-y-4">
-                  <h3 className="text-lg font-bold">
-                    {child?.avatar_url ? 'Replace Avatar' : 'Create Avatar'}
-                  </h3>
+                  <h3 className="text-lg font-bold">Avatar Creation</h3>
 
-                  {/* Ready Player Me Avatar Creator */}
-                  <div className="bg-blue-50 border-2 border-blue-300 p-6 text-center">
+                  <div className="bg-gradient-to-br from-blue-50 to-purple-50 border-4 border-blue-400 shadow-brutal-xl p-6 transform rotate-1">
                     <div className="space-y-4">
-                      <div className="text-blue-800">
-                        <svg className="w-16 h-16 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                        </svg>
-                      </div>
-                      <div>
-                        <h4 className="font-bold text-blue-800 mb-2">Create 3D Avatar</h4>
+                      <div className="text-center">
+                        <div className="text-6xl mb-3 animate-bounce">🎨</div>
+                        <h4 className="font-bold text-blue-800 mb-2 text-xl">✨ NEW: Child-Created Avatars ✨</h4>
+                        <div className="bg-yellow-200 border-2 border-yellow-400 p-3 rounded-lg mb-4">
+                          <p className="text-sm font-bold text-yellow-800">
+                            🚀 MAJOR UPDATE: Children can now create and customize their own avatars directly from their "My Stuff" section!
+                          </p>
+                        </div>
                         <p className="text-sm text-blue-700 mb-4">
-                          Use Ready Player Me to create a personalized 3D avatar for {child?.name}
+                          This promotes self-expression and therapeutic engagement through personalized avatar creation.
                         </p>
-                        <button
-                          onClick={() => openAvatarCreator(child?.id || '')}
-                          className="bg-chart-2 text-white px-6 py-3 border-2 border-black shadow-brutal hover:shadow-brutal-lg font-bold flex items-center space-x-2 mx-auto"
-                        >
-                          <User className="h-5 w-5" />
-                          <span>CREATE AVATAR</span>
-                        </button>
+                      </div>
+
+                      <div className="bg-white border-4 border-green-400 shadow-brutal p-4 rounded transform -rotate-1">
+                        <h5 className="font-bold text-green-800 mb-2 flex items-center">
+                          <span className="text-lg mr-2">🌟</span>
+                          Key Benefits:
+                        </h5>
+                        <ul className="text-sm text-green-700 space-y-2 list-none">
+                          <li className="flex items-center"><span className="text-green-500 mr-2">✅</span>Enhanced self-expression and creativity</li>
+                          <li className="flex items-center"><span className="text-green-500 mr-2">✅</span>Ownership of their learning experience</li>
+                          <li className="flex items-center"><span className="text-green-500 mr-2">✅</span>Therapeutic engagement through customization</li>
+                          <li className="flex items-center"><span className="text-green-500 mr-2">✅</span>Improved motivation and connection</li>
+                        </ul>
+                      </div>
+
+                      <div className="bg-white border-4 border-orange-400 shadow-brutal p-4 rounded transform rotate-1">
+                        <h5 className="font-bold text-orange-800 mb-2 flex items-center">
+                          <span className="text-lg mr-2">🎛️</span>
+                          Your Educator Controls:
+                        </h5>
+                        <ul className="text-sm text-orange-700 space-y-2 list-none">
+                          <li className="flex items-center"><span className="text-orange-500 mr-2">👁️</span>View the child's current avatar</li>
+                          <li className="flex items-center"><span className="text-red-500 mr-2">🗑️</span>Delete avatars when necessary</li>
+                          <li className="flex items-center"><span className="text-blue-500 mr-2">📊</span>Monitor avatar usage in sessions</li>
+                          <li className="flex items-center"><span className="text-purple-500 mr-2">⚙️</span>Set avatar permissions and limits</li>
+                        </ul>
+                      </div>
+
+                      {child?.avatar_url && (
+                        <div className="bg-gradient-to-r from-green-100 to-emerald-100 border-4 border-green-500 shadow-brutal-xl p-6 rounded-lg transform -rotate-1">
+                          <div className="flex items-center space-x-3 mb-3">
+                            <div className="relative">
+                              <div className="w-6 h-6 bg-green-500 rounded-full animate-pulse"></div>
+                              <div className="absolute -top-1 -right-1 w-3 h-3 bg-yellow-400 rounded-full animate-bounce"></div>
+                            </div>
+                            <h5 className="font-bold text-green-800 text-lg flex items-center">
+                              🎉 Avatar Successfully Created! 🎉
+                            </h5>
+                          </div>
+                          <div className="bg-white border-2 border-green-400 p-3 rounded">
+                            <p className="text-sm font-bold text-green-800 mb-2">
+                              ✨ This child has successfully created their personalized avatar!
+                            </p>
+                            <p className="text-xs text-green-700">
+                              They can now use it for interactive learning sessions, voice chats, and immersive educational experiences.
+                            </p>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Avatar Permissions */}
+                  <div className="bg-gradient-to-br from-yellow-50 to-orange-50 border-4 border-yellow-400 shadow-brutal-xl p-6 rounded-lg transform rotate-1">
+                    <h4 className="text-xl font-bold mb-4 text-yellow-800 flex items-center">
+                      <span className="mr-3 text-2xl">⚙️</span>
+                      Avatar Permissions & Controls
+                      <span className="ml-3 text-2xl animate-spin">🔧</span>
+                    </h4>
+                    <div className="space-y-3">
+                      <label className="flex items-center space-x-3">
+                        <input
+                          type="checkbox"
+                          defaultChecked={child?.avatar_permissions?.can_customize ?? true}
+                          className="w-4 h-4 border-2 border-black"
+                        />
+                        <span className="text-sm font-medium">Allow child to customize avatar</span>
+                      </label>
+                      <label className="flex items-center space-x-3">
+                        <input
+                          type="checkbox"
+                          defaultChecked={child?.avatar_permissions?.can_chat ?? true}
+                          className="w-4 h-4 border-2 border-black"
+                        />
+                        <span className="text-sm font-medium">Allow avatar chat interactions</span>
+                      </label>
+                      <div className="flex items-center space-x-3">
+                        <span className="text-sm font-medium">Chat time limit (minutes):</span>
+                        <input
+                          type="number"
+                          defaultValue={child?.avatar_permissions?.chat_time_limit_minutes ?? 30}
+                          min="5"
+                          max="120"
+                          className="w-20 px-2 py-1 border-2 border-black text-sm"
+                        />
                       </div>
                     </div>
+                    <button className="mt-4 bg-yellow-500 text-white px-4 py-2 border-2 border-black shadow-brutal hover:shadow-brutal-lg font-bold text-sm">
+                      SAVE PERMISSIONS
+                    </button>
                   </div>
                 </div>
               </div>
@@ -924,24 +590,30 @@ export default function ChildrenTab() {
           )}
         </div>
 
-        {/* Avatar Creator Modal */}
-        {showAvatarCreator && avatarCreatorChildId && (
-          <AvatarCreatorModal
-            isOpen={showAvatarCreator}
-            onClose={() => {
-              setShowAvatarCreator(false)
-              setAvatarCreatorChildId(null)
-            }}
-            child={children.find(c => c.id === avatarCreatorChildId) || null}
-            onAvatarSaved={handleAvatarSaved}
-          />
-        )}
+        {/* Avatar creation is now handled on child platform */}
       </div>
     )
   }
 
   return (
     <div className="space-y-8">
+      {/* New Feature Banner */}
+      <div className="bg-gradient-to-r from-purple-600 via-blue-600 to-green-600 border-4 border-black shadow-brutal-xl p-6 transform rotate-1 mb-6">
+        <div className="text-center text-white">
+          <div className="flex items-center justify-center space-x-3 mb-2">
+            <span className="text-3xl animate-bounce">🎉</span>
+            <h2 className="text-2xl font-bold">NEW AVATAR SYSTEM ACTIVE!</h2>
+            <span className="text-3xl animate-bounce">🎨</span>
+          </div>
+          <p className="text-lg font-semibold mb-2">
+            Children can now create their own personalized avatars!
+          </p>
+          <p className="text-sm opacity-90">
+            Enhanced therapeutic engagement through self-expression and creativity
+          </p>
+        </div>
+      </div>
+
       {/* Header */}
       <div className="text-center mb-8">
         <div className="bg-white border-4 border-black shadow-brutal-xl p-8 transform -rotate-1 inline-block">
@@ -1031,8 +703,12 @@ export default function ChildrenTab() {
                     <span className="font-mono font-bold">{child.access_code}</span>
                   </div>
                   {child.avatar_url && (
-                    <div className="bg-green-500 text-white px-2 py-1 border border-black inline-block">
-                      <span className="text-xs font-bold">🎭 AVATAR</span>
+                    <div className="bg-gradient-to-r from-green-500 to-emerald-600 text-white px-3 py-2 border-2 border-black shadow-brutal inline-block transform rotate-1 animate-pulse">
+                      <span className="text-xs font-bold flex items-center">
+                        <span className="mr-1">🎭</span>
+                        AVATAR ACTIVE
+                        <span className="ml-1 animate-bounce">✨</span>
+                      </span>
                     </div>
                   )}
                 </div>
@@ -1040,13 +716,6 @@ export default function ChildrenTab() {
             </div>
             <div className="flex space-x-2">
               <button onClick={() => setSelectedChild(child.id)} className="flex-1 bg-chart-2 text-white py-2 px-4 border-2 border-black shadow-brutal font-bold text-sm">VIEW PROFILE</button>
-              <button
-                onClick={() => openAvatarCreator(child.id)}
-                className="bg-chart-1 text-white py-2 px-3 border-2 border-black shadow-brutal font-bold text-sm hover:bg-chart-1/90 transition-colors"
-                title={child.avatar_url ? 'Replace Avatar' : 'Create Avatar'}
-              >
-                🎭
-              </button>
               <button onClick={() => deleteChild(child.id)} className="bg-red-500 text-white py-2 px-4 border-2 border-black shadow-brutal font-bold text-sm hover:bg-red-600 transition-colors">DELETE</button>
             </div>
           </div>
@@ -1091,18 +760,7 @@ export default function ChildrenTab() {
         </div>
       )}
 
-      {/* Avatar Creator Modal */}
-      {showAvatarCreator && avatarCreatorChildId && (
-        <AvatarCreatorModal
-          isOpen={showAvatarCreator}
-          onClose={() => {
-            setShowAvatarCreator(false)
-            setAvatarCreatorChildId(null)
-          }}
-          child={children.find(c => c.id === avatarCreatorChildId) || null}
-          onAvatarSaved={handleAvatarSaved}
-        />
-      )}
+      {/* Avatar creation is now handled on child platform */}
     </div>
   )
 }
