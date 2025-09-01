@@ -16,23 +16,33 @@ Unique Selling Proposition (USP):
 
 Core Features:
 1. Immutable Game Molds (e.g., Matching Cards, Sorting Challenge) versioned via SQL migrations
-2. Personalized Molds generated per child using AI prompts (interests -> themed assets)
+2. Personalized Molds generated per child using AI prompts (interests → themed assets)
 3. Polymorphic Game Player: routes config to correct mini‑game implementation
-4. Educator / Child role separation with RLS (Row Level Security) in Supabase
-5. Image preloading + caching + optimized rendering (performance hooks & smart loader)
-6. Centralized validation & error handling (Zod + structured API responses)
-7. Production‑safe logging with contextual levels & performance markers
-8. Extensible type‑safe domain model (`types/game.ts`)
-9. Future: customization request workflow & background AI fulfillment
+4. Conversational Child Portal:
+   - Text chat with Gemini TTS audio and real‑time lipsync on a 3D avatar
+   - Voice chat powered by Gemini Live (low‑latency, streaming)
+5. 3D Avatar System (Ready Player Me compatible):
+   - Natural idle + folded‑arms poses with subtle breathing
+   - Robust morph target mapping for lipsync across RPM variants
+6. Educator / Child role separation with RLS (Row Level Security) in Supabase
+7. Image preloading + caching + optimized rendering (performance hooks & smart loader)
+8. Centralized validation & error handling (Zod + structured API responses)
+9. Production‑safe logging with contextual levels & performance markers
+10. Extensible type‑safe domain model (`types/`)
 
 Tech Stack:
-- Framework: Next.js 15 (App Router, Edge‑compatible middleware)
-- Language: TypeScript (strict domain typing)
+- Framework: Next.js 15 (App Router)
+- Language: TypeScript (strict)
 - Backend as a Service: Supabase (Postgres, Auth, RLS, Storage)
 - Auth: Supabase email auth (middleware protected routes)
 - Data Validation: Zod
 - UI / Styling: Tailwind CSS, next-themes, Lucide Icons
-- AI Integration: Google Gemini (generative game asset prompts)
+- 3D/Realtime: three.js, @react-three/fiber, @react-three/drei, SkeletonUtils
+- Lipsync: wawa-lipsync
+- AI Integration: Google Gemini
+  - Speech Generation: `gemini-2.5-*-tts`
+  - Live API (streaming audio): `gemini-live-2.5-flash-preview`, fallback `gemini-2.0-flash-live-001`
+- Audio Tooling (server): ffmpeg / `ffmpeg-static` (optional)
 - Charts / Visualization: Recharts
 - Tooling: ESLint, TypeScript, pnpm, Supabase CLI
 
@@ -61,12 +71,14 @@ Create a `.env.local` file at the project root:
 NEXT_PUBLIC_SUPABASE_URL=your_supabase_project_url
 NEXT_PUBLIC_SUPABASE_ANON_KEY=public_anon_key
 SUPABASE_SERVICE_ROLE_KEY=service_role_key               # server-only (never expose client side)
-GEMINI_API_KEY=your_gemini_key                           # for AI generation
+GEMINI_API_KEY=your_gemini_key                           # required for TTS + Live
+ENABLE_FFMPEG=1                                          # optional; enables server PCM conversion for voice chat
 HUGGINGFACE_API_KEY=optional_for_image_generation
 NODE_ENV=development
 ```
 
 Minimum required to run locally: `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`.
+Text chat TTS and voice chat will additionally require `GEMINI_API_KEY`. For best Live results, set `ENABLE_FFMPEG=1` (uses `ffmpeg-static`).
 
 ### 4. Start Local Supabase (Optional – if using local Postgres)
 ```bash
@@ -129,6 +141,53 @@ hooks/               Performance & state management hooks
 supabase/            Config, migrations, seed data
 ```
 
+---
+## Conversational & Avatar System
+
+### Text Chat with Gemini TTS + Lipsync
+- API: `app/api/tts/gemini/route.ts`
+  - Uses official Gemini TTS models (e.g., `gemini-2.5-flash-preview-tts`, `gemini-2.5-pro-preview-tts`).
+  - Requests `responseModalities: ["AUDIO"]` and returns base64 audio with `isRealAudio: true` when successful.
+  - Fallback path returns Gemini‑optimized text for browser TTS when audio isn’t available.
+- Client: `components/AvatarTextChat.tsx`
+  - Calls `/api/tts/gemini` and, when `isRealAudio` is true, plays the returned audio and drives lipsync.
+  - Falls back to enhanced browser TTS with boundary‑driven lip cues.
+- Lipsync: `lib/lipsync-manager.ts`
+  - Wawa Lipsync processes real audio (`processAudioFile`) and browser TTS (`processSpeechSynthesis`).
+  - Emits canonical blendshapes (`jawOpen`, `mouthSmile`, `mouthFunnel`), mapped to Ready Player Me morphs.
+
+Quick Test (TTS):
+1. `pnpm dev` → open `/child`.
+2. Send a message in Text Chat.
+3. Look for “AvatarTextChat: Using REAL Gemini TTS audio” in the console.
+
+### Voice Chat with Gemini Live
+- API: `app/api/chat/voice-livekit/route.ts`
+  - Creates a Live session using your preferred model hierarchy: `gemini-live-2.5-flash-preview` → `gemini-2.0-flash-live-001` → `gemini-2.5-flash-preview-native-audio-dialog`.
+  - Streams microphone audio; if `ENABLE_FFMPEG=1`, converts WebM chunks to `audio/pcm;rate=16000` via `ffmpeg-static`. Otherwise sends WebM directly.
+  - Ensures `responseModalities: ["AUDIO"]` so the model returns playable audio.
+- Client: `components/AvatarVoiceChat.tsx`
+  - Uses `MediaRecorder` to capture mic chunks and posts to the Live API route.
+  - Plays received base64 audio and drives lipsync.
+
+Quick Test (Live):
+1. Add `GEMINI_API_KEY` (and `ENABLE_FFMPEG=1` for best compatibility).
+2. Open the Voice Chat UI, allow mic permissions.
+3. Speak and confirm avatar audio + mouth motion.
+
+### 3D Avatar Posing (Global)
+- Viewer: `components/SimpleAvatarViewer.tsx`
+  - Clones GLB with `SkeletonUtils.clone` to preserve skinning.
+  - Discovers bones from all skinned meshes (name heuristics for RPM/Mixamo rigs) and applies two static poses:
+    - Natural Idle (slight arm drop + subtle breathing)
+    - Folded Arms (crossed at chest)
+  - Toggles pose every 5 seconds. Breathing stays active.
+- Used across child pages (chat, “My Stuff”, etc.), so the non‑T‑pose stance is consistent.
+
+Configuration Tips:
+- To adjust pose angles or toggle interval, edit `SimpleAvatarViewer.tsx` pose helpers.
+- To disable pose toggling, comment the `setInterval` block and apply only the natural pose on load.
+
 ### Key Domain Types (`types/game.ts`)
 `GameConfig` → normalized config powering polymorphic player.
 `Card`, `Category`, `PersonalizedMold` → AI-personalizable entities.
@@ -162,20 +221,25 @@ Integrate Full Personalization Pipeline (Future):
 ---
 ## Troubleshooting
 | Issue | Cause | Fix |
-|-------|-------|-----|
-| 401 Unauthorized | Missing/expired Supabase auth | Re-login; check cookies in devtools |
-| Env var undefined | .env.local missing key | Add required variable & restart dev server |
+|------|-------|-----|
+| 401 Unauthorized | Missing/expired Supabase auth | Re‑login; check cookies in devtools |
+| Env var undefined | `.env.local` missing key | Add required variable & restart dev server |
 | DB mismatch | Migrations not applied | Run `pnpm supabase:reset-seed` |
-| AI key errors | GEMINI_API_KEY absent | Add key or skip AI-dependent actions |
+| AI key errors | `GEMINI_API_KEY` absent | Add key and restart dev server |
+| TTS plays with browser voice | TTS route didn’t return audio | Check server logs; ensure `isRealAudio: true` in `/api/tts/gemini` response |
+| “Unexpected token < … is not valid JSON” | Parsing HTML error page as JSON | Client checks content‑type; ensure route isn’t erroring (watch dev console) |
+| Live: “Mime type 'audio/webm' not supported” | Model expects PCM | Set `ENABLE_FFMPEG=1` and ensure `ffmpeg-static` is installed |
+| Live: `spawn .../ffmpeg ENOENT` | ffmpeg not found in env | Keep `ENABLE_FFMPEG=1` (uses `ffmpeg-static`) or install system ffmpeg |
+| Live: long silences / timeouts | Session not returning audio | Verify model name, API key quota, and that `responseModalities: ["AUDIO"]` is set |
+| Lipsync not moving | Avatar morph names differ | Open console logs to collect morph targets; extend mapping in `AvatarTextChat.tsx` |
+| Avatar still in T‑pose | Bone names differ | Viewer infers bones; if needed, share console “🦴 Discovered bones / ✅ Selected bones” for tweaks |
 
 ---
-## Roadmap (Condensed)
-- [ ] Customization request workflow & async processing
-- [ ] Complete removal of remaining console logs
-- [ ] Rich analytics & educator dashboards
-- [ ] Puzzle / Drawing / Storytelling mold implementations
-- [ ] Accessibility & inclusive UX improvements
-- [ ] Test coverage (>70%) & performance profiling
+## Notes for Contributors (Avatar & Audio)
+- Prefer `SkeletonUtils.clone` when reusing GLB scenes with skinning.
+- Keep pose helpers non‑destructive: always restore base quaternions before applying a new pose.
+- When adjusting Live audio handling, keep `responseModalities: ["AUDIO"]` and `audio/pcm;rate=16000` compatibility in mind.
+- Never log secrets; scrub API keys and PII in server logs.
 
 ---
 ## License
