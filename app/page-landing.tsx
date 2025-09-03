@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { Brain, Calendar, MapPin, Instagram, Facebook, Twitter, Linkedin } from "lucide-react"
+import { Calendar, MapPin, Instagram, Facebook, Twitter, Linkedin } from "lucide-react"
 import Image from "next/image"
 import { useRouter } from "next/navigation"
 
@@ -19,9 +19,8 @@ export default function BrainBerry() {
       <header className="sticky top-0 z-50 bg-white border-b-4 border-black shadow-brutal-xl">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
-            <div className="flex items-center space-x-2">
-              <Brain className="h-8 w-8 text-black" />
-              <span className="text-xl font-bold text-black">BRAINBERRY</span>
+            <div className="flex items-center">
+              <Image src="/BrainBerrylogo.png" alt="BrainBerry Logo" width={120} height={40} className="h-10 w-auto" />
             </div>
             <nav className="hidden md:flex items-center space-x-8">
               <a href="#about" className="text-black hover:text-main font-medium">
@@ -70,7 +69,7 @@ export default function BrainBerry() {
               </p>
               <button
                 onClick={goToLogin}
-                className="bg-chart-2 text-white px-8 py-4 border-4 border-border shadow-brutal hover:shadow-brutal-lg transition-all font-bold text-lg"
+                className="bg-chart-5 text-black px-8 py-4 border-4 border-border shadow-brutal hover:shadow-brutal-lg transition-all font-bold text-lg"
               >
                 EXPLORE PROGRAMS
               </button>
@@ -127,7 +126,7 @@ export default function BrainBerry() {
       <section className="py-20 bg-chart-1">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-12">
-            <div className="bg-main border-4 border-border shadow-brutal-colored-xl p-4 inline-block transform rotate-1">
+            <div className="bg-chart-5 border-4 border-border shadow-brutal-colored-xl p-4 inline-block transform rotate-1">
               <h2 className="text-4xl md:text-5xl font-bold text-main-foreground">SEE BRAINBERRY IN ACTION</h2>
             </div>
           </div>
@@ -348,9 +347,8 @@ export default function BrainBerry() {
           <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6 lg:gap-8">
             <div>
               <div>
-                <div className="flex items-center space-x-2 mb-4">
-                  <Brain className="h-8 w-8 text-foreground" />
-                  <span className="text-xl font-bold text-foreground">BRAINBERRY</span>
+                <div className="flex items-center mb-4">
+                  <Image src="/BrainBerrylogo.png" alt="BrainBerry Logo" width={120} height={40} className="h-10 w-auto" />
                 </div>
                 <p className="text-foreground font-medium mb-4">
                   Ramaiah Institute of Technology
@@ -422,7 +420,7 @@ export default function BrainBerry() {
                     className="flex-1 px-3 py-2 border-2 border-border bg-background text-foreground font-medium text-sm mb-2 sm:mb-0"
                     suppressHydrationWarning
                   />
-                  <button className="bg-main text-main-foreground px-4 py-2 border-2 sm:border-l-0 border-border shadow-[8px_8px_0px_0px_var(--color-border)] hover:shadow-[12px_12px_0px_0px_var(--color-border)] transition-all font-bold text-sm" suppressHydrationWarning>
+                  <button className="bg-chart-1 text-main-foreground px-4 py-2 border-2 sm:border-l-0 border-border shadow-[8px_8px_0px_0px_var(--color-border)] hover:shadow-[12px_12px_0px_0px_var(--color-border)] transition-all font-bold text-sm" suppressHydrationWarning>
                     SUBSCRIBE
                   </button>
                 </div>

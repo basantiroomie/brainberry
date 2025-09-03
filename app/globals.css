@@ -34,9 +34,9 @@
   --color-border: #000000;
   --color-overlay: oklch(0% 0 0 / 0.8);
   --color-ring: oklch(0% 0 0);
-  --color-chart-1: #00c8f0;
+  --color-chart-1: #7a83ff;
   --color-chart-2: #ff7a05;
-  --color-chart-3: #7a83ff;
+  --color-chart-3: #00c8f0;
   --color-chart-4: #ff4d50;
   --color-chart-5: #facc00;
   --shadow-shadow: 4px 4px 0px 0px #000000;
@@ -71,11 +71,11 @@
   --color-main-foreground: oklch(0% 0 0);
   --color-border: #000000;
   --color-ring: oklch(100% 0 0);
-  --color-chart-1: #009dbd;
-  --color-chart-2: #eb6d00;
-  --color-chart-3: #7a83ff;
-  --color-chart-4: #ff6669;
-  --color-chart-5: #e0b700;
+  --color-chart-1: #7a83ff;
+  --color-chart-2: #ff7a05;
+  --color-chart-3: #00c8f0;
+  --color-chart-4: #ff4d50;
+  --color-chart-5: #facc00;
 }
 
 @layer base {
