@@ -242,10 +242,6 @@ Integrate Full Personalization Pipeline (Future):
 - Never log secrets; scrub API keys and PII in server logs.
 
 ---
-## License
-Internal / Restricted – add explicit license before open sourcing.
-
----
 ## Contributing
 1. Fork & branch: `feat/<short-feature>`
 2. Follow existing type patterns (`types/`) & logging conventions

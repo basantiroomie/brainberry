@@ -38,51 +38,56 @@ export function useImagePreloader({ images, onAllLoaded, onProgress, fallbackEmo
     
     setImageStates(initialStates)
 
-    // Use image cache for faster loading
     let loadedCount = 0
+    let errorCount = 0
     const totalImages = images.length
 
-    const loadImages = async () => {
-      // Preload all images using the cache
-      await imageCache.preloadImages(images, 3) // Load in batches of 3
-
-      // Update states with cached URLs
-      const updatedStates = images.map((url, index) => {
-        const cachedUrl = imageCache.getCachedImage(url)
-        const isLoaded = !!cachedUrl
-        
-        if (isLoaded) {
-          loadedCount++
-          onProgress(loadedCount, totalImages)
+    const updateProgressAndState = (index: number, success: boolean, cachedUrl?: string) => {
+      setImageStates(prev => {
+        const next = [...prev]
+        const current = next[index]
+        if (!current) return prev
+        next[index] = {
+          ...current,
+          loaded: success,
+          error: !success,
+          cachedUrl: success ? (cachedUrl || current.cachedUrl) : undefined
         }
-
-        return {
-          url,
-          loaded: isLoaded,
-          error: !isLoaded,
-          fallbackEmoji: fallbackEmojis[index] || '⭐',
-          cachedUrl: cachedUrl || undefined
-        }
+        return next
       })
 
-      setImageStates(updatedStates)
-      setAllLoaded(true)
-      onAllLoaded()
+      if (success) {
+        loadedCount++
+        onProgress(loadedCount, totalImages)
+      } else {
+        errorCount++
+      }
+
+      // Only mark allLoaded and call onAllLoaded when ALL images loaded successfully
+      if (loadedCount === totalImages && errorCount === 0) {
+        setAllLoaded(true)
+        onAllLoaded()
+      }
     }
 
-    loadImages().catch((error) => {
-      console.error('Error loading images:', error)
-      // Fallback to showing all as loaded with errors
-      const errorStates = images.map((url, index) => ({
-        url,
-        loaded: true,
-        error: true,
-        fallbackEmoji: fallbackEmojis[index] || '⭐',
-        cachedUrl: undefined
-      }))
-      setImageStates(errorStates)
-      setAllLoaded(true)
-      onAllLoaded()
+    const attemptPreload = async (url: string, index: number, attempt: number = 1): Promise<void> => {
+      try {
+        const dataUrl = await imageCache.preloadImage(url)
+        updateProgressAndState(index, true, dataUrl)
+      } catch (e) {
+        if (attempt < 2) {
+          // brief retry after a short delay
+          setTimeout(() => {
+            attemptPreload(url, index, attempt + 1).catch(() => {})
+          }, 400)
+        } else {
+          updateProgressAndState(index, false)
+        }
+      }
+    }
+
+    images.forEach((url, index) => {
+      attemptPreload(url, index).catch(() => {})
     })
 
   }, [images.join(',')]) // Re-run when images change

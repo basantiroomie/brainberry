@@ -106,19 +106,42 @@ RESPONSE FORMAT (JSON):
   }
 
   // Transform Gemini response to game format
-  const cards = geminiData.cards.map((card: any, index: number) => ({
+  const transformedCards = (geminiData.cards || []).map((card: any, index: number) => ({
     pair_id: card.pair_id || (index + 1),
     image_url: `/api/generate-image?prompt=${encodeURIComponent(card.image_prompt)}&style=child_friendly&theme=${encodeURIComponent(geminiData.theme)}`,
-    label: card.child_friendly_label || card.subject,
+    label: card.child_friendly_label || card.subject || `${geminiData.theme} item ${index + 1}`,
     description: card.description,
     educational_fact: card.educational_fact,
     ai_generation: {
-      image_prompt: card.image_prompt,
-      subject: card.subject,
+      image_prompt: card.image_prompt || `${geminiData.theme} item ${index + 1}, cute, colorful, child friendly`,
+      subject: card.subject || `${geminiData.theme} item ${index + 1}`,
       fallback_emoji: getThemeEmoji(geminiData.theme, index),
       gemini_generated: true
     }
   }))
+
+  // Enforce fixed number of pairs from mold rules
+  let cards = transformedCards.slice(0, pairsCount)
+  if (cards.length < pairsCount) {
+    const toAdd = pairsCount - cards.length
+    for (let i = 0; i < toAdd; i++) {
+      const idx = cards.length + 1
+      const fillerPrompt = `${geminiData.theme} item ${idx}, cute, colorful, child friendly`
+      cards.push({
+        pair_id: idx,
+        image_url: `/api/generate-image?prompt=${encodeURIComponent(fillerPrompt)}&style=child_friendly&theme=${encodeURIComponent(geminiData.theme)}`,
+        label: `${geminiData.theme} ${idx}`,
+        description: undefined,
+        educational_fact: undefined,
+        ai_generation: {
+          image_prompt: fillerPrompt,
+          subject: `${geminiData.theme} ${idx}`,
+          fallback_emoji: getThemeEmoji(geminiData.theme, idx - 1),
+          gemini_generated: true
+        }
+      })
+    }
+  }
 
   return {
     game_type: 'matching_cards',
