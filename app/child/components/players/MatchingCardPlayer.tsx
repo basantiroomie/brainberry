@@ -95,21 +95,28 @@ export default function MatchingCardPlayer({ gameConfig, childId, onComplete, on
     }
 
     const card = cards.find(c => c.id === cardId)
+    
+    // Prevent clicking on already flipped, matched cards, or when 2 cards are already flipped
     if (!card || card.isFlipped || card.isMatched || flippedCards.length >= 2) {
       return
     }
 
+    // Add card to flipped cards array
     const newFlippedCards = [...flippedCards, cardId]
     setFlippedCards(newFlippedCards)
 
-    // Update card state
+    // Flip the card to face-up
     setCards(prev => prev.map(c => 
       c.id === cardId ? { ...c, isFlipped: true } : c
     ))
 
+    // If this is the second card flipped, check for match after a short delay
     if (newFlippedCards.length === 2) {
       setMoves(prev => prev + 1)
-      checkForMatch(newFlippedCards)
+      // Small delay to ensure the card flip animation shows
+      setTimeout(() => {
+        checkForMatch(newFlippedCards)
+      }, 100)
     }
   }
 
@@ -119,15 +126,17 @@ export default function MatchingCardPlayer({ gameConfig, childId, onComplete, on
     const secondCard = cards.find(c => c.id === secondId)
 
     if (firstCard && secondCard && firstCard.pair_id === secondCard.pair_id) {
-      // Match found!
+      // Match found! Keep cards face-up and mark as matched
       setTimeout(() => {
         setCards(prev => prev.map(c => 
-          flippedCardIds.includes(c.id) ? { ...c, isMatched: true } : c
+          flippedCardIds.includes(c.id) 
+            ? { ...c, isMatched: true, isFlipped: false } // Mark as matched, will stay visible due to isMatched
+            : c
         ))
         setMatchedPairs(prev => [...prev, firstCard.pair_id])
         setScore(prev => prev + 10)
         setConsecutiveMatches(prev => prev + 1)
-        setFlippedCards([])
+        setFlippedCards([]) // Clear flipped cards array
 
         // Show encouragement for consecutive matches
         if (consecutiveMatches >= 2) {
@@ -151,16 +160,16 @@ export default function MatchingCardPlayer({ gameConfig, childId, onComplete, on
         if (soundEnabled) {
           playSound('match')
         }
-      }, 1000)
+      }, 800)
     } else {
-      // No match - flip cards back
+      // No match - flip cards back to face-down after showing them briefly
       setTimeout(() => {
         setCards(prev => prev.map(c => 
           flippedCardIds.includes(c.id) ? { ...c, isFlipped: false } : c
         ))
-        setFlippedCards([])
+        setFlippedCards([]) // Clear flipped cards array
         setConsecutiveMatches(0) // Reset streak
-      }, 1500)
+      }, 1200)
     }
   }
 

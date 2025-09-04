@@ -102,11 +102,11 @@ export default function PersonalizedMoldPlayer({ personalizedMoldId, childId }: 
     const card2 = cards.find(c => c.id === card2Id)
 
     if (card1 && card2 && card1.pair_id === card2.pair_id) {
-      // Match found!
+      // Match found! Keep cards face-up and mark as matched
       setTimeout(() => {
         setCards(prev => prev.map(card => 
           flippedCardIds.includes(card.id) 
-            ? { ...card, isMatched: true }
+            ? { ...card, isMatched: true, isFlipped: false } // Mark as matched but not flipped
             : card
         ))
         
@@ -128,7 +128,7 @@ export default function PersonalizedMoldPlayer({ personalizedMoldId, childId }: 
         setFlippedCards([])
       }, 1000)
     } else {
-      // No match - flip cards back
+      // No match - flip cards back to face-down
       setTimeout(() => {
         setCards(prev => prev.map(card => 
           flippedCardIds.includes(card.id) 

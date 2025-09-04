@@ -106,8 +106,10 @@ RESPONSE FORMAT (JSON):
   }
 
   // Transform Gemini response to game format
+  // Each card from Gemini represents one unique item/concept
+  // We'll create exactly 2 cards for each concept to form pairs
   const transformedCards = (geminiData.cards || []).map((card: any, index: number) => ({
-    pair_id: card.pair_id || (index + 1),
+    pair_id: index + 1, // Each concept gets its own pair_id (1, 2, 3, etc.)
     image_url: `/api/generate-image?prompt=${encodeURIComponent(card.image_prompt)}&style=child_friendly&theme=${encodeURIComponent(geminiData.theme)}`,
     label: card.child_friendly_label || card.subject || `${geminiData.theme} item ${index + 1}`,
     description: card.description,
