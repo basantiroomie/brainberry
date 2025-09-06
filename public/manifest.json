@@ -1,0 +1,27 @@
+{
+  "name": "BrainBerry - Neurodiverse Learning Platform",
+  "short_name": "BrainBerry",
+  "description": "Therapeutic gaming system designed for neurodiverse children",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#7a83ff",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/BrainBerrylogo.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/BrainBerrylogo.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["education", "health", "games"],
+  "lang": "en",
+  "dir": "ltr"
+}

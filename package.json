@@ -1,5 +1,5 @@
 {
-  "name": "jam-rock-climbers",
+  "name": "brainberry",
   "version": "0.1.0",
   "private": true,
   "scripts": {
@@ -9,7 +9,9 @@
     "start": "next start",
     "type-check": "tsc --noEmit",
     "deploy:vercel": "vercel --prod",
-    "deploy:railway": "railway up"
+    "deploy:railway": "railway up",
+    "optimize": "node scripts/optimize-images.js",
+    "analyze": "ANALYZE=true npm run build"
   },
   "dependencies": {
     "@google/genai": "^1.16.0",
