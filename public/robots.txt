@@ -1,0 +1,18 @@
+User-agent: *
+Allow: /
+
+# Allow important pages for SEO
+Allow: /
+Allow: /child
+Allow: /educator  
+Allow: /community
+Allow: /login
+
+# Block admin/API routes from crawling
+Disallow: /api/
+Disallow: /test-avatar
+Disallow: /_next/
+Disallow: /.well-known/
+
+# Sitemap location
+Sitemap: https://brainberry.vercel.app/sitemap.xml
