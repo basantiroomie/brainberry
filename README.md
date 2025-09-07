@@ -1,213 +1,175 @@
-# 🧠 BrainBerry - Neurodiverse Learning Platform
+## BrainBerry – Personalized Therapeutic Learning Games
 
-> **Therapeutic gaming system designed for neurodiverse children. Personalized learning experiences configured by therapists and educators.**
+Short Description:
+BrainBerry is a GenAI‑assisted therapeutic mini‑game platform that lets educators create safe, personalized cognitive and developmental training experiences for children. Immutable “Game Molds” define structured, evidence‑informed game templates; AI then fills these molds with child‑relevant themed content (images, labels, prompts) while preserving pedagogical integrity.
 
-[![Next.js](https://img.shields.io/badge/Next.js-15.5.2-black?style=for-the-badge&logo=next.js)](https://nextjs.org/)
-[![React](https://img.shields.io/badge/React-19-blue?style=for-the-badge&logo=react)](https://reactjs.org/)
-[![TypeScript](https://img.shields.io/badge/TypeScript-5-blue?style=for-the-badge&logo=typescript)](https://www.typescriptlang.org/)
-[![Supabase](https://img.shields.io/badge/Supabase-Database-green?style=for-the-badge&logo=supabase)](https://supabase.com/)
-[![Tailwind CSS](https://img.shields.io/badge/Tailwind-CSS-38B2AC?style=for-the-badge&logo=tailwind-css)](https://tailwindcss.com/)
+Target Audience:
+- Neurodiverse children (early childhood to pre‑teen) needing engaging repetition & adaptive reinforcement
+- Educators / therapists / caregivers supervising therapeutic or learning sessions
+- Product teams exploring structured + AI hybrid content delivery for pediatric interventions
 
-## 🌟 Overview
+Unique Selling Proposition (USP):
+- Separation of pedagogy (immutable molds) from personalization (AI generated assets)
+- Guard‑railed AI generation with schema + validation to preserve therapeutic intent
+- Rapid personalization without compromising auditability or safety
+- Structured Supabase schema enabling analytics, assignments, and longitudinal tracking
 
-BrainBerry is a cutting-edge therapeutic gaming platform that creates personalized learning experiences for neurodiverse children. Built with modern web technologies, it provides a safe, engaging environment where children can learn and grow through interactive games and AI-powered avatars.
+Core Features:
+1. Immutable Game Molds (e.g., Matching Cards, Sorting Challenge) versioned via SQL migrations
+2. Personalized Molds generated per child using AI prompts (interests -> themed assets)
+3. Polymorphic Game Player: routes config to correct mini‑game implementation
+4. Educator / Child role separation with RLS (Row Level Security) in Supabase
+5. Image preloading + caching + optimized rendering (performance hooks & smart loader)
+6. Centralized validation & error handling (Zod + structured API responses)
+7. Production‑safe logging with contextual levels & performance markers
+8. Extensible type‑safe domain model (`types/game.ts`)
+9. Future: customization request workflow & background AI fulfillment
 
-### ✨ Key Features
+Tech Stack:
+- Framework: Next.js 15 (App Router, Edge‑compatible middleware)
+- Language: TypeScript (strict domain typing)
+- Backend as a Service: Supabase (Postgres, Auth, RLS, Storage)
+- Auth: Supabase email auth (middleware protected routes)
+- Data Validation: Zod
+- UI / Styling: Tailwind CSS, next-themes, Lucide Icons
+- AI Integration: Google Gemini (generative game asset prompts)
+- Charts / Visualization: Recharts
+- Tooling: ESLint, TypeScript, pnpm, Supabase CLI
 
-- **🎮 Therapeutic Gaming**: Personalized games designed for cognitive development
-- **🤖 AI-Powered Avatars**: Interactive 3D avatars with voice and text chat capabilities
-- **👩‍🏫 Educator Dashboard**: Comprehensive tools for therapists and educators
-- **📊 Progress Tracking**: Real-time analytics and progress monitoring
-- **🎨 Creative Tools**: Avatar customization and creative expression games
-- **📱 Mobile Responsive**: Optimized for all devices and screen sizes
-- **♿ Accessibility**: WCAG 2.1 AA compliant design
-
-## 🚀 Quick Start
-
-### Prerequisites
-
-- Node.js 18+ 
-- npm or yarn
-- Supabase account (for database)
-
-### Installation
-
-1. **Clone the repository**
-   ```bash
-   git clone https://github.com/your-username/brainberry.git
-   cd brainberry
-   ```
-
-2. **Install dependencies**
-   ```bash
-   npm install
-   ```
-
-3. **Set up environment variables**
-   ```bash
-   cp .env.example .env.local
-   ```
-   
-   Fill in your environment variables:
-   ```env
-   NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
-   NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
-   SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
-   GEMINI_API_KEY=your_gemini_api_key
-   ELEVENLABS_API_KEY=your_elevenlabs_api_key
-   ```
-
-4. **Run the development server**
-   ```bash
-   npm run dev
-   ```
-
-5. **Open your browser**
-   Navigate to [http://localhost:3000](http://localhost:3000)
-
-## 🏗️ Project Structure
-
-```
-brainberry/
-├── app/                    # Next.js App Router
-│   ├── api/               # API routes
-│   ├── child/             # Child dashboard
-│   ├── educator/          # Educator dashboard
-│   ├── community/         # Community features
-│   └── login/             # Authentication
-├── components/            # Reusable React components
-│   └── ui/               # UI components
-├── lib/                   # Utility libraries
-├── types/                 # TypeScript type definitions
-├── public/               # Static assets
-├── supabase/             # Database migrations
-└── hooks/                # Custom React hooks
-```
-
-## 🎯 Core Features
-
-### For Children
-- **Interactive Games**: Memory matching, expression training, creative coloring
-- **Avatar Interaction**: 3D character interaction for social skill building
-- **Progress Tracking**: Visual progress indicators and achievements
-- **Safe Environment**: Supervised and secure gaming experience
-
-### For Educators & Therapists
-- **Mold Studio**: Create custom therapeutic games and activities
-- **Analytics Dashboard**: Track child progress and engagement
-- **Child Management**: Manage multiple children and their profiles
-- **Customization Tools**: Personalize experiences for each child
-
-### For Parents
-- **Progress Reports**: View detailed progress and achievements
-- **Community Access**: Connect with other families and resources
-- **Safe Communication**: Secure messaging with educators
-
-## 🛠️ Technology Stack
-
-### Frontend
-- **Next.js 15.5.2** - React framework with App Router
-- **React 19** - UI library with latest features
-- **TypeScript** - Type-safe development
-- **Tailwind CSS** - Utility-first CSS framework
-- **Three.js** - 3D graphics and avatar rendering
-- **Framer Motion** - Smooth animations
-
-### Backend
-- **Supabase** - Database and authentication
-- **Next.js API Routes** - Server-side functionality
-- **Gemini AI** - AI-powered conversations
-- **ElevenLabs** - Text-to-speech synthesis
-
-### Performance & Optimization
-- **Image Optimization** - WebP/AVIF formats with lazy loading
-- **Code Splitting** - Dynamic imports and bundle optimization
-- **PWA Support** - Service worker and offline capabilities
-- **Mobile-First** - Responsive design with touch optimization
-
-## 🎨 Design System
-
-BrainBerry uses a custom design system with:
-- **Brutal Design Language**: Bold, accessible, and engaging
-- **High Contrast**: WCAG AA compliant color schemes
-- **Touch-Friendly**: 44px minimum touch targets
-- **Responsive Typography**: Fluid scaling across devices
-
-## 📱 Mobile Experience
-
-- **Progressive Web App** (PWA) capabilities
-- **Touch Optimizations** for mobile interactions
-- **Responsive Design** that works on all screen sizes
-- **Offline Support** for core functionality
-
-## 🔒 Security & Privacy
-
-- **Data Encryption** - All sensitive data encrypted at rest
-- **Secure Authentication** - Supabase Auth with RLS policies
-- **GDPR Compliant** - Privacy-first approach
-- **Child Safety** - Supervised environment with content filtering
-
-## 🚀 Deployment
-
-### Vercel (Recommended)
-```bash
-npm run deploy:vercel
-```
-
-### Railway
-```bash
-npm run deploy:railway
-```
-
-### Manual Build
-```bash
-npm run build
-npm start
-```
-
-## 📊 Performance
-
-- **Lighthouse Score**: 95+ across all metrics
-- **Core Web Vitals**: Optimized for LCP, FID, and CLS
-- **Bundle Size**: Optimized with code splitting
-- **Image Loading**: 50% faster with modern formats
-
-## 🤝 Contributing
-
-We welcome contributions! Please see our [Contributing Guidelines](CONTRIBUTING.md) for details.
-
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Add tests if applicable
-5. Submit a pull request
-
-## 📄 License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## 👥 Team
-
-- **Bhaskar** - [LinkedIn](https://www.linkedin.com/in/bhaskar-datta-p/)
-- **Megha** - [LinkedIn](https://www.linkedin.com/in/meghaprasadd/)
-- **Siddhanth** - [LinkedIn](https://www.linkedin.com/in/siddhanth-pradhan/)
-
-## 🏫 Institution
-
-**Ramaiah Institute of Technology**  
-Bengaluru, Karnataka, India
-
-## 📞 Contact
-
-- **Email**: hello@brainberry.com
-- **Website**: [brainberry.com](https://brainberry.com)
-
-## 🙏 Acknowledgments
-
-- ReadyPlayer.me for avatar technology
-- Supabase for backend infrastructure
-- The neurodiverse community for inspiration and feedback
+High‑Level Architecture Flow:
+Educator seeds Mold (migration) -> Child selects Mold -> Provides interest prompts -> (Future) Customization Request queued -> AI generates themed assets -> PersonalizedMold stored -> Player loads config -> Gameplay & metrics recorded.
 
 ---
+## Getting Started
 
-**Made with ❤️ for neurodiverse learners everywhere**
+### 1. Prerequisites
+- Node.js 18+ (recommended 20 LTS)
+- pnpm installed (`npm i -g pnpm`)
+- Supabase CLI (`npm i -g supabase`)
+- Google Gemini API key (for AI personalization) *(optional until full flow wired)*
+
+### 2. Clone & Install
+```bash
+git clone <your-fork-or-repo-url>
+cd v1
+pnpm install
+```
+
+### 3. Environment Variables
+Create a `.env.local` file at the project root:
+```bash
+NEXT_PUBLIC_SUPABASE_URL=your_supabase_project_url
+NEXT_PUBLIC_SUPABASE_ANON_KEY=public_anon_key
+SUPABASE_SERVICE_ROLE_KEY=service_role_key               # server-only (never expose client side)
+GEMINI_API_KEY=your_gemini_key                           # for AI generation
+HUGGINGFACE_API_KEY=optional_for_image_generation
+NODE_ENV=development
+```
+
+Minimum required to run locally: `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`.
+
+### 4. Start Local Supabase (Optional – if using local Postgres)
+```bash
+supabase start
+# To apply migrations + seed
+pnpm supabase:reset-seed
+```
+
+This spins up Postgres, Studio, Auth, Storage on ports defined in `supabase/config.toml`.
+
+### 5. Database Migrations
+If you modified schema locally and want to push:
+```bash
+pnpm supabase:push
+```
+To regenerate TypeScript types from the DB:
+```bash
+pnpm supabase:types
+```
+
+### 6. Run the App
+```bash
+pnpm dev
+```
+App serves at: http://localhost:3000
+
+### 7. Build & Production Start
+```bash
+pnpm build
+pnpm start
+```
+
+---
+## Usage Walkthrough
+
+### Roles
+- Educator: Authenticates, manages children, views molds, assigns personalized games.
+- Child: Accesses a simplified interface to play personalized or catalog games.
+
+### Basic Flow (Current Implementation)
+1. Sign up / log in as educator.
+2. Create child profiles via `/api/children` UI flows.
+3. List available molds (immutable templates) – Matching Cards & Sorting Challenge supported.
+4. Generate (or load existing) personalized mold configs (stubbed / direct for now).
+5. Launch Polymorphic Game Player – selects the proper mini‑game based on `gameConfig.game_type`.
+
+### Personalization (Present vs Near-Term)
+Current: Direct embedding of sample configs without async request lifecycle.
+Planned: Submit `MoldCustomizationRequest` -> background worker invokes Gemini -> persists `PersonalizedMold` -> child notified when ready.
+
+### Directory Highlights
+```
+app/                 Next.js route handlers & UI (App Router)
+	api/               REST-ish endpoints (Supabase + validation)
+	child/, educator/  Role-specific UI surfaces
+lib/                 Supabase clients, AI integration, schemas
+types/               Domain model (game + DB types)
+utils/               Logger, validation & optimization helpers
+hooks/               Performance & state management hooks
+supabase/            Config, migrations, seed data
+```
+
+### Key Domain Types (`types/game.ts`)
+`GameConfig` → normalized config powering polymorphic player.
+`Card`, `Category`, `PersonalizedMold` → AI-personalizable entities.
+
+---
+## Troubleshooting
+| Issue | Cause | Fix |
+|-------|-------|-----|
+| 401 Unauthorized | Missing/expired Supabase auth | Re-login; check cookies in devtools |
+| Env var undefined | .env.local missing key | Add required variable & restart dev server |
+| DB mismatch | Migrations not applied | Run `pnpm supabase:reset-seed` |
+| AI key errors | GEMINI_API_KEY absent | Add key or skip AI-dependent actions |
+
+---
+## Roadmap (Condensed)
+- [ ] Customization request workflow & async processing
+- [ ] Complete removal of remaining console logs
+- [ ] Rich analytics & educator dashboards
+- [ ] Puzzle / Drawing / Storytelling mold implementations
+- [ ] Accessibility & inclusive UX improvements
+- [ ] Test coverage (>70%) & performance profiling
+
+---
+## License
+Internal / Restricted – add explicit license before open sourcing.
+
+---
+## Contributing
+1. Fork & branch: `feat/<short-feature>`
+2. Follow existing type patterns (`types/`) & logging conventions
+3. Run lint before PR: `pnpm lint`
+4. Provide migration SQL for any schema changes
+
+---
+## Quick Start (TL;DR)
+```bash
+pnpm install
+cp .env.example .env.local   # then fill in keys
+supabase start               # optional local backend
+pnpm dev
+# open http://localhost:3000
+```
+
+Happy building & personalizing! 🍓
