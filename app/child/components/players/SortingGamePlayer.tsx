@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { ArrowLeft, RotateCcw, Volume2, VolumeX } from 'lucide-react'
 import { useImagePreloader, SmartImage } from '@/components/ImagePreloader'
 import GameLoadingScreen from '@/components/GameLoadingScreen'
+import { imageCache } from '@/lib/image-cache'
 
 interface SortingGamePlayerProps {
   gameConfig: any
@@ -100,34 +101,60 @@ export default function SortingGamePlayer({ gameConfig, childId, onComplete, onB
     }
   }, [gameConfig, imagesReady])
 
+  // Safety: if some images fail and imagesReady never becomes true, fallback after 1.5s
+  useEffect(() => {
+    if (!gameConfig?.categories) return
+    if (imagesReady) return
+    const timer = setTimeout(() => {
+      if (!imagesReady) {
+        console.warn('[SortingGame] Forcing imagesReady after timeout to avoid blocking UI')
+        setImagesReady(true)
+      }
+    }, 1500)
+    return () => clearTimeout(timer)
+  }, [gameConfig?.categories, imagesReady])
+
   function initializeSortingGame() {
-    // Set up categories
-    const gameCategories: Category[] = gameConfig.categories.map((cat: any) => ({
-      id: cat.id,
-      name: cat.name,
-      color: cat.color || '#3b82f6',
+    // Enforce maximum of 3 categories
+    const limitedCategoriesSrc = gameConfig.categories.slice(0, 3)
+
+    // Normalize categories
+    const gameCategories: Category[] = limitedCategoriesSrc.map((cat: any, idx: number) => ({
+      id: cat.id ?? (idx + 1),
+      name: cat.name || `Category ${idx + 1}`,
+      color: cat.color || ['#6366f1', '#ec4899', '#10b981'][idx % 3],
       items: []
     }))
 
-    // Collect all items and shuffle them
+    // Collect and limit items to 4 per category (total 12)
     const allItems: Item[] = []
-    gameConfig.categories.forEach((cat: any) => {
-      cat.items.forEach((item: any) => {
+    limitedCategoriesSrc.forEach((cat: any, idx: number) => {
+      const catItems = (cat.items || []).slice(0, 4) // limit 4 each
+      catItems.forEach((item: any, itemIdx: number) => {
         allItems.push({
           ...item,
-          category_id: cat.id,
+          id: item.id || `${cat.id || idx + 1}-${itemIdx + 1}`,
+          category_id: cat.id ?? (idx + 1),
           placed: false
         })
       })
     })
 
+    // If fewer than 12 items provided, just shuffle what we have
     const shuffledItems = [...allItems].sort(() => Math.random() - 0.5)
-    
+
     setCategories(gameCategories)
     setUnplacedItems(shuffledItems)
     setScore(0)
     setGameComplete(false)
     setGameStarted(false)
+
+
+    // Eagerly preload unplaced item images (some may not have loaded in global preloader)
+    const urls = shuffledItems.map(i => i.image_url).filter(Boolean)
+    imageCache.preloadImages(urls, 6).then(() => {
+      setUnplacedItems(prev => [...prev])
+    }).catch(() => {})
   }
 
   function handleDragStart(e: React.DragEvent, item: Item) {
@@ -298,7 +325,7 @@ export default function SortingGamePlayer({ gameConfig, childId, onComplete, onB
             Items to Sort ({unplacedItems.length} left)
           </h3>
           
-          <div className="grid grid-cols-3 md:grid-cols-6 gap-4">
+      <div className="grid grid-cols-3 md:grid-cols-6 gap-4">
             {unplacedItems.map(item => (
               <div
                 key={item.id}
@@ -308,12 +335,21 @@ export default function SortingGamePlayer({ gameConfig, childId, onComplete, onB
                 className="bg-yellow-100 border-4 border-yellow-300 rounded-lg p-3 text-center cursor-grab active:cursor-grabbing hover:bg-yellow-200 transform hover:scale-105 transition-all"
               >
                 <div className="mb-1">
-                  <div className="w-12 h-12 mx-auto rounded">
-                    <SmartImage
+                  <div className="w-12 h-12 mx-auto rounded overflow-hidden bg-white flex items-center justify-center">
+                    <img
                       src={getCachedUrl ? getCachedUrl(item.image_url) : item.image_url}
                       alt={item.name || item.label || 'Game item'}
-                      className="w-full h-full rounded"
-                      fallbackEmoji={item.ai_generation?.fallback_emoji || '⭐'}
+                      className="w-full h-full object-cover"
+                      loading="eager"
+                      decoding="async"
+                      onError={(e) => {
+                        const target = e.currentTarget
+                        target.style.display = 'none'
+                        const parent = target.parentElement
+                        if (parent) {
+                          parent.innerHTML = `<div class='w-full h-full flex items-center justify-center text-xl'>${item.ai_generation?.fallback_emoji || '⭐'}</div>`
+                        }
+                      }}
                     />
                   </div>
                 </div>

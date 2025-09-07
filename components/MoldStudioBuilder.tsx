@@ -1,11 +1,15 @@
 "use client"
 
 import { useState, useEffect } from 'react'
-import { Plus, Trash2, Edit3, ArrowUp, ArrowDown, Copy, Settings, Image, Volume2, Play } from 'lucide-react'
+import { Plus, Trash2, Edit3, ArrowUp, ArrowDown, Copy, Settings, Image, Volume2, Play, LucideBadgeJapaneseYen, AlertOctagon, AudioLines } from 'lucide-react'
 import { MoldValidationIndicator } from './MoldValidationIndicator'
 import { SceneBuilder } from './SceneBuilder'
 import { CustomizationSettings } from './CustomizationSettings'
 import { MetaDataEditor } from './MetaDataEditor'
+import { DstAlphaFactor, DstColorFactor } from 'three'
+import { validateAvatarUrl } from '@/lib/avatar-url-utils'
+import { setDefaultAutoSelectFamilyAttemptTimeout } from 'net'
+import { sigmoid } from 'face-api.js'
 
 interface ValidationError {
   type: 'critical' | 'warning' | 'info'

@@ -1,7 +1,7 @@
 'use client'
 
 import React, { Suspense, useCallback, useRef, useState, useEffect, useMemo } from 'react'
-import { Canvas, useFrame } from '@react-three/fiber'
+import { Canvas } from '@react-three/fiber'
 import { OrbitControls, Environment, useGLTF } from '@react-three/drei'
 import { Object3D } from 'three'
 // Preserve skinned mesh skeletons when cloning GLTFs
@@ -372,38 +372,14 @@ const ValidatedGLBModel: React.FC<{
     if (meshRef.current) forceSkeletonUpdate(meshRef.current)
   }, [restoreBase])
 
-  // Switch poses every 5 seconds; breathing runs continuously
+  // Apply only the natural pose once (no looping animations)
   useEffect(() => {
     if (!meshRef.current) return
     captureRig(meshRef.current)
     applyNaturalPose()
     currentPoseRef.current = 'natural'
     poseAppliedRef.current = true
-    const id = setInterval(() => {
-      if (!bonesRef.current) return
-      if (currentPoseRef.current === 'natural') {
-        applyFoldedArmsPose()
-        currentPoseRef.current = 'folded'
-      } else {
-        applyNaturalPose()
-        currentPoseRef.current = 'natural'
-      }
-    }, 5000)
-    return () => clearInterval(id)
-  }, [applyFoldedArmsPose, applyNaturalPose, captureRig])
-
-  // Subtle breathing animation
-  useFrame(() => {
-    if (!bonesRef.current) return
-    const t = ((typeof performance !== 'undefined' ? performance.now() : Date.now()) - startTimeRef.current) / 1000
-    const breath = Math.sin(t * 1.2) * (1.2 * deg)
-    const chest = bonesRef.current.chest || bonesRef.current.spine
-    if (chest) {
-      const base = baseRotXRef.current['chest'] ?? chest.rotation.x
-      chest.rotation.x = base + breath
-      chest.updateMatrixWorld(true)
-    }
-  })
+  }, [applyNaturalPose, captureRig])
 
   // Call onLoaded with the actual rendered instance (clone) once it's mounted
   useEffect(() => {
@@ -510,13 +486,14 @@ const AvatarScene: React.FC<{
   )
 }
 
-export const SimpleAvatarViewer: React.FC<SimpleAvatarViewerProps> = ({
+export const SimpleAvatarViewer: React.FC<SimpleAvatarViewerProps & { disableAnimation?: boolean }> = ({
   avatarUrl,
   enableControls = true,
   cameraMode = 'full',
   onModelLoad,
   onModelError,
-  className = ''
+  className = '',
+  disableAnimation = true // default to true since animations removed
 }) => {
   if (!avatarUrl) {
     return (

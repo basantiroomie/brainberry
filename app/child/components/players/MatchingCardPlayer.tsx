@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Play, RotateCcw, Volume2, VolumeX, ArrowLeft } from 'lucide-react'
 import { useImagePreloader, SmartImage } from '@/components/ImagePreloader'
 import OptimizedCard from '@/components/OptimizedCard'
@@ -36,6 +36,27 @@ export default function MatchingCardPlayer({ gameConfig, childId, onComplete, on
   const [imagesReady, setImagesReady] = useState(false)
   const [loadingProgress, setLoadingProgress] = useState(0)
 
+  // Refs to guard against remount/state loss and provide latest values inside timeouts
+  const initializedRef = useRef(false)
+  const flippedRef = useRef<number[]>([])
+  const cardsRef = useRef<GameCard[]>([])
+  const instanceIdRef = useRef<string>(Math.random().toString(36).slice(2))
+  const instanceId = instanceIdRef.current
+  const resolvingRef = useRef(false)
+  const checkTimeoutRef = useRef<number | null>(null)
+  const resolveTimeoutRef = useRef<number | null>(null)
+
+  // Keep refs in sync
+  useEffect(() => { cardsRef.current = cards }, [cards])
+  useEffect(() => { flippedRef.current = flippedCards }, [flippedCards])
+
+  useEffect(() => {
+    return () => {
+      if (checkTimeoutRef.current) window.clearTimeout(checkTimeoutRef.current)
+      if (resolveTimeoutRef.current) window.clearTimeout(resolveTimeoutRef.current)
+    }
+  }, [instanceId])
+
   // Extract image URLs for preloading
   const imageUrls = gameConfig?.cards?.map((card) => card.image_url) || []
   const fallbackEmojis = gameConfig?.cards?.map((card) => 
@@ -51,10 +72,11 @@ export default function MatchingCardPlayer({ gameConfig, childId, onComplete, on
   })
 
   useEffect(() => {
-    if (gameConfig?.cards && imagesReady) {
-      initializeCards(gameConfig.cards)
-    }
-  }, [gameConfig, imagesReady])
+    if (!gameConfig?.cards || !imagesReady) return
+    if (initializedRef.current) return
+    initializeCards(gameConfig.cards)
+    initializedRef.current = true
+  }, [gameConfig?.cards, imagesReady, instanceId, cards.length])
 
   useEffect(() => {
     if (gameStarted && !gameComplete) {
@@ -69,6 +91,7 @@ export default function MatchingCardPlayer({ gameConfig, childId, onComplete, on
     // Create pairs of cards and shuffle them
     const gameCards: Card[] = []
     let cardId = 1
+
 
     cardData.forEach(cardInfo => {
       // Add two identical cards for each pair
@@ -86,15 +109,17 @@ export default function MatchingCardPlayer({ gameConfig, childId, onComplete, on
 
     // Shuffle the cards
     const shuffledCards = [...gameCards].sort(() => Math.random() - 0.5)
-    setCards(shuffledCards)
+  setCards(shuffledCards as GameCard[])
   }
 
   function handleCardClick(cardId: number) {
+  if (resolvingRef.current) return
     if (!gameStarted) {
       setGameStarted(true)
     }
 
     const card = cards.find(c => c.id === cardId)
+    
     
     // Prevent clicking on already flipped, matched cards, or when 2 cards are already flipped
     if (!card || card.isFlipped || card.isMatched || flippedCards.length >= 2) {
@@ -102,8 +127,9 @@ export default function MatchingCardPlayer({ gameConfig, childId, onComplete, on
     }
 
     // Add card to flipped cards array
-    const newFlippedCards = [...flippedCards, cardId]
-    setFlippedCards(newFlippedCards)
+  const newFlippedCards = [...flippedRef.current, cardId]
+  flippedRef.current = newFlippedCards
+  setFlippedCards(newFlippedCards)
 
     // Flip the card to face-up
     setCards(prev => prev.map(c => 
@@ -113,63 +139,69 @@ export default function MatchingCardPlayer({ gameConfig, childId, onComplete, on
     // If this is the second card flipped, check for match after a short delay
     if (newFlippedCards.length === 2) {
       setMoves(prev => prev + 1)
-      // Small delay to ensure the card flip animation shows
-      setTimeout(() => {
-        checkForMatch(newFlippedCards)
-      }, 100)
+      resolvingRef.current = true
+      // Use a short delay so animation can render, then check latest card states
+      if (checkTimeoutRef.current) window.clearTimeout(checkTimeoutRef.current)
+      checkTimeoutRef.current = window.setTimeout(() => {
+        checkForMatch([...newFlippedCards])
+      }, 140)
     }
   }
 
   function checkForMatch(flippedCardIds: number[]) {
     const [firstId, secondId] = flippedCardIds
-    const firstCard = cards.find(c => c.id === firstId)
-    const secondCard = cards.find(c => c.id === secondId)
+    const currentCards = cardsRef.current
+    const firstCard = currentCards.find(c => c.id === firstId)
+    const secondCard = currentCards.find(c => c.id === secondId)
+
 
     if (firstCard && secondCard && firstCard.pair_id === secondCard.pair_id) {
       // Match found! Keep cards face-up and mark as matched
-      setTimeout(() => {
-        setCards(prev => prev.map(c => 
-          flippedCardIds.includes(c.id) 
-            ? { ...c, isMatched: true, isFlipped: false } // Mark as matched, will stay visible due to isMatched
+  if (resolveTimeoutRef.current) window.clearTimeout(resolveTimeoutRef.current)
+  resolveTimeoutRef.current = window.setTimeout(() => {
+        setCards(prev => prev.map(c =>
+          flippedCardIds.includes(c.id)
+            ? { ...c, isMatched: true, isFlipped: false }
             : c
         ))
-        setMatchedPairs(prev => [...prev, firstCard.pair_id])
+        setMatchedPairs(prev => {
+          const updated = [...prev, firstCard.pair_id]
+          const totalPairs = gameConfig.cards?.length || 0
+          if (updated.length >= totalPairs) {
+            setGameComplete(true)
+            onComplete?.()
+            logger.game('Game completed', undefined, {
+              totalPairs,
+              moves,
+              score: score + 10,
+              gameTime
+            })
+          }
+          return updated
+        })
         setScore(prev => prev + 10)
-        setConsecutiveMatches(prev => prev + 1)
-        setFlippedCards([]) // Clear flipped cards array
-
-        // Show encouragement for consecutive matches
-        if (consecutiveMatches >= 2) {
-          showEncouragementFeedback()
-        }
-
-        // Check if game is complete
-        const totalPairs = gameConfig.cards?.length || 0
-        if (matchedPairs.length + 1 >= totalPairs) {
-          setGameComplete(true)
-          onComplete?.()
-          logger.game('Game completed', undefined, { 
-            totalPairs, 
-            moves, 
-            score, 
-            gameTime 
-          })
-        }
-
-        // Play success sound
-        if (soundEnabled) {
-          playSound('match')
-        }
-      }, 800)
+        setConsecutiveMatches(prev => {
+          const newVal = prev + 1
+            ;(newVal >= 2) && showEncouragementFeedback()
+          return newVal
+        })
+        flippedRef.current = []
+        setFlippedCards([])
+        if (soundEnabled) playSound('match')
+        resolvingRef.current = false
+      }, 600)
     } else {
       // No match - flip cards back to face-down after showing them briefly
-      setTimeout(() => {
-        setCards(prev => prev.map(c => 
+      if (resolveTimeoutRef.current) window.clearTimeout(resolveTimeoutRef.current)
+      resolveTimeoutRef.current = window.setTimeout(() => {
+        setCards(prev => prev.map(c =>
           flippedCardIds.includes(c.id) ? { ...c, isFlipped: false } : c
         ))
-        setFlippedCards([]) // Clear flipped cards array
-        setConsecutiveMatches(0) // Reset streak
-      }, 1200)
+        flippedRef.current = []
+        setFlippedCards([])
+        setConsecutiveMatches(0)
+        resolvingRef.current = false
+      }, 900)
     }
   }
 
@@ -206,10 +238,29 @@ export default function MatchingCardPlayer({ gameConfig, childId, onComplete, on
     setMatchedPairs([])
     setConsecutiveMatches(0)
     setShowEncouragement(false)
-    if (gameConfig?.cards) {
-      initializeCards(gameConfig.cards)
-    }
+  flippedRef.current = []
+  initializedRef.current = false
+    resolvingRef.current = false
+    if (checkTimeoutRef.current) window.clearTimeout(checkTimeoutRef.current)
+    if (resolveTimeoutRef.current) window.clearTimeout(resolveTimeoutRef.current)
+  if (gameConfig?.cards) initializeCards(gameConfig.cards)
   }
+
+  // Safety watchdog: ensure no stranded flipped (non-matched) cards remain >2s
+  useEffect(() => {
+    if (!resolvingRef.current && flippedRef.current.length === 2) {
+      const ids = [...flippedRef.current]
+      const timer = window.setTimeout(() => {
+        if (!resolvingRef.current && flippedRef.current.length === 2) {
+          // Force unflip as fallback
+            setCards(prev => prev.map(c => ids.includes(c.id) && !c.isMatched ? { ...c, isFlipped: false } : c))
+            flippedRef.current = []
+            setFlippedCards([])
+        }
+      }, 2200)
+      return () => window.clearTimeout(timer)
+    }
+  }, [flippedCards])
 
   function formatTime(seconds: number) {
     const mins = Math.floor(seconds / 60)

@@ -127,7 +127,10 @@ export function SmartImage({ src, alt, className = '', fallbackEmoji = '⭐', on
     if (imageCache.isCached(src)) {
       setImageLoaded(true)
       onLoad?.()
+      return
     }
+
+  // We keep spinner until success or real error; no forced timeout error now
   }, [src])
 
   const handleLoad = () => {
@@ -153,13 +156,12 @@ export function SmartImage({ src, alt, className = '', fallbackEmoji = '⭐', on
       <img
         src={cachedSrc}
         alt={alt}
-        className={`w-full h-full object-cover transition-opacity duration-150 ${
-          imageLoaded ? 'opacity-100' : 'opacity-0'
-        }`}
+        className={`w-full h-full object-cover ${imageLoaded ? 'opacity-100' : 'opacity-0'} transition-opacity duration-150`}
         onLoad={handleLoad}
         onError={handleError}
         loading="eager"
         decoding="sync"
+        crossOrigin="anonymous"
       />
       {!imageLoaded && (
         <div className="absolute inset-0 flex items-center justify-center bg-gray-100 animate-pulse">

@@ -101,8 +101,15 @@ export default function PersonalizedMoldPlayer({ personalizedMoldId, childId }: 
     const card1 = cards.find(c => c.id === card1Id)
     const card2 = cards.find(c => c.id === card2Id)
 
+    console.log('🎮 PersonalizedMoldPlayer - Checking match:', {
+      card1: { id: card1?.id, label: card1?.label, pair_id: card1?.pair_id },
+      card2: { id: card2?.id, label: card2?.label, pair_id: card2?.pair_id },
+      isMatch: card1?.pair_id === card2?.pair_id
+    })
+
     if (card1 && card2 && card1.pair_id === card2.pair_id) {
       // Match found! Keep cards face-up and mark as matched
+      console.log('✅ PersonalizedMoldPlayer - Match found! Cards will stay visible')
       setTimeout(() => {
         setCards(prev => prev.map(card => 
           flippedCardIds.includes(card.id) 
@@ -129,6 +136,7 @@ export default function PersonalizedMoldPlayer({ personalizedMoldId, childId }: 
       }, 1000)
     } else {
       // No match - flip cards back to face-down
+      console.log('❌ PersonalizedMoldPlayer - No match found! Cards will flip back down')
       setTimeout(() => {
         setCards(prev => prev.map(card => 
           flippedCardIds.includes(card.id) 
@@ -136,6 +144,7 @@ export default function PersonalizedMoldPlayer({ personalizedMoldId, childId }: 
             : card
         ))
         setFlippedCards([])
+        console.log('🔄 PersonalizedMoldPlayer - Cards should now be face down')
       }, 1500)
     }
   }
