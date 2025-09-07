@@ -20,27 +20,21 @@ const MODEL_FALLBACK_HIERARCHY = [
 // Track failed models to avoid retrying them immediately
 const failedModels = new Set<string>()
 
-// Helper function to convert WebM (Opus) to 16-bit PCM @16kHz mono using ffmpeg
+// Helper function to convert WebM (Opus) to 16-bit PCM @16kHz mono using ffmpeg (always attempt if available)
 async function convertAudioForModel(audioData: Uint8Array, model: string): Promise<{ data: string, mimeType: string }> {
   console.log('🎤 Converting to PCM format for model:', model)
 
-  // Feature flag: enable ffmpeg only when explicitly allowed
-  if (!process.env.ENABLE_FFMPEG) {
-    const audioBase64 = Buffer.from(audioData).toString('base64')
-    return { data: audioBase64, mimeType: 'audio/webm' }
-  }
-
-  // If ffmpeg is unavailable, fallback to raw base64 (not ideal)
-  if (!ffmpegPath) {
-    console.warn('🎤 ffmpeg not available, sending raw audio which may fail')
+  const canUseFfmpeg = ffmpegPath && fs.existsSync(ffmpegPath as string)
+  if (!canUseFfmpeg) {
+    console.warn('🎤 ffmpeg not available (or path missing). Returning original WebM (Gemini may reject). Install/enable ffmpeg-static for proper PCM conversion.')
     const audioBase64 = Buffer.from(audioData).toString('base64')
     return { data: audioBase64, mimeType: 'audio/webm' }
   }
 
   return new Promise<{ data: string, mimeType: string }>((resolve, reject) => {
     try {
-      const resolved = (ffmpegPath && fs.existsSync(ffmpegPath)) ? ffmpegPath : 'ffmpeg'
-      const ffmpeg = spawn(resolved as string, [
+      const resolved = ffmpegPath as string
+      const ffmpeg = spawn(resolved, [
         '-hide_banner',
         '-loglevel', 'error',
         '-f', 'webm', // input format
@@ -60,7 +54,7 @@ async function convertAudioForModel(audioData: Uint8Array, model: string): Promi
       ffmpeg.on('error', (err) => reject(err))
       ffmpeg.on('close', (code) => {
         if (code === 0) {
-          const pcmBuffer = Buffer.concat(chunks)
+          const pcmBuffer = Buffer.concat(chunks as any)
           const base64 = pcmBuffer.toString('base64')
           resolve({ data: base64, mimeType: 'audio/pcm;rate=16000' })
         } else {
@@ -135,8 +129,8 @@ async function handleTurn(responseQueue: any[]) {
         done = true;
       }
       
-    } catch (error) {
-      if (error.message === 'Timeout') {
+    } catch (error: any) {
+      if ((error as any).message === 'Timeout') {
         console.log('🎤 Message wait timeout, checking if we have any content...');
         if (turns.length > 0) {
           console.log('🎤 Have some content, completing turn');
@@ -501,6 +495,7 @@ export async function POST(req: Request) {
           let audioResponses: string[] = []
           let textResponses: string[] = []
           
+          const audioMimeTypes: string[] = []
           for (const turn of turns) {
             // Check for audio responses in turn data
             if (turn.serverContent?.modelTurn?.parts) {
@@ -508,6 +503,9 @@ export async function POST(req: Request) {
                 if (part.inlineData?.mimeType?.includes('audio') && part.inlineData?.data) {
                   console.log('🎤 Audio response found in turn, length:', part.inlineData.data.length)
                   audioResponses.push(part.inlineData.data)
+                  if (part.inlineData.mimeType && !audioMimeTypes.includes(part.inlineData.mimeType)) {
+                    audioMimeTypes.push(part.inlineData.mimeType)
+                  }
                 }
                 if (part.text) {
                   console.log('🎤 Text response found in turn:', part.text.substring(0, 100))
@@ -549,6 +547,7 @@ export async function POST(req: Request) {
             success: true,
             text: responseText,
             audioData: outputAudioData,
+            audioMimeType: audioMimeTypes[0] || undefined,
             transcription: responseText,
             provider: 'gemini-live-livekit',
             model: sessionData.model,

@@ -28,6 +28,8 @@ export const AvatarVoiceChat: React.FC<AvatarVoiceChatProps> = ({
   const [error, setError] = useState<string | null>(null)
   const [sessionStartTime, setSessionStartTime] = useState<Date | null>(null)
   const [currentModel, setCurrentModel] = useState<string | null>(null)
+  const [lastResponseText, setLastResponseText] = useState<string | null>(null)
+  const [isPlayingResponse, setIsPlayingResponse] = useState(false)
   
   // Refs
   const avatarModelRef = useRef<Object3D | null>(null)
@@ -475,7 +477,7 @@ export const AvatarVoiceChat: React.FC<AvatarVoiceChatProps> = ({
       const data = await response.json()
       console.log('🎤 API Response data:', data)
 
-      if (data.success) {
+  if (data.success) {
         console.log('🤖 Avatar response received from session:', data.sessionId)
         
         // Update model if it changed (due to automatic fallback)
@@ -492,10 +494,21 @@ export const AvatarVoiceChat: React.FC<AvatarVoiceChatProps> = ({
         }
         
         // Check if we have audio data from Gemini Live turn-based response
-        if (data.streaming?.outputAudio) {
-          console.log('🔊 Playing Gemini Live audio response')
+        // New unified audio fields from API: audioData (base64) + audioMimeType
+        if (data.text) {
+          setLastResponseText(data.text)
+        }
+        if (data.audioData) {
+          console.log('🔊 Playing Gemini Live audio response (unified field)')
+          setIsPlayingResponse(true)
+          await playGeminiAudioResponse(data.audioData, data.audioMimeType || 'audio/wav')
+          setIsPlayingResponse(false)
+        } else if (data.streaming?.outputAudio) {
+          console.log('🔊 Playing Gemini Live audio response (legacy streaming.outputAudio)')
+          setIsPlayingResponse(true)
           await playGeminiAudioResponse(data.streaming.outputAudio, 'audio/wav')
-        } else if (data.streaming?.outputText) {
+          setIsPlayingResponse(false)
+        } else if (data.streaming?.outputText || data.text) {
           console.log('🔊 Received text response, could implement TTS fallback:', data.streaming.outputText)
           // For now, just log the text response
           // You could implement TTS fallback here if needed
@@ -535,7 +548,10 @@ export const AvatarVoiceChat: React.FC<AvatarVoiceChatProps> = ({
       for (let i = 0; i < audioBytes.length; i++) {
         audioArray[i] = audioBytes.charCodeAt(i)
       }
-      const audioBlob = new Blob([audioArray], { type: mimeType })
+      let finalMime = mimeType
+      // Some models may return undefined mimeType; default to wav
+      if (!finalMime) finalMime = 'audio/wav'
+      const audioBlob = new Blob([audioArray], { type: finalMime })
       const audioUrl = URL.createObjectURL(audioBlob)
       
       // Create audio element and play
@@ -783,9 +799,13 @@ export const AvatarVoiceChat: React.FC<AvatarVoiceChatProps> = ({
                      'Speak naturally to continue the conversation'}
                   </p>
                   {isProcessing && (
-                    <div className="mt-4 text-sm text-gray-500">
-                      Processing your voice...
-                    </div>
+                    <div className="mt-4 text-sm text-gray-500">Processing your voice...</div>
+                  )}
+                  {isPlayingResponse && (
+                    <div className="mt-2 text-xs text-purple-500 animate-pulse">Playing response...</div>
+                  )}
+                  {lastResponseText && !isPlayingResponse && (
+                    <div className="mt-4 max-w-sm text-xs text-gray-500 italic line-clamp-3">“{lastResponseText}”</div>
                   )}
                 </div>
               )}
