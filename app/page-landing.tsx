@@ -69,13 +69,14 @@ const BrainBerry = memo(function BrainBerry() {
             muted
             playsInline
             className="w-full h-full object-cover"
-            poster="/landingpage.jpg"
-            onLoadedData={() => console.log('✅ Hero video loaded from Vercel Blob')}
-            onError={(e) => console.error('❌ Video failed to load:', e)}
+            style={{ pointerEvents: 'none' }}
           >
-            <source src="https://z03hipz68fi4idqn.public.blob.vercel-storage.com/hero-video.mp4" type="video/mp4" />
+            <source 
+              src="https://ik.imagekit.io/1jxk7hhig/hero.mp4?tr=orig&updatedAt=1757351084022" 
+              type="video/mp4" 
+            />
           </video>
-          <div className="absolute inset-0 bg-overlay"></div>
+          <div className="absolute inset-0 bg-black/40"></div>
         </div>
         <div className="relative z-10 text-center max-w-4xl mx-auto px-responsive safe-area-inset">
           <div className="mb-6 md:mb-8">
