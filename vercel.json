@@ -1,9 +1,4 @@
 {
-  "functions": {
-    "app/api/**/*.ts": {
-      "maxDuration": 30
-    }
-  },
   "headers": [
     {
       "source": "/hero.mp4",
@@ -32,10 +27,5 @@
       ]
     }
   ],
-  "rewrites": [
-    {
-      "source": "/",
-      "destination": "/app/page-landing"
-    }
-  ]
+  "cleanUrls": true
 }
