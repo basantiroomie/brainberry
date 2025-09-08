@@ -63,23 +63,14 @@ const BrainBerry = memo(function BrainBerry() {
       {/* Hero Section */}
       <section className="relative min-h-screen h-screen flex items-center justify-center overflow-hidden">
         <div className="absolute inset-0">
-          <video
-            autoPlay
-            loop
-            muted
-            playsInline
-            className="w-full h-full object-cover"
-            poster="/landingpage.jpg"
-            onLoadedData={() => console.log('✅ Video loaded successfully')}
-            onError={(e) => {
-              console.log('❌ Video failed, showing fallback image')
-              const videoElement = e.target as HTMLVideoElement
-              videoElement.style.display = 'none'
-            }}
-          >
-            <source src="https://raw.githubusercontent.com/basantiroomie/brainberry/main/public/hero-video.mp4" type="video/mp4" />
-            <source src="/hero-video.mp4" type="video/mp4" />
-          </video>
+          <Image
+            src="/landingpage.jpg"
+            alt="Children enjoying therapeutic gaming together"
+            fill
+            className="object-cover"
+            priority
+            sizes="100vw"
+          />
           <div className="absolute inset-0 bg-overlay"></div>
         </div>
         <div className="relative z-10 text-center max-w-4xl mx-auto px-responsive safe-area-inset">
