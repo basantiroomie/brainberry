@@ -63,13 +63,14 @@ const BrainBerry = memo(function BrainBerry() {
       {/* Hero Section */}
       <section className="relative min-h-screen h-screen flex items-center justify-center overflow-hidden">
         <div className="absolute inset-0">
-          <Image
-            src="/landingpage.jpg"
-            alt="Children enjoying therapeutic gaming together"
-            fill
-            className="object-cover"
-            priority
-            sizes="100vw"
+          <video
+            src="/hero.mp4"
+            autoPlay
+            loop
+            muted
+            playsInline
+            className="w-full h-full object-cover"
+            poster="/landingpage.jpg"
           />
           <div className="absolute inset-0 bg-overlay"></div>
         </div>
