@@ -70,8 +70,10 @@ const BrainBerry = memo(function BrainBerry() {
             playsInline
             className="w-full h-full object-cover"
             poster="/landingpage.jpg"
+            onLoadedData={() => console.log('✅ Hero video loaded from Vercel Blob')}
+            onError={(e) => console.error('❌ Video failed to load:', e)}
           >
-            <source src="https://www.learningcontainer.com/wp-content/uploads/2020/05/sample-mp4-file.mp4" type="video/mp4" />
+            <source src="https://z03hipz68fi4idqn.public.blob.vercel-storage.com/hero-video.mp4" type="video/mp4" />
           </video>
           <div className="absolute inset-0 bg-overlay"></div>
         </div>
