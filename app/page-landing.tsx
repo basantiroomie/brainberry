@@ -64,16 +64,36 @@ const BrainBerry = memo(function BrainBerry() {
       <section className="relative min-h-screen h-screen flex items-center justify-center overflow-hidden">
         <div className="absolute inset-0">
           <video
-            src="/hero.mp4?v=2"
             autoPlay
             loop
             muted
             playsInline
-            preload="auto"
+            preload="metadata"
             className="w-full h-full object-cover"
             poster="/landingpage.jpg"
-            onError={(e) => console.error('Video failed to load:', e)}
-          />
+            onLoadStart={() => console.log('Video loading started')}
+            onCanPlay={() => console.log('Video can play')}
+            onError={(e) => {
+              console.error('Video failed to load:', e)
+              // Fallback to image if video fails
+              const videoElement = e.target as HTMLVideoElement
+              const imgElement = document.createElement('img')
+              imgElement.src = '/landingpage.jpg'
+              imgElement.className = 'w-full h-full object-cover'
+              imgElement.alt = 'Children enjoying therapeutic gaming together'
+              videoElement.parentNode?.replaceChild(imgElement, videoElement)
+            }}
+          >
+            <source src="/hero.mp4?v=3" type="video/mp4" />
+            <Image
+              src="/landingpage.jpg"
+              alt="Children enjoying therapeutic gaming together"
+              fill
+              className="object-cover"
+              priority
+              sizes="100vw"
+            />
+          </video>
           <div className="absolute inset-0 bg-overlay"></div>
         </div>
         <div className="relative z-10 text-center max-w-4xl mx-auto px-responsive safe-area-inset">
