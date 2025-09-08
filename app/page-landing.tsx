@@ -64,13 +64,15 @@ const BrainBerry = memo(function BrainBerry() {
       <section className="relative min-h-screen h-screen flex items-center justify-center overflow-hidden">
         <div className="absolute inset-0">
           <video
-            src="/hero.mp4"
+            src="/hero.mp4?v=2"
             autoPlay
             loop
             muted
             playsInline
+            preload="auto"
             className="w-full h-full object-cover"
             poster="/landingpage.jpg"
+            onError={(e) => console.error('Video failed to load:', e)}
           />
           <div className="absolute inset-0 bg-overlay"></div>
         </div>
