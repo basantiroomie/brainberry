@@ -64,34 +64,15 @@ const BrainBerry = memo(function BrainBerry() {
       <section className="relative min-h-screen h-screen flex items-center justify-center overflow-hidden">
         <div className="absolute inset-0">
           <video
-            key="hero-video"
             autoPlay
             loop
             muted
             playsInline
-            preload="auto"
             className="w-full h-full object-cover"
             poster="/landingpage.jpg"
-            onLoadStart={() => console.log('✅ Video loading started')}
-            onCanPlay={() => console.log('✅ Video can play')}
-            onLoadedData={() => console.log('✅ Video data loaded')}
-            onError={(e) => {
-              console.error('❌ Video failed to load:', e)
-              console.log('🔄 Falling back to static image')
-            }}
           >
-            <source src="/hero.mp4?v=4" type="video/mp4" />
-            Your browser does not support the video tag.
+            <source src="/hero-video.mp4" type="video/mp4" />
           </video>
-          {/* Fallback image - will show if video fails */}
-          <Image
-            src="/landingpage.jpg"
-            alt="Children enjoying therapeutic gaming together"
-            fill
-            className="object-cover -z-10"
-            priority
-            sizes="100vw"
-          />
           <div className="absolute inset-0 bg-overlay"></div>
         </div>
         <div className="relative z-10 text-center max-w-4xl mx-auto px-responsive safe-area-inset">
