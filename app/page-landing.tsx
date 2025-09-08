@@ -70,7 +70,14 @@ const BrainBerry = memo(function BrainBerry() {
             playsInline
             className="w-full h-full object-cover"
             poster="/landingpage.jpg"
+            onLoadedData={() => console.log('✅ Video loaded successfully')}
+            onError={(e) => {
+              console.log('❌ Video failed, showing fallback image')
+              const videoElement = e.target as HTMLVideoElement
+              videoElement.style.display = 'none'
+            }}
           >
+            <source src="https://raw.githubusercontent.com/basantiroomie/brainberry/main/public/hero-video.mp4" type="video/mp4" />
             <source src="/hero-video.mp4" type="video/mp4" />
           </video>
           <div className="absolute inset-0 bg-overlay"></div>
