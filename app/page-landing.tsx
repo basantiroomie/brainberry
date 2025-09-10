@@ -181,24 +181,13 @@ const BrainBerry = memo(function BrainBerry() {
               <div className="bg-black border-4 border-border shadow-brutal-3xl p-2 md:p-4 transform -rotate-1 hover:shadow-[28px_28px_0px_0px_var(--color-border)] transition-all duration-300 will-change-transform">
                 <div className="relative aspect-video bg-chart-3 border-2 border-border">
                   <Suspense fallback={<Loading />}>
-                    <video
-                      className="w-full h-full object-cover"
-                      controls
-                      poster="/diverse-children-educational-games.png"
-                      preload="metadata"
-                    >
-                      <source src="/demo-video.mp4" type="video/mp4" />
-                      <div className="flex items-center justify-center h-full bg-chart-3 border-2 border-border">
-                        <div className="text-center p-responsive">
-                          <div className="bg-main border-2 border-border shadow-brutal p-responsive mb-3 md:mb-4">
-                            <p className="text-main-foreground font-bold text-responsive-sm">🎮 DEMO COMING SOON</p>
-                          </div>
-                          <p className="text-main-foreground font-medium text-responsive-sm">
-                            Interactive preview of our therapeutic gaming platform
-                          </p>
-                        </div>
-                      </div>
-                    </video>
+                    <Image
+                      src="/Children_happy.png"
+                      alt="Children enjoying therapeutic learning with tablets"
+                      fill
+                      className="object-cover"
+                      sizes="(max-width: 768px) 100vw, 50vw"
+                    />
                   </Suspense>
                 </div>
               </div>
