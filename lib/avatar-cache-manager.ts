@@ -1,6 +1,6 @@
 // Avatar caching and memory management system
 import { logger } from '@/utils/logger'
-import { Object3D, Texture, Material, Geometry, BufferGeometry } from 'three'
+import { Object3D, Texture, Material, BufferGeometry, Mesh } from 'three'
 
 export interface CacheEntry {
   key: string
@@ -123,7 +123,7 @@ export class AvatarCacheManager {
       // Dispose of 3D resources
       this.disposeEntry(entry)
       
-      logger.cache('remove', key, { size: entry.size })
+      logger.debug(`Removed cache entry: ${key}`, 'AVATAR_CACHE', { size: entry.size })
       return true
     }
     
@@ -214,23 +214,24 @@ export class AvatarCacheManager {
    * Calculate 3D model size
    */
   private calculate3DModelSize(model: Object3D): number {
-    let size = 0
-
+    let size = 1024 // Base size estimate
+    
     model.traverse((child) => {
-      // Geometry size
-      if (child.geometry) {
-        if (child.geometry instanceof BufferGeometry) {
-          const attributes = child.geometry.attributes
-          Object.values(attributes).forEach(attribute => {
+      // Type-safe property access
+      const mesh = child as any
+      
+      if (mesh.geometry && mesh.geometry.attributes) {
+        const attributes = mesh.geometry.attributes
+        Object.values(attributes).forEach((attribute: any) => {
+          if (attribute?.array?.byteLength) {
             size += attribute.array.byteLength
-          })
-        }
+          }
+        })
       }
 
-      // Material size (textures)
-      if (child.material) {
-        const materials = Array.isArray(child.material) ? child.material : [child.material]
-        materials.forEach(material => {
+      if (mesh.material) {
+        const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material]
+        materials.forEach((material: any) => {
           size += this.calculateMaterialSize(material)
         })
       }
@@ -329,24 +330,29 @@ export class AvatarCacheManager {
    */
   private dispose3DModel(model: Object3D): void {
     model.traverse((child) => {
+      // Type-safe property access
+      const mesh = child as any
+      
       // Dispose geometry
-      if (child.geometry) {
-        child.geometry.dispose()
+      if (mesh.geometry) {
+        mesh.geometry.dispose()
       }
 
       // Dispose materials and textures
-      if (child.material) {
-        const materials = Array.isArray(child.material) ? child.material : [child.material]
-        materials.forEach(material => {
+      if (mesh.material) {
+        const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material]
+        materials.forEach((material: any) => {
           // Dispose textures
-          Object.values(material).forEach(value => {
+          Object.values(material).forEach((value: any) => {
             if (value && typeof value === 'object' && 'dispose' in value) {
-              (value as any).dispose()
+              value.dispose()
             }
           })
           
           // Dispose material
-          material.dispose()
+          if (material.dispose) {
+            material.dispose()
+          }
         })
       }
     })

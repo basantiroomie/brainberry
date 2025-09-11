@@ -16,7 +16,7 @@ export function useSafeCallback<T extends (...args: any[]) => any>(
   callback: T | undefined,
   deps: React.DependencyList
 ): T {
-  const callbackRef = useRef<T>()
+  const callbackRef = useRef<T | undefined>(callback)
   
   useEffect(() => {
     callbackRef.current = callback

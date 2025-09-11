@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react'
 import ProfilePicture from '@/components/ProfilePicture'
 import { AvatarUrlValidator } from '@/lib/avatar-url-validator'
 import { useSafeAvatar } from '@/lib/avatar-error-prevention'
+import { useAvatarRefresh } from '@/lib/avatar-refresh-manager'
 
 interface ChildAvatarDisplayProps {
   avatarUrl?: string | null
@@ -26,6 +27,8 @@ export const ChildAvatarDisplay: React.FC<ChildAvatarDisplayProps> = ({
   autoGenerateFromAvatar = true,
   onHeadshotGenerated
 }) => {
+  const [refreshKey, setRefreshKey] = useState(0)
+
   // Map child-specific sizes to ProfilePicture sizes
   const sizeMapping = {
     small: 'sm' as const,
@@ -33,7 +36,14 @@ export const ChildAvatarDisplay: React.FC<ChildAvatarDisplayProps> = ({
     large: 'lg' as const
   }
 
+  // Use the avatar refresh hook to listen for updates to this specific child
+  useAvatarRefresh(childId || '', () => {
+    console.log('ChildAvatarDisplay: Avatar refresh triggered for child', childId)
+    setRefreshKey(prev => prev + 1)
+  })
+
   // Process avatar URLs to get the best display URL for profile pictures
+  // Add refreshKey to force re-evaluation when profile updates
   const primaryUrl = headshotUrl || (avatarUrl ? AvatarUrlValidator.getBestDisplayUrl(avatarUrl, true) : null)
   const fallbackUrl = avatarUrl && avatarUrl !== primaryUrl ? AvatarUrlValidator.getBestDisplayUrl(avatarUrl, false) : null
 
@@ -49,10 +59,11 @@ export const ChildAvatarDisplay: React.FC<ChildAvatarDisplayProps> = ({
         headshotUrl,
         displayUrl,
         size,
-        error
+        error,
+        refreshKey
       })
     }
-  }, [childName, avatarUrl, headshotUrl, displayUrl, size, error])
+  }, [childName, avatarUrl, headshotUrl, displayUrl, size, error, refreshKey])
 
   if (isLoading) {
     return (

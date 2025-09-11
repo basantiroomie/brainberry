@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createSupabaseServerClient } from '@/lib/supabase-server'
+import { createSupabaseServerClient, createSupabaseServiceClient } from '@/lib/supabase-server'
 import { childCreateSchema, updateChildAvatarSchema, avatarCodeSchema } from '@/lib/schemas'
 import { requireEducator } from '@/lib/supabase-server'
 import { AvatarCodeUtils } from '@/lib/avatar-utils'
@@ -32,26 +32,49 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
 
 export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const { user } = await requireEducator()
-    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    
     const json = await req.json()
     const { id } = await params
-    const supabase = await createSupabaseServerClient()
     
-    console.log('[DEBUG] PUT /api/children/[id] - Request:', { 
+    console.log('[DEBUG] PUT /api/children/[id] - Request received:', { 
       childId: id, 
-      userId: user.id,
-      requestData: json 
+      requestData: json,
+      timestamp: new Date().toISOString()
     })
+    
+    // Enhanced authentication check
+    let user: any
+    try {
+      const authResult = await requireEducator()
+      user = authResult.user
+    } catch (authError) {
+      console.error('[DEBUG] Authentication failed:', authError)
+      return NextResponse.json({ 
+        error: 'Authentication required',
+        details: 'Please log in to access this resource'
+      }, { status: 401 })
+    }
+    
+    if (!user) {
+      console.error('[DEBUG] No user found after authentication')
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+    
+    console.log('[DEBUG] User authenticated:', { userId: user.id })
+    
+    // Create both regular and service clients for better flexibility
+    const supabase = await createSupabaseServerClient()
+    const serviceSupabase = createSupabaseServiceClient()
     
     // Check if this is an avatar update request
     const isAvatarUpdate = json.avatar_code || json.avatar_url || json.avatar_headshot_url
     
     if (isAvatarUpdate) {
+      console.log('[DEBUG] Processing avatar update request')
+      
       // Validate avatar update data
       const avatarParsed = updateChildAvatarSchema.safeParse(json)
       if (!avatarParsed.success) {
+        console.error('[DEBUG] Avatar validation failed:', avatarParsed.error.flatten())
         return NextResponse.json({ 
           error: 'Invalid avatar data', 
           details: avatarParsed.error.flatten() 
@@ -67,10 +90,15 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
           const urls = AvatarCodeUtils.codeToUrls(avatarData.avatar_code)
           updateData.avatar_url = urls.glbUrl
           updateData.avatar_headshot_url = urls.pngUrl
+          console.log('[DEBUG] Avatar code converted:', { 
+            code: avatarData.avatar_code,
+            glbUrl: urls.glbUrl,
+            pngUrl: urls.pngUrl
+          })
         } catch (error) {
-          console.error('Avatar code conversion error:', error)
+          console.error('[DEBUG] Avatar code conversion error:', error)
           return NextResponse.json({ 
-            error: 'Invalid avatar code format. Must be 6 uppercase alphanumeric characters.' 
+            error: 'Invalid avatar code format. Must be 6+ uppercase alphanumeric characters.' 
           }, { status: 400 })
         }
       } else {
@@ -79,43 +107,40 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
         if (avatarData.avatar_headshot_url) updateData.avatar_headshot_url = avatarData.avatar_headshot_url
       }
       
-      // Validate avatar URLs if provided
+      // Enhanced URL validation
       if (updateData.avatar_url) {
         try {
-          new URL(updateData.avatar_url)
-          // Validate it's a Ready Player Me URL
-          if (!updateData.avatar_url.includes('readyplayer.me') || !updateData.avatar_url.endsWith('.glb')) {
+          const url = new URL(updateData.avatar_url)
+          if (!url.hostname.includes('readyplayer.me') || !updateData.avatar_url.endsWith('.glb')) {
+            console.error('[DEBUG] Invalid avatar URL:', updateData.avatar_url)
             return NextResponse.json({ 
               error: 'Invalid avatar URL. Must be a Ready Player Me GLB URL.' 
             }, { status: 400 })
           }
-        } catch {
+        } catch (urlError) {
+          console.error('[DEBUG] Avatar URL parsing failed:', urlError)
           return NextResponse.json({ error: 'Invalid avatar URL format.' }, { status: 400 })
         }
       }
       
       if (updateData.avatar_headshot_url) {
         try {
-          new URL(updateData.avatar_headshot_url)
-          // Validate it's a Ready Player Me URL
-          if (!updateData.avatar_headshot_url.includes('readyplayer.me') || !updateData.avatar_headshot_url.endsWith('.png')) {
+          const url = new URL(updateData.avatar_headshot_url)
+          if (!url.hostname.includes('readyplayer.me') || !updateData.avatar_headshot_url.endsWith('.png')) {
+            console.error('[DEBUG] Invalid avatar headshot URL:', updateData.avatar_headshot_url)
             return NextResponse.json({ 
               error: 'Invalid avatar headshot URL. Must be a Ready Player Me PNG URL.' 
             }, { status: 400 })
           }
-        } catch {
+        } catch (urlError) {
+          console.error('[DEBUG] Avatar headshot URL parsing failed:', urlError)
           return NextResponse.json({ error: 'Invalid avatar headshot URL format.' }, { status: 400 })
         }
       }
       
-      // For avatar updates, always use service client to bypass RLS issues
-      console.log('[DEBUG] Avatar update - using service client to bypass RLS')
+      console.log('[DEBUG] Avatar URLs validated successfully')
       
-      // Import service client for RLS bypass
-      const { createSupabaseServiceClient } = await import('@/lib/supabase-server')
-      const serviceSupabase = createSupabaseServiceClient()
-      
-      // First verify the child exists
+      // First verify the child exists and user has permission
       const { data: existingChild, error: checkError } = await serviceSupabase
         .from('ChildProfile')
         .select('id, educator_id, name')
@@ -123,7 +148,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
         .single()
       
       if (checkError || !existingChild) {
-        console.error('Child not found during avatar update:', { 
+        console.error('[DEBUG] Child not found during avatar update:', { 
           id, 
           userId: user.id,
           error: checkError,
@@ -137,13 +162,17 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
         childId: existingChild.id,
         childName: existingChild.name,
         educatorId: existingChild.educator_id,
-        currentUserId: user.id
+        currentUserId: user.id,
+        updateData
       })
       
-      // Update avatar data using service client
+      // Update avatar data using service client to bypass RLS
       const { data: updatedChildren, error: updateError } = await serviceSupabase
         .from('ChildProfile')
-        .update(updateData)
+        .update({
+          ...updateData,
+          updated_at: new Date().toISOString()
+        })
         .eq('id', id)
         .select(`
           *,
@@ -151,17 +180,25 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
         `)
       
       if (updateError) {
-        console.error('Service client avatar update error:', updateError)
-        return NextResponse.json({ error: 'Failed to update child avatar' }, { status: 500 })
+        console.error('[DEBUG] Service client avatar update error:', updateError)
+        return NextResponse.json({ 
+          error: 'Failed to update child avatar',
+          details: updateError.message 
+        }, { status: 500 })
       }
       
       if (!updatedChildren || updatedChildren.length === 0) {
-        console.error('No children returned after update')
+        console.error('[DEBUG] No children returned after avatar update')
         return NextResponse.json({ error: 'Child not found or update failed' }, { status: 404 })
       }
       
       const child = updatedChildren[0]
-      console.log('[DEBUG] Avatar update successful:', { childId: child.id, childName: child.name })
+      console.log('[DEBUG] Avatar update successful:', { 
+        childId: child.id, 
+        childName: child.name,
+        avatarUrl: child.avatar_url,
+        headshotUrl: child.avatar_headshot_url
+      })
       
       return NextResponse.json({ 
         success: true, 
@@ -170,8 +207,11 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       })
     } else {
       // Handle regular child profile updates
+      console.log('[DEBUG] Processing profile update request')
+      
       const parsed = childCreateSchema.safeParse(json)
       if (!parsed.success) {
+        console.error('[DEBUG] Profile validation failed:', parsed.error.flatten())
         return NextResponse.json({ 
           error: 'Invalid child data', 
           details: parsed.error.flatten() 
@@ -180,20 +220,15 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       
       const data = parsed.data
       
-      // For profile updates, also use service client to ensure consistency
-      console.log('[DEBUG] Profile update - using service client to bypass RLS')
-      
-      const serviceSupabaseProfile = createSupabaseServiceClient()
-      
-      // First verify the child exists
-      const { data: existingChild, error: checkError } = await serviceSupabaseProfile
+      // First verify the child exists and user has permission
+      const { data: existingChild, error: checkError } = await serviceSupabase
         .from('ChildProfile')
         .select('id, educator_id, name')
         .eq('id', id)
         .single()
       
       if (checkError || !existingChild) {
-        console.error('Child not found during profile update:', { 
+        console.error('[DEBUG] Child not found during profile update:', { 
           id, 
           userId: user.id,
           error: checkError,
@@ -211,24 +246,28 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       })
       
       // Update profile data using service client
-      const { data: updatedChildren, error: updateError } = await serviceSupabaseProfile
+      const { data: updatedChildren, error: updateError } = await serviceSupabase
         .from('ChildProfile')
         .update({
           name: data.name,
           age: data.age,
           diagnosis: data.diagnosis,
-          notes: data.notes
+          notes: data.notes,
+          updated_at: new Date().toISOString()
         })
         .eq('id', id)
         .select()
       
       if (updateError) {
-        console.error('Service client profile update error:', updateError)
-        return NextResponse.json({ error: 'Failed to update child' }, { status: 500 })
+        console.error('[DEBUG] Service client profile update error:', updateError)
+        return NextResponse.json({ 
+          error: 'Failed to update child profile',
+          details: updateError.message 
+        }, { status: 500 })
       }
       
       if (!updatedChildren || updatedChildren.length === 0) {
-        console.error('No children returned after profile update')
+        console.error('[DEBUG] No children returned after profile update')
         return NextResponse.json({ error: 'Child not found or update failed' }, { status: 404 })
       }
       
@@ -238,8 +277,11 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       return NextResponse.json(child)
     }
   } catch (error) {
-    console.error('PUT child error:', error)
-    return NextResponse.json({ error: 'Failed to update child' }, { status: 500 })
+    console.error('[DEBUG] PUT child error:', error)
+    return NextResponse.json({ 
+      error: 'Failed to update child',
+      details: error instanceof Error ? error.message : 'Unknown error'
+    }, { status: 500 })
   }
 }
 

@@ -43,12 +43,13 @@ export default function ChildAvatarCreator({ isOpen, onClose, childProfile, onAv
 
     // Check if it's a URL
     if (trimmedValue.includes('models.readyplayer.me')) {
-      // Extract code from URL if it's a full URL
-      const urlMatch = trimmedValue.match(/models\.readyplayer\.me\/([A-Z0-9]{6,})/i)
+      // Extract code from URL if it's a full URL - support mixed case alphanumeric codes
+      const urlMatch = trimmedValue.match(/models\.readyplayer\.me\/([A-Z0-9a-z]{6,})/i)
       if (urlMatch) {
         const extractedCode = urlMatch[1].replace(/\.(glb|png)$/, '')
         if (extractedCode.length >= 6) {
-          // Valid URL with code
+          // Valid URL with code - no error
+          console.log('Valid URL detected:', trimmedValue)
           return
         }
       }
@@ -58,14 +59,18 @@ export default function ChildAvatarCreator({ isOpen, onClose, childProfile, onAv
         return
       }
 
-      if (!trimmedValue.includes('.glb') && !trimmedValue.includes('.png')) {
-        setCodeError('URL should contain .glb or .png extension')
+      // For direct URLs, just check if they contain a reasonable code
+      const directCodeMatch = trimmedValue.match(/models\.readyplayer\.me\/([A-Z0-9a-z]{6,})/i)
+      if (!directCodeMatch) {
+        setCodeError('URL should contain a valid avatar code (6+ characters)')
         return
       }
+
+      console.log('URL validation passed:', trimmedValue)
     } else {
       // Check if it's an avatar code (6 or more characters)
       if (trimmedValue.length >= 6) {
-        if (!/^[A-Z0-9]{6,}$/i.test(trimmedValue)) {
+        if (!/^[A-Z0-9a-z]{6,}$/i.test(trimmedValue)) {
           setCodeError('Code should contain only letters and numbers')
         }
       } else if (trimmedValue.length > 0) {
@@ -76,6 +81,8 @@ export default function ChildAvatarCreator({ isOpen, onClose, childProfile, onAv
 
   // Save avatar with improved code/URL handling
   const handleSaveAvatar = async () => {
+    console.log('Save Avatar clicked!', { avatarCode, codeError, saving })
+    
     if (!avatarCode.trim()) {
       setCodeError('Please enter an avatar code or URL')
       return
@@ -88,13 +95,14 @@ export default function ChildAvatarCreator({ isOpen, onClose, childProfile, onAv
 
       // Handle URL input (including partial URLs)
       if (trimmedInput.includes('models.readyplayer.me')) {
-        // Extract code from URL - support longer codes too
-        const urlMatch = trimmedInput.match(/models\.readyplayer\.me\/([A-Z0-9]{6,})/i)
+        // Extract code from URL - support longer codes and mixed case
+        const urlMatch = trimmedInput.match(/models\.readyplayer\.me\/([A-Z0-9a-z]{6,})/i)
         if (urlMatch) {
           const extractedCode = urlMatch[1].replace(/\.(glb|png)$/, '')
           // Use the full extracted code (don't truncate to 6 characters)
           glbUrl = `https://models.readyplayer.me/${extractedCode}.glb`
           pngUrl = `https://models.readyplayer.me/${extractedCode}.png`
+          console.log('Extracted from URL:', { extractedCode, glbUrl, pngUrl })
         } else {
           setCodeError('Could not extract avatar code from URL')
           return
@@ -103,35 +111,52 @@ export default function ChildAvatarCreator({ isOpen, onClose, childProfile, onAv
         // Handle codes (6+ characters)
         const upperCode = trimmedInput.toUpperCase()
 
-        // Validate code format - allow 6 or more characters
-        if (!/^[A-Z0-9]{6,}$/.test(upperCode)) {
+        // Validate code format - allow 6 or more characters with mixed case
+        if (!/^[A-Z0-9a-z]{6,}$/i.test(trimmedInput)) {
           setCodeError('Code must be at least 6 characters (letters and numbers only)')
           return
         }
 
-        // Convert code to URLs using the full code
-        glbUrl = `https://models.readyplayer.me/${upperCode}.glb`
-        pngUrl = `https://models.readyplayer.me/${upperCode}.png`
+        // Convert code to URLs using the full code (preserve original case)
+        glbUrl = `https://models.readyplayer.me/${trimmedInput}.glb`
+        pngUrl = `https://models.readyplayer.me/${trimmedInput}.png`
+        console.log('Direct code:', { trimmedInput, glbUrl, pngUrl })
       }
 
       setSaving(true)
+      console.log('Starting save request to child-avatar API:', { childId: childProfile.id, glbUrl, pngUrl })
 
-      // Update child with avatar URLs
-      const response = await fetch(`/api/children/${childProfile.id}`, {
+      // Update child avatar using the dedicated child avatar API
+      const response = await fetch('/api/child-avatar', {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
+          childId: childProfile.id,
           avatar_url: glbUrl,
           avatar_headshot_url: pngUrl,
         }),
       })
 
+      console.log('Save response:', { status: response.status, ok: response.ok })
+
       if (response.ok) {
-        toast.success('🎉 Your amazing avatar has been created!')
-        onAvatarSaved()
-        onClose()
+        const result = await response.json()
+        console.log('Avatar save response:', result)
+        
+        if (result.success && result.child) {
+          // Update sessionStorage with the new profile data
+          sessionStorage.setItem('childProfile', JSON.stringify(result.child))
+          
+          toast.success('🎉 Your amazing avatar has been created!')
+          
+          // Call the callback with the updated child data
+          onAvatarSaved()
+          onClose()
+        } else {
+          throw new Error('Invalid response format')
+        }
       } else {
         const errorData = await response.json().catch(() => ({ error: 'Unknown error' }))
         console.error('Avatar save failed:', {
@@ -319,19 +344,19 @@ export default function ChildAvatarCreator({ isOpen, onClose, childProfile, onAv
                       {avatarCode.startsWith('https://models.readyplayer.me/') ? (
                         <>
                           <div>
-                            <span className="font-bold">3D Model:</span> {avatarCode}
+                            <span className="font-bold">3D Model:</span> {avatarCode.includes('.glb') ? avatarCode : avatarCode + '.glb'}
                           </div>
                           <div>
-                            <span className="font-bold">Profile Picture:</span> {avatarCode.replace('.glb', '.png')}
+                            <span className="font-bold">Profile Picture:</span> {avatarCode.includes('.png') ? avatarCode.replace('.glb', '.png') : avatarCode.replace('.glb', '.png')}
                           </div>
                         </>
-                      ) : avatarCode.length >= 6 && /^[A-Z0-9]{6,}$/i.test(avatarCode) ? (
+                      ) : avatarCode.length >= 6 && /^[A-Z0-9a-z]{6,}$/i.test(avatarCode) ? (
                         <>
                           <div>
-                            <span className="font-bold">3D Model:</span> https://models.readyplayer.me/{avatarCode.toUpperCase()}.glb
+                            <span className="font-bold">3D Model:</span> https://models.readyplayer.me/{avatarCode}.glb
                           </div>
                           <div>
-                            <span className="font-bold">Profile Picture:</span> https://models.readyplayer.me/{avatarCode.toUpperCase()}.png
+                            <span className="font-bold">Profile Picture:</span> https://models.readyplayer.me/{avatarCode}.png
                           </div>
                         </>
                       ) : null}
@@ -351,11 +376,21 @@ export default function ChildAvatarCreator({ isOpen, onClose, childProfile, onAv
                   BACK TO CREATOR
                 </button>
                 <button
-                  onClick={handleSaveAvatar}
-                  disabled={!avatarCode || codeError || saving}
-                  className={`px-6 py-2 border-2 border-black shadow-brutal hover:shadow-brutal-lg font-bold flex items-center space-x-2 ${!avatarCode || codeError || saving
+                  onClick={() => {
+                    console.log('Button clicked! State:', { 
+                      avatarCode, 
+                      codeError, 
+                      saving, 
+                      trimLength: avatarCode.trim().length,
+                      isUrl: avatarCode.includes('models.readyplayer.me'),
+                      disabled: !avatarCode || !!codeError || saving
+                    })
+                    handleSaveAvatar()
+                  }}
+                  disabled={!avatarCode || !!codeError || saving}
+                  className={`px-6 py-2 border-2 border-black shadow-brutal hover:shadow-brutal-lg font-bold flex items-center space-x-2 ${!avatarCode || !!codeError || saving
                     ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                    : 'bg-chart-3 text-white'
+                    : 'bg-chart-3 text-white hover:bg-chart-3/90'
                     }`}
                 >
                   {saving ? (

@@ -318,12 +318,52 @@ export async function POST(req: Request) {
     
     // Determine action if not provided - if we have audio data, it's audio streaming
     const effectiveAction = action || (audioData ? 'stream_audio' : 'create_session')
-    console.log('🎤 Effective action:', effectiveAction)
+    console.log('🎤 Gemini Live request:', { action, sessionId: sessionId?.substring(0, 8) })
     
-    // Initialize Google GenAI
-    const ai = new GoogleGenAI({
-      apiKey: process.env.GEMINI_API_KEY!
-    })
+    // Enhanced environment check with detailed logging
+    if (!process.env.GEMINI_API_KEY) {
+      console.error('🎤 CRITICAL: GEMINI_API_KEY environment variable is missing')
+      console.error('🎤 Available env vars:', Object.keys(process.env).filter(k => k.includes('GEMINI') || k.includes('API')))
+      return NextResponse.json({
+        success: false,
+        error: 'API configuration error',
+        details: 'Gemini API key not configured on server. Please check Vercel environment variables.',
+        isQuotaError: false,
+        configError: true
+      }, { status: 500 })
+    }
+
+    // Validate API key format
+    const apiKey = process.env.GEMINI_API_KEY.trim()
+    if (!apiKey || apiKey.length < 20) {
+      console.error('🎤 Invalid GEMINI_API_KEY format or too short')
+      return NextResponse.json({
+        success: false,
+        error: 'Invalid API key format',
+        details: 'Gemini API key appears to be malformed or missing',
+        isQuotaError: false,
+        configError: true
+      }, { status: 500 })
+    }
+
+    console.log('🎤 API Key validated:', apiKey.substring(0, 10) + '...')
+    
+    // Initialize Google GenAI with error handling
+    let ai: GoogleGenAI
+    try {
+      ai = new GoogleGenAI({
+        apiKey: apiKey
+      })
+    } catch (error) {
+      console.error('🎤 Failed to initialize GoogleGenAI:', error)
+      return NextResponse.json({
+        success: false,
+        error: 'Failed to initialize AI service',
+        details: error instanceof Error ? error.message : 'Unknown initialization error',
+        isQuotaError: false,
+        configError: true
+      }, { status: 500 })
+    }
     
     const currentSessionId = sessionId || `audio-live-${Date.now()}`
     
