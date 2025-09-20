@@ -48,7 +48,7 @@ Educator → Game Mold → Child Interest Input → AI Content Generation → Pe
 
 ```bash
 # 1. Clone and install dependencies
-git clone [<your-repo-url>](https://github.com/basantiroomie/brainberry.git)
+git clone https://github.com/basantiroomie/brainberry.git
 cd brainberry
 npm install -g pnpm
 pnpm install
@@ -336,7 +336,7 @@ brainberry/
 
 ```bash
 # Essential setup
-git clone [<repo-url>](https://github.com/basantiroomie/brainberry.git) && cd brainberry
+git clone https://github.com/basantiroomie/brainberry.git && cd brainberry
 npm install -g pnpm && pnpm install
 cp .env.local.example .env.local
 # Edit .env.local with your API keys
