@@ -34,7 +34,6 @@ BrainBerry is a GenAI-assisted therapeutic mini-game platform that empowers educ
 | **Database** | PostgreSQL | Relational data with advanced features |
 | **AI/ML** | Google Gemini API | Content generation and personalization |
 | **Avatar/3D** | Ready Player Me | 3D avatar creation and customization |
-| **TTS** | ElevenLabs (optional) | Text-to-speech for accessibility |
 | **UI/Styling** | Tailwind CSS, Radix UI | Modern, accessible component system |
 | **Validation** | Zod | Runtime type validation |
 | **Charts** | Recharts | Data visualization |
@@ -210,7 +209,6 @@ brainberry/
 | **Supabase** | Backend-as-a-Service | Free tier available | [docs.supabase.com](https://docs.supabase.com) |
 | **Google Gemini** | AI content generation | Free tier: 60 req/min | [ai.google.dev](https://ai.google.dev) |
 | **Ready Player Me** | 3D avatar creation | Free tier available | [docs.readyplayer.me](https://docs.readyplayer.me) |
-| **ElevenLabs** | Text-to-speech | Paid service | [elevenlabs.io/docs](https://elevenlabs.io/docs) |
 
 ### 📚 Open Source Libraries
 
@@ -338,7 +336,7 @@ brainberry/
 
 ```bash
 # Essential setup
-git clone <repo-url> && cd brainberry
+git clone [<repo-url>](https://github.com/basantiroomie/brainberry.git) && cd brainberry
 npm install -g pnpm && pnpm install
 cp .env.local.example .env.local
 # Edit .env.local with your API keys
