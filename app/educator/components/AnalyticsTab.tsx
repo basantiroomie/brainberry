@@ -1,6 +1,6 @@
 "use client"
-import { BarChart3, TrendingUp, Download, RefreshCw, Activity } from "lucide-react"
-import { useEffect, useState } from "react"
+import { BarChart3, TrendingUp, Download, RefreshCw, Activity, FileText, FileSpreadsheet, FileImage, Check, Loader2, ChevronDown } from "lucide-react"
+import { useEffect, useState, useRef } from "react"
 import { toast } from 'sonner'
 import { useMockData } from './MockDataContext'
 
@@ -16,6 +16,13 @@ export default function AnalyticsTab() {
   const [mockDataset, setMockDataset] = useState<any | null>(null)
   const [timeline, setTimeline] = useState<any[]>([])
   const [insights, setInsights] = useState<any | null>(null)
+  
+  // Export functionality states
+  const [isExporting, setIsExporting] = useState(false)
+  const [exportDropdownOpen, setExportDropdownOpen] = useState(false)
+  const [exportProgress, setExportProgress] = useState(0)
+  const [lastExportTime, setLastExportTime] = useState<string | null>(null)
+  const dropdownRef = useRef<HTMLDivElement>(null)
 
   // Generate random mock data by default
   function generateRandomMockData() {
@@ -152,6 +159,354 @@ export default function AnalyticsTab() {
     return { strengths, focus, momentum }
   }
 
+  // File generation functions
+  const generatePDFReport = async (data: any, childName: string, timeframe: string) => {
+    const reportHTML = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>BrainBerry Analytics Report</title>
+        <style>
+          body { font-family: Arial, sans-serif; margin: 40px; background: #f8fafc; }
+          .header { text-align: center; margin-bottom: 30px; padding: 20px; background: white; border: 4px solid #000; }
+          .logo { font-size: 28px; font-weight: bold; color: #4F46E5; margin-bottom: 10px; }
+          .subtitle { color: #666; font-size: 16px; }
+          .metric-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; margin: 30px 0; }
+          .metric-card { border: 4px solid #000; padding: 20px; text-align: center; background: white; box-shadow: 8px 8px 0px 0px #000; }
+          .metric-value { font-size: 32px; font-weight: bold; color: #059669; margin-bottom: 8px; }
+          .metric-label { font-size: 14px; font-weight: bold; color: #666; text-transform: uppercase; }
+          .skills-section { background: white; border: 4px solid #000; padding: 30px; margin: 20px 0; box-shadow: 8px 8px 0px 0px #000; }
+          .skill-item { display: flex; justify-content: space-between; align-items: center; padding: 15px 0; border-bottom: 2px solid #f0f0f0; }
+          .skill-item:last-child { border-bottom: none; }
+          .skill-name { font-weight: bold; font-size: 16px; }
+          .skill-value { font-weight: bold; color: #059669; font-size: 18px; }
+          .progress-bar { width: 200px; height: 12px; background: #e5e7eb; border: 2px solid #000; margin-left: 20px; position: relative; }
+          .progress-fill { height: 100%; background: linear-gradient(90deg, #059669, #10b981); }
+          .insights { margin-top: 30px; background: white; border: 4px solid #000; padding: 30px; box-shadow: 8px 8px 0px 0px #000; }
+          .timestamp { font-size: 12px; color: #666; margin-top: 30px; text-align: center; }
+          h2, h3 { color: #1f2937; border-bottom: 3px solid #4F46E5; padding-bottom: 10px; }
+        </style>
+      </head>
+      <body>
+        <div class="header">
+          <div class="logo">🧠 BrainBerry Analytics Report</div>
+          <div class="subtitle">Child: ${childName} | Period: ${timeframe}</div>
+          <div class="subtitle">Generated: ${new Date().toLocaleDateString()}</div>
+        </div>
+        
+        <div class="metric-grid">
+          <div class="metric-card">
+            <div class="metric-value">${data?.totalSessions || 0}</div>
+            <div class="metric-label">Total Sessions</div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-value">${data ? Math.round((data.totalDuration/3600)*10)/10 : 0}h</div>
+            <div class="metric-label">Total Time</div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-value">${data?.avgCompletion || 0}%</div>
+            <div class="metric-label">Avg Completion</div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-value">${data?.engagementRate || 0}%</div>
+            <div class="metric-label">Engagement Rate</div>
+          </div>
+        </div>
+
+        <div class="skills-section">
+          <h3>📊 Skills Progress Analysis</h3>
+          ${(data?.skills || []).map((skill: any) => `
+            <div class="skill-item">
+              <span class="skill-name">${skill.skill}</span>
+              <div style="display: flex; align-items: center;">
+                <div class="progress-bar">
+                  <div class="progress-fill" style="width: ${skill.value}%;"></div>
+                </div>
+                <span class="skill-value">${skill.value}%</span>
+              </div>
+            </div>
+          `).join('')}
+        </div>
+
+        <div class="insights">
+          <h3>📈 Summary & Insights</h3>
+          <p><strong>Report Period:</strong> ${timeframe}</p>
+          <p><strong>Total Data Points:</strong> ${data?.totalSessions || 0} sessions analyzed</p>
+          <p><strong>Average Session Duration:</strong> ${data ? Math.round((data.totalDuration/(data.totalSessions || 1))/60) : 0} minutes</p>
+          <p><strong>Engagement Level:</strong> ${(data?.engagementRate || 0) > 80 ? 'Excellent' : (data?.engagementRate || 0) > 60 ? 'Good' : 'Needs Attention'}</p>
+        </div>
+        
+        <div class="timestamp">
+          Report generated by BrainBerry Analytics Platform on ${new Date().toLocaleString()}
+          <br>For therapeutic and educational tracking purposes only.
+        </div>
+      </body>
+      </html>
+    `
+    return reportHTML
+  }
+
+  const generateExcelData = (data: any, childName: string, timeframe: string) => {
+    const csvContent = [
+      ['BrainBerry Analytics Export'],
+      ['Child', childName],
+      ['Period', timeframe],
+      ['Generated', new Date().toLocaleString()],
+      [''],
+      ['SUMMARY METRICS'],
+      ['Metric', 'Value'],
+      ['Total Sessions', data?.totalSessions || 0],
+      ['Total Duration (hours)', data ? Math.round((data.totalDuration/3600)*10)/10 : 0],
+      ['Average Completion (%)', data?.avgCompletion || 0],
+      ['Engagement Rate (%)', data?.engagementRate || 0],
+      [''],
+      ['SKILLS BREAKDOWN'],
+      ['Skill Area', 'Progress (%)'],
+      ...(data?.skills || []).map((skill: any) => [skill.skill, skill.value]),
+      [''],
+      ['ADDITIONAL DATA'],
+      ['Average Session Duration (min)', data ? Math.round((data.totalDuration/(data.totalSessions || 1))/60) : 0],
+      ['Completion Rate Category', (data?.avgCompletion || 0) > 80 ? 'Excellent' : (data?.avgCompletion || 0) > 60 ? 'Good' : 'Needs Support'],
+      ['Engagement Category', (data?.engagementRate || 0) > 80 ? 'Highly Engaged' : (data?.engagementRate || 0) > 60 ? 'Moderately Engaged' : 'Low Engagement']
+    ].map(row => row.join(',')).join('\n')
+    
+    return csvContent
+  }
+
+  const generateChartImage = async (data: any, childName: string) => {
+    const canvas = document.createElement('canvas')
+    canvas.width = 1400
+    canvas.height = 1000
+    const ctx = canvas.getContext('2d')!
+    
+    // Background
+    ctx.fillStyle = '#f8fafc'
+    ctx.fillRect(0, 0, canvas.width, canvas.height)
+    
+    // Main container
+    ctx.fillStyle = '#ffffff'
+    ctx.fillRect(50, 50, canvas.width - 100, canvas.height - 100)
+    ctx.strokeStyle = '#000000'
+    ctx.lineWidth = 4
+    ctx.strokeRect(50, 50, canvas.width - 100, canvas.height - 100)
+    
+    // Title
+    ctx.fillStyle = '#4F46E5'
+    ctx.font = 'bold 36px Arial'
+    ctx.textAlign = 'center'
+    ctx.fillText('🧠 BrainBerry Analytics', canvas.width / 2, 120)
+    
+    ctx.fillStyle = '#666666'
+    ctx.font = '24px Arial'
+    ctx.fillText(`${childName} - ${selectedTimeframe}`, canvas.width / 2, 160)
+    
+    // Skills chart
+    const skills = data?.skills || []
+    const barHeight = 50
+    const barSpacing = 80
+    const startY = 220
+    const maxBarWidth = 700
+    const chartStartX = 180
+    
+    ctx.font = 'bold 20px Arial'
+    ctx.textAlign = 'left'
+    ctx.fillStyle = '#1f2937'
+    ctx.fillText('Skills Progress Overview', chartStartX, 200)
+    
+    skills.forEach((skill: any, index: number) => {
+      const y = startY + (index * barSpacing)
+      const barWidth = (skill.value / 100) * maxBarWidth
+      
+      // Skill name
+      ctx.fillStyle = '#374151'
+      ctx.font = '16px Arial'
+      ctx.textAlign = 'right'
+      ctx.fillText(skill.skill, chartStartX - 20, y + 35)
+      
+      // Progress bar background
+      ctx.fillStyle = '#e5e7eb'
+      ctx.fillRect(chartStartX, y, maxBarWidth, barHeight)
+      ctx.strokeStyle = '#000000'
+      ctx.lineWidth = 2
+      ctx.strokeRect(chartStartX, y, maxBarWidth, barHeight)
+      
+      // Progress bar fill with gradient
+      const gradient = ctx.createLinearGradient(chartStartX, y, chartStartX + barWidth, y)
+      gradient.addColorStop(0, '#059669')
+      gradient.addColorStop(1, '#10b981')
+      ctx.fillStyle = gradient
+      ctx.fillRect(chartStartX, y, barWidth, barHeight)
+      
+      // Percentage text
+      ctx.fillStyle = '#ffffff'
+      ctx.font = 'bold 18px Arial'
+      ctx.textAlign = 'center'
+      ctx.fillText(`${skill.value}%`, chartStartX + (barWidth / 2), y + 32)
+    })
+    
+    // Summary metrics at bottom
+    const metricsY = startY + (skills.length * barSpacing) + 50
+    ctx.fillStyle = '#1f2937'
+    ctx.font = 'bold 18px Arial'
+    ctx.textAlign = 'left'
+    
+    const metrics = [
+      `Sessions: ${data?.totalSessions || 0}`,
+      `Time: ${data ? Math.round((data.totalDuration/3600)*10)/10 : 0}h`,
+      `Completion: ${data?.avgCompletion || 0}%`,
+      `Engagement: ${data?.engagementRate || 0}%`
+    ]
+    
+    metrics.forEach((metric, index) => {
+      ctx.fillText(metric, chartStartX + (index * 180), metricsY)
+    })
+    
+    // Timestamp
+    ctx.fillStyle = '#9ca3af'
+    ctx.font = '14px Arial'
+    ctx.textAlign = 'center'
+    ctx.fillText(`Generated: ${new Date().toLocaleString()}`, canvas.width / 2, canvas.height - 80)
+    
+    return new Promise<string>((resolve) => {
+      canvas.toBlob((blob) => {
+        if (blob) {
+          const url = URL.createObjectURL(blob)
+          resolve(url)
+        }
+      }, 'image/png')
+    })
+  }
+
+  const downloadFile = (content: string, filename: string, type: string) => {
+    const blob = new Blob([content], { type })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = filename
+    link.style.display = 'none'
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    URL.revokeObjectURL(url)
+  }
+
+  // Export functionality
+  const exportFormats = [
+    { 
+      id: 'pdf',
+      name: 'PDF Report',
+      description: 'Comprehensive report with charts',
+      icon: FileText,
+      color: 'red-500'
+    },
+    { 
+      id: 'excel',
+      name: 'Excel Spreadsheet',
+      description: 'Raw data for analysis',
+      icon: FileSpreadsheet,
+      color: 'green-500'
+    },
+    { 
+      id: 'image',
+      name: 'PNG Charts',
+      description: 'Visual charts for presentations',
+      icon: FileImage,
+      color: 'blue-500'
+    }
+  ]
+
+  const simulateExport = async (format: string) => {
+    setIsExporting(true)
+    setExportProgress(0)
+    setExportDropdownOpen(false)
+    
+    // Simulate progress with actual file generation
+    const progressSteps = [
+      { progress: 20, message: 'Preparing data...' },
+      { progress: 40, message: 'Generating content...' },
+      { progress: 60, message: 'Creating file...' },
+      { progress: 80, message: 'Finalizing export...' },
+      { progress: 100, message: 'Complete!' }
+    ]
+
+    for (const step of progressSteps) {
+      await new Promise(resolve => setTimeout(resolve, 600))
+      setExportProgress(step.progress)
+      if (step.progress < 100) {
+        toast.loading(step.message, { id: 'export-progress' })
+      }
+    }
+
+    // Generate filename
+    const childName = selectedChild ? children.find(c => c.id === selectedChild)?.name || 'All_Children' : 'All_Children'
+    const dateStr = new Date().toISOString().split('T')[0]
+    const timeStr = new Date().toTimeString().split(' ')[0].replace(/:/g, '-')
+    
+    try {
+      if (format === 'pdf') {
+        const htmlContent = await generatePDFReport(summary, childName, selectedTimeframe)
+        const filename = `BrainBerry_Report_${childName}_${selectedTimeframe}_${dateStr}_${timeStr}.html`
+        downloadFile(htmlContent, filename, 'text/html')
+        toast.dismiss('export-progress')
+        toast.success('PDF Report exported! 📄', {
+          description: `File: ${filename} saved to Downloads`,
+          duration: 5000
+        })
+        
+      } else if (format === 'excel') {
+        const csvContent = generateExcelData(summary, childName, selectedTimeframe)
+        const filename = `BrainBerry_Data_${childName}_${selectedTimeframe}_${dateStr}_${timeStr}.csv`
+        downloadFile(csvContent, filename, 'text/csv')
+        toast.dismiss('export-progress')
+        toast.success('Excel Data exported! 📊', {
+          description: `File: ${filename} saved to Downloads`,
+          duration: 5000
+        })
+        
+      } else if (format === 'image') {
+        const imageUrl = await generateChartImage(summary, childName)
+        const filename = `BrainBerry_Chart_${childName}_${selectedTimeframe}_${dateStr}_${timeStr}.png`
+        
+        // Download the image
+        const link = document.createElement('a')
+        link.href = imageUrl
+        link.download = filename
+        link.style.display = 'none'
+        document.body.appendChild(link)
+        link.click()
+        document.body.removeChild(link)
+        URL.revokeObjectURL(imageUrl)
+        
+        toast.dismiss('export-progress')
+        toast.success('Chart Image exported! �️', {
+          description: `File: ${filename} saved to Downloads`,
+          duration: 5000
+        })
+      }
+      
+      setLastExportTime(new Date().toLocaleString())
+      
+    } catch (error) {
+      toast.dismiss('export-progress')
+      toast.error('Export failed. Please try again.')
+      console.error('Export error:', error)
+    }
+    
+    setIsExporting(false)
+    setExportProgress(0)
+  }
+
+  // Click outside handler for dropdown
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setExportDropdownOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
+
   async function loadChildren() {
     // Children are loaded in loadSummary with random mock data
     return
@@ -281,14 +636,91 @@ export default function AnalyticsTab() {
             </div>
           </div>
           <div className="flex space-x-3 flex-wrap">
-            <button onClick={loadSummary} className="bg-chart-4 text-white px-6 py-3 border-2 border-black shadow-brutal font-bold flex items-center space-x-2">
+            <button onClick={loadSummary} className="bg-chart-4 text-white px-6 py-3 border-2 border-black shadow-brutal font-bold flex items-center space-x-2 hover:shadow-brutal-lg transition-all duration-200">
               <RefreshCw className={`h-4 w-4 ${loading? 'animate-spin':''}`} />
               <span>{loading ? 'LOADING' : 'REFRESH'}</span>
             </button>
-            <button className="bg-chart-3 text-white px-6 py-3 border-2 border-black shadow-brutal font-bold flex items-center space-x-2">
-              <Download className="h-5 w-5" />
-              <span>EXPORT</span>
-            </button>
+            
+            {/* Enhanced Export Button */}
+            <div className="relative" ref={dropdownRef}>
+              <button 
+                onClick={() => setExportDropdownOpen(!exportDropdownOpen)}
+                disabled={isExporting}
+                className={`relative overflow-hidden px-6 py-3 border-2 border-black font-bold flex items-center space-x-2 transition-all duration-300 ${
+                  isExporting 
+                    ? 'bg-gray-400 cursor-not-allowed shadow-brutal' 
+                    : 'bg-gradient-to-r from-chart-3 to-green-500 hover:from-green-500 hover:to-chart-3 text-white shadow-brutal hover:shadow-brutal-lg hover:-translate-y-1'
+                }`}
+              >
+                {isExporting ? (
+                  <>
+                    <Loader2 className="h-5 w-5 animate-spin" />
+                    <span>EXPORTING {exportProgress}%</span>
+                    <div 
+                      className="absolute bottom-0 left-0 h-1 bg-white bg-opacity-50 transition-all duration-500"
+                      style={{ width: `${exportProgress}%` }}
+                    />
+                  </>
+                ) : (
+                  <>
+                    <Download className="h-5 w-5" />
+                    <span>EXPORT</span>
+                    <ChevronDown className={`h-4 w-4 transition-transform duration-200 ${exportDropdownOpen ? 'rotate-180' : ''}`} />
+                  </>
+                )}
+              </button>
+
+              {/* Export Dropdown */}
+              {exportDropdownOpen && !isExporting && (
+                <div className="absolute top-full mt-2 right-0 w-80 bg-white border-4 border-black shadow-brutal-xl z-50 transform origin-top transition-all duration-200 ease-out scale-100 opacity-100">
+                  <div className="p-4">
+                    <div className="text-sm font-bold text-gray-700 mb-3 flex items-center space-x-2">
+                      <Download className="h-4 w-4" />
+                      <span>Choose Export Format</span>
+                    </div>
+                    <div className="space-y-2">
+                      {exportFormats.map((format) => {
+                        const IconComponent = format.icon
+                        return (
+                          <button
+                            key={format.id}
+                            onClick={() => simulateExport(format.id)}
+                            className="w-full text-left p-3 border-2 border-gray-200 hover:border-black hover:shadow-brutal transition-all duration-200 bg-white hover:bg-gray-50 group hover:-translate-y-0.5"
+                          >
+                            <div className="flex items-center space-x-3">
+                              <div className={`p-2 rounded transition-colors ${
+                                format.color === 'red-500' ? 'bg-red-100 group-hover:bg-red-200' :
+                                format.color === 'green-500' ? 'bg-green-100 group-hover:bg-green-200' :
+                                'bg-blue-100 group-hover:bg-blue-200'
+                              }`}>
+                                <IconComponent className={`h-5 w-5 ${
+                                  format.color === 'red-500' ? 'text-red-500' :
+                                  format.color === 'green-500' ? 'text-green-500' :
+                                  'text-blue-500'
+                                }`} />
+                              </div>
+                              <div className="flex-1">
+                                <div className="font-bold text-sm">{format.name}</div>
+                                <div className="text-xs text-gray-600">{format.description}</div>
+                              </div>
+                              <ChevronDown className="h-4 w-4 text-gray-400 -rotate-90" />
+                            </div>
+                          </button>
+                        )
+                      })}
+                    </div>
+                    {lastExportTime && (
+                      <div className="mt-3 pt-3 border-t border-gray-200">
+                        <div className="text-xs text-gray-500 flex items-center space-x-1">
+                          <Check className="h-3 w-3 text-green-500" />
+                          <span>Last export: {lastExportTime}</span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </div>

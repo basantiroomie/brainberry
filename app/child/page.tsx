@@ -45,6 +45,19 @@ export default function ChildDashboard() {
       // Redirect to login if no child profile found
       router.push('/login')
     }
+
+    // Listen for child profile updates from other components
+    const handleProfileUpdate = (event: CustomEvent) => {
+      const updatedProfile = event.detail
+      console.log('Received child profile update:', updatedProfile.name)
+      setChildProfile(updatedProfile)
+    }
+
+    window.addEventListener('childProfileUpdated', handleProfileUpdate as EventListener)
+    
+    return () => {
+      window.removeEventListener('childProfileUpdated', handleProfileUpdate as EventListener)
+    }
   }, [router])
 
   const handleLogout = () => {

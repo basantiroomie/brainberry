@@ -210,7 +210,23 @@ export default function LoginPage() {
           )}
 
           {modalStep === "login" && (
-            <form onSubmit={handleLogin} className="space-y-4">
+            <>
+              {/* Sample Credentials Info */}
+              <div className="mb-4 p-3 bg-blue-50 border-2 border-blue-300 rounded">
+                <h3 className="font-bold text-sm text-blue-800 mb-2">🔑 Sample Login Credentials</h3>
+                {selectedRole === "EDUCATOR" ? (
+                  <div className="text-xs text-blue-700">
+                    <p><strong>Email:</strong> ed@mail.com</p>
+                    <p><strong>Password:</strong> 1234</p>
+                  </div>
+                ) : (
+                  <div className="text-xs text-blue-700">
+                    <p><strong>Aryan's Access Code:</strong> ES5R6P</p>
+                  </div>
+                )}
+              </div>
+
+              <form onSubmit={handleLogin} className="space-y-4">
               {selectedRole === "EDUCATOR" ? (
                 <>
                   <div>
@@ -220,6 +236,7 @@ export default function LoginPage() {
                       value={loginData.email}
                       onChange={(e) => setLoginData({ ...loginData, email: e.target.value })}
                       className="w-full p-3 border-2 border-black focus:outline-none focus:shadow-brutal"
+                      placeholder="ed@mail.com (sample)"
                       required
                     />
                   </div>
@@ -230,6 +247,7 @@ export default function LoginPage() {
                       value={loginData.password}
                       onChange={(e) => setLoginData({ ...loginData, password: e.target.value })}
                       className="w-full p-3 border-2 border-black focus:outline-none focus:shadow-brutal"
+                      placeholder="1234 (sample)"
                       required
                     />
                   </div>
@@ -254,7 +272,7 @@ export default function LoginPage() {
                     value={loginData.childCode}
                     onChange={(e) => setLoginData({ ...loginData, childCode: e.target.value })}
                     className="w-full p-3 border-2 border-black focus:outline-none focus:shadow-brutal text-center text-lg font-mono"
-                    placeholder="Enter your code"
+                    placeholder="ES5R6P (Aryan's account)"
                     required
                   />
                 </div>
@@ -290,7 +308,8 @@ export default function LoginPage() {
                   )}
                 </div>
               )}
-            </form>
+              </form>
+            </>
           )}
         </div>
       </div>

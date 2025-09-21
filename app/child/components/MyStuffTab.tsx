@@ -6,6 +6,7 @@ import { SimpleAvatarViewer } from "@/components/SimpleAvatarViewer"
 import AvatarChatCoordinator from "@/components/AvatarChatCoordinator"
 import ChildAvatarCreator from "./ChildAvatarCreator"
 import { toast } from 'sonner'
+import { avatarRefreshManager } from '@/lib/avatar-refresh-manager'
 
 interface ChildProgress {
   completedAssignments: number
@@ -165,15 +166,49 @@ export default function MyStuffTab({ childProfile }: MyStuffTabProps) {
   }
 
   // Handle avatar creation success
-  const handleAvatarSaved = () => {
-    // Trigger a refresh of the child profile
-    setRefreshProfile(prev => prev + 1)
-    toast.success('🎉 Your avatar has been saved! It will appear in your profile shortly.')
-    
-    // Update the session storage with new avatar data
-    setTimeout(() => {
-      window.location.reload() // Simple refresh to update all avatar displays
-    }, 1000)
+  const handleAvatarSaved = async () => {
+    try {
+      // Get updated profile from sessionStorage (updated by the avatar creator)
+      const updatedProfileData = sessionStorage.getItem('childProfile')
+      if (updatedProfileData) {
+        const updatedProfile = JSON.parse(updatedProfileData)
+        
+        console.log('Avatar saved and profile updated:', {
+          childId: updatedProfile.id,
+          avatarUrl: updatedProfile.avatar_url,
+          headshotUrl: updatedProfile.avatar_headshot_url
+        })
+        
+        // Trigger a refresh of the child profile state
+        setRefreshProfile(prev => prev + 1)
+        
+        // Use the avatar refresh manager to handle cache clearing and notifications
+        await avatarRefreshManager.notifyAvatarUpdated({
+          childId: updatedProfile.id,
+          oldAvatarUrl: childProfile?.avatar_url,
+          newAvatarUrl: updatedProfile.avatar_url,
+          oldHeadshotUrl: childProfile?.avatar_headshot_url,
+          newHeadshotUrl: updatedProfile.avatar_headshot_url,
+          timestamp: new Date()
+        })
+        
+        toast.success('🎉 Your avatar has been saved and updated everywhere!')
+      } else {
+        // Fallback: reload page
+        toast.success('🎉 Your avatar has been saved! Refreshing page...')
+        setTimeout(() => {
+          window.location.reload()
+        }, 1000)
+      }
+    } catch (error) {
+      console.error('Error refreshing profile after avatar save:', error)
+      toast.success('🎉 Your avatar has been saved! Refreshing page...')
+      
+      // Fallback: reload page after a delay
+      setTimeout(() => {
+        window.location.reload()
+      }, 1000)
+    }
   }
 
   // Show avatar view section with creation capability
