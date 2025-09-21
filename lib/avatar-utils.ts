@@ -1,5 +1,8 @@
 // Avatar utilities index - exports all avatar-related utilities
-export { default as AvatarService, AvatarCodeUtils } from './avatar-service'
+import { AvatarCodeUtils } from './avatar-service'
+
+export { default as AvatarService } from './avatar-service'
+export { AvatarCodeUtils } from './avatar-service'
 export { LipsyncManager, getLipsyncManager, resetLipsyncManager } from './lipsync-manager'
 export { AvatarTTS, ElevenLabsTTS, createTTSInstance } from './tts-utils'
 export { ttsConfig, elevenLabsConfig, getBestVoice } from './tts-config'

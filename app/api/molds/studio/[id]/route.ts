@@ -3,13 +3,14 @@ import { createSupabaseServerClient, requireEducator } from '@/lib/supabase-serv
 
 export async function DELETE(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const { user } = await requireEducator()
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-    const moldId = params.id
+    const resolvedParams = await params
+    const moldId = resolvedParams.id
     const supabase = await createSupabaseServerClient()
 
     // Verify ownership

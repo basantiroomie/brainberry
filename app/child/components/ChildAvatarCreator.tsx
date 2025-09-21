@@ -352,7 +352,7 @@ export default function ChildAvatarCreator({ isOpen, onClose, childProfile, onAv
                 </button>
                 <button
                   onClick={handleSaveAvatar}
-                  disabled={!avatarCode || codeError || saving}
+                  disabled={!avatarCode || !!codeError || saving}
                   className={`px-6 py-2 border-2 border-black shadow-brutal hover:shadow-brutal-lg font-bold flex items-center space-x-2 ${!avatarCode || codeError || saving
                     ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
                     : 'bg-chart-3 text-white'

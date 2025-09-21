@@ -206,10 +206,11 @@ export class AvatarErrorHandler {
     
     try {
       // @ts-ignore - performance.memory is not in all browsers
-      return window.performance?.memory ? {
-        usedJSHeapSize: window.performance.memory.usedJSHeapSize,
-        totalJSHeapSize: window.performance.memory.totalJSHeapSize,
-        jsHeapSizeLimit: window.performance.memory.jsHeapSizeLimit
+      const performanceWithMemory = window.performance as any
+      return performanceWithMemory?.memory ? {
+        usedJSHeapSize: performanceWithMemory.memory.usedJSHeapSize,
+        totalJSHeapSize: performanceWithMemory.memory.totalJSHeapSize,
+        jsHeapSizeLimit: performanceWithMemory.memory.jsHeapSizeLimit
       } : null
     } catch {
       return null

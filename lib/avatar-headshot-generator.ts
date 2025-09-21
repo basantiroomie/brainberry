@@ -142,7 +142,7 @@ export class AvatarHeadshotGenerator {
           (error) => {
             clearTimeout(timeout)
             console.error('Error loading avatar for headshot:', error)
-            reject(new Error(`Failed to load GLB file: ${error.message || error}`))
+            reject(new Error(`Failed to load GLB file: ${(error as Error)?.message || error}`))
           }
         )
       } catch (error) {

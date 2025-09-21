@@ -1,15 +1,12 @@
 "use client"
 
-import { useState, useEffect } from 'react'
-import { Plus, Trash2, Edit3, ArrowUp, ArrowDown, Copy, Settings, Image, Volume2, Play, LucideBadgeJapaneseYen, AlertOctagon, AudioLines } from 'lucide-react'
+import { useState, useEffect, useMemo } from 'react'
+import { Plus, Trash2, Edit3, ArrowUp, ArrowDown, Copy, Settings, Play } from 'lucide-react'
 import { MoldValidationIndicator } from './MoldValidationIndicator'
 import { SceneBuilder } from './SceneBuilder'
 import { CustomizationSettings } from './CustomizationSettings'
 import { MetaDataEditor } from './MetaDataEditor'
-import { DstAlphaFactor, DstColorFactor } from 'three'
-import { validateAvatarUrl } from '@/lib/avatar-url-utils'
-import { setDefaultAutoSelectFamilyAttemptTimeout } from 'net'
-import { sigmoid } from 'face-api.js'
+import { type Mold, type Scene, type Asset } from '../lib/mold-normalize'
 
 interface ValidationError {
   type: 'critical' | 'warning' | 'info'
@@ -17,30 +14,6 @@ interface ValidationError {
   section?: string
   field?: string
   sceneIndex?: number
-}
-
-interface Scene {
-  id: string
-  title: string
-  narrative: string
-  instructions: string
-  assets: any[]
-  pacingHints: any
-  reinforcement: string
-}
-
-interface Mold {
-  id?: string | null
-  name: string
-  category: string
-  structureType: string
-  experienceType: string
-  primaryObjective: string
-  rules: string
-  scenes: Scene[]
-  customization: any
-  meta: any
-  version: number
 }
 
 interface MoldStudioBuilderProps {
@@ -155,6 +128,18 @@ export function MoldStudioBuilder({ mold, onChange, validationErrors }: MoldStud
   const sectionErrors = (section: string): ValidationError[] => {
     return validationErrors.filter(error => error.section === section)
   }
+
+  const sceneErrorMap = useMemo(() => {
+    const map = new Map<number, { critical: number; warning: number; info: number }>()
+    for (const e of validationErrors) {
+      if (e.section === 'scenes' && typeof e.sceneIndex === 'number') {
+        const cur = map.get(e.sceneIndex) || { critical: 0, warning: 0, info: 0 }
+        cur[e.type]++ as any
+        map.set(e.sceneIndex, cur)
+      }
+    }
+    return map
+  }, [validationErrors])
 
   const sections = [
     { id: 'basic', label: 'Basic Info', icon: Edit3 },
@@ -301,7 +286,11 @@ export function MoldStudioBuilder({ mold, onChange, validationErrors }: MoldStud
             </div>
             
             <div className="space-y-2">
-              {mold!.scenes.map((scene: Scene, index: number) => (
+              {mold!.scenes.map((scene: Scene, index: number) => {
+                const counts = sceneErrorMap.get(index) || { critical: 0, warning: 0, info: 0 }
+                const criticalCount = counts.critical
+                const warningCount = counts.warning
+                return (
                 <div
                   key={scene.id}
                   className={`p-3 border-2 border-black cursor-pointer transition-all ${
@@ -314,7 +303,21 @@ export function MoldStudioBuilder({ mold, onChange, validationErrors }: MoldStud
                   <div className="flex items-center justify-between">
                     <div className="flex-1">
                       <div className="font-bold text-sm">{scene.title || `Scene ${index + 1}`}</div>
-                      <div className="text-xs text-gray-600 truncate">{scene.instructions}</div>
+                      <div className="text-xs text-gray-600 truncate">{scene.instructions || 'No instructions yet'}</div>
+                      {(criticalCount > 0 || warningCount > 0) && (
+                        <div className="mt-1 flex items-center gap-2">
+                          {criticalCount > 0 && (
+                            <span className="text-[10px] font-bold bg-red-500 text-white px-1.5 py-0.5 rounded">
+                              {criticalCount} critical
+                            </span>
+                          )}
+                          {warningCount > 0 && (
+                            <span className="text-[10px] font-bold bg-yellow-400 text-black px-1.5 py-0.5 rounded">
+                              {warningCount} warn
+                            </span>
+                          )}
+                        </div>
+                      )}
                     </div>
                     
                     <div className="flex items-center space-x-1 ml-2">
@@ -351,15 +354,15 @@ export function MoldStudioBuilder({ mold, onChange, validationErrors }: MoldStud
                     </div>
                   </div>
                 </div>
-              ))}
+              )})}
             </div>
           </div>
 
           {/* Scene Editor */}
           <div className="lg:col-span-2">
             <SceneBuilder
-              scene={mold!.scenes[selectedScene]}
-              onChange={(updates: Partial<Scene>) => updateScene(selectedScene, updates)}
+              scene={mold!.scenes[selectedScene] as any}
+              onChange={(updates: any) => updateScene(selectedScene, updates)}
               validationErrors={validationErrors.filter(e => e.sceneIndex === selectedScene)}
             />
           </div>
@@ -378,7 +381,7 @@ export function MoldStudioBuilder({ mold, onChange, validationErrors }: MoldStud
       {/* Metadata & Learning Goals */}
       {activeSection === 'metadata' && (
         <MetaDataEditor
-          meta={mold!.meta}
+          meta={mold!.meta as any}
           onChange={(meta: any) => updateMold({ meta })}
           validationErrors={sectionErrors('metadata')}
         />

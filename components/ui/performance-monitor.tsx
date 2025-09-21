@@ -28,12 +28,16 @@ export function PerformanceMonitor() {
 
     // Monitor LCP, FID, CLS (optional - only if web-vitals is installed)
     try {
-      import("web-vitals").then(({ getCLS, getFID, getFCP, getLCP, getTTFB }) => {
-        getCLS(console.log)
-        getFID(console.log)
-        getFCP(console.log)
-        getLCP(console.log)
-        getTTFB(console.log)
+      // Type-safe dynamic import for optional web-vitals
+      import("web-vitals" as any).then((webVitals: any) => {
+        if (webVitals) {
+          const { getCLS, getFID, getFCP, getLCP, getTTFB } = webVitals
+          getCLS(console.log)
+          getFID(console.log)
+          getFCP(console.log)
+          getLCP(console.log)
+          getTTFB(console.log)
+        }
       }).catch(() => {
         // web-vitals not installed, skip
       })

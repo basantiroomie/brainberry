@@ -7,25 +7,42 @@ import { createSupabaseServerClient, requireEducator } from '@/lib/supabase-serv
 import { gameMoldCreateSchema } from '@/lib/schemas'
 
 // List & Create
-export async function GET() {
+export async function GET(req: NextRequest) {
   try {
     const { user } = await requireEducator()
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     
     const supabase = await createSupabaseServerClient()
-    
+    const summary = req.nextUrl.searchParams.get('summary')
+
+    const select = summary
+      ? 'id,name,category,structure_type,experience_type,primary_objective,version,age_min,age_max,metadata'
+      : `*, scenes:Scene(*, assets:Asset(*))`
+
     const { data: molds, error } = await supabase
       .from('GameMold')
-      .select(`
-        *,
-        scenes:Scene(
-          *,
-          assets:Asset(*)
-        )
-      `)
+      .select(select as any)
+      .order('updated_at', { ascending: false })
     
     if (error) {
       console.error('Get molds error:', error)
+      
+      // Check if it's a paused project error
+      if (error.message?.includes('column') && error.message?.includes('does not exist')) {
+        return NextResponse.json({ 
+          error: 'Database schema issue - some migrations may not be applied', 
+          details: error.message 
+        }, { status: 500 })
+      }
+      
+      // Check for connection/timeout errors that might indicate paused project
+      if (error.message?.includes('timeout') || error.message?.includes('connection') || error.code === 'PGRST301') {
+        return NextResponse.json({ 
+          error: 'Database connection issue - project may be paused. Please check Supabase dashboard.', 
+          details: error.message 
+        }, { status: 503 })
+      }
+      
       return NextResponse.json({ error: 'Failed to fetch molds' }, { status: 500 })
     }
     

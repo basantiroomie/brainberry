@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createSupabaseServerClient } from '@/lib/supabase-server'
+import { createSupabaseServerClient, createSupabaseServiceClient } from '@/lib/supabase-server'
 import { childCreateSchema, updateChildAvatarSchema, avatarCodeSchema } from '@/lib/schemas'
 import { requireEducator } from '@/lib/supabase-server'
 import { AvatarCodeUtils } from '@/lib/avatar-utils'
@@ -111,8 +111,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       // For avatar updates, always use service client to bypass RLS issues
       console.log('[DEBUG] Avatar update - using service client to bypass RLS')
       
-      // Import service client for RLS bypass
-      const { createSupabaseServiceClient } = await import('@/lib/supabase-server')
+      // Use service client for RLS bypass
       const serviceSupabase = createSupabaseServiceClient()
       
       // First verify the child exists

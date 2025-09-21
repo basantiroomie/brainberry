@@ -35,17 +35,7 @@ export async function POST(request: NextRequest) {
           console.log(`🔊 Gemini TTS: Trying ${modelName} with new SDK format`)
           
           const model = genAI.getGenerativeModel({ 
-            model: modelName,
-            generationConfig: {
-              responseModalities: ["AUDIO"],
-              speechConfig: {
-                voiceConfig: {
-                  prebuiltVoiceConfig: {
-                    voiceName: childFriendlyVoices[0]  // Use child-friendly voice
-                  }
-                }
-              }
-            }
+            model: modelName
           })
 
           const result = await model.generateContent(text)

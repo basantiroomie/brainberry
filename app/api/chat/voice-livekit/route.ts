@@ -298,7 +298,7 @@ export async function POST(req: Request) {
         console.error('JSON parse error:', parseError);
         console.error('Character at error position:', rawBody.charAt(1));
         console.error('First 50 chars of raw body:', JSON.stringify(rawBody.substring(0, 50)));
-        return Response.json({ 
+        return NextResponse.json({ 
           error: 'Invalid JSON in request body',
           details: parseError instanceof Error ? parseError.message : 'Unknown error',
           preview: rawBody.substring(0, 100)

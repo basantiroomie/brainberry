@@ -1,25 +1,10 @@
 "use client"
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { Search, Eye, Plus } from 'lucide-react'
+import { normalizeMoldArrayFromApi } from '@/lib/mold-normalize'
 
-interface Mold {
-  id: string
-  name: string
-  category: string
-  structureType: string
-  experienceType: string
-  primaryObjective: string
-  scenes: any[]
-  meta: {
-    ageRange: { min: number; max: number }
-    difficulty: string
-    learnerProfiles: string[]
-  }
-  version: number
-  createdAt?: string
-  updatedAt?: string
-}
+import { Mold } from '../lib/mold-normalize'
 
 interface MoldLibraryProps {
   onMoldSelect: (mold: Mold | null) => void
@@ -27,9 +12,11 @@ interface MoldLibraryProps {
 
 export function MoldLibrary({ onMoldSelect }: MoldLibraryProps) {
   const [selectedCategory, setSelectedCategory] = useState<string>("all")
+  const [searchInput, setSearchInput] = useState('')
   const [searchQuery, setSearchQuery] = useState('')
   const [molds, setMolds] = useState<Mold[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string>('')
 
   useEffect(() => {
     loadMolds()
@@ -38,41 +25,81 @@ export function MoldLibrary({ onMoldSelect }: MoldLibraryProps) {
   const loadMolds = async () => {
     try {
       setLoading(true)
-      const response = await fetch('/api/molds')
-      if (response.ok) {
-        const data = await response.json()
-        setMolds(data)
+      setError('')
+      const response = await fetch('/api/molds?summary=1')
+      
+      if (!response.ok) {
+        // Try to get the error details from the response
+        let errorMessage = `HTTP ${response.status}`
+        try {
+          const errorData = await response.json()
+          if (errorData.error) {
+            errorMessage = errorData.error
+          }
+        } catch (e) {
+          // Ignore JSON parsing errors, use status message
+        }
+        throw new Error(errorMessage)
       }
+      
+      const data = await response.json()
+      const normalized = normalizeMoldArrayFromApi(data)
+      setMolds(normalized)
     } catch (error) {
       console.error('Failed to load molds:', error)
+      
+      // Try to get more specific error information
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+      
+      if (errorMessage.includes('project may be paused')) {
+        setError('⚠️ Your Supabase project is paused. Please go to https://app.supabase.com and unpause your project to continue.')
+      } else if (errorMessage.includes('Database connection issue')) {
+        setError('Database connection issue. Please check if your Supabase project is active and try again.')
+      } else if (errorMessage.includes('Database schema issue')) {
+        setError('Database schema issue. Some migrations may need to be applied. Check the console for details.')
+      } else if (errorMessage.includes('Failed to fetch')) {
+        setError('Network error. Please check your internet connection and try again.')
+      } else if (errorMessage.includes('HTTP 500')) {
+        setError('Server error. Please check the browser console and server logs for details.')
+      } else {
+        setError(`Failed to load molds: ${errorMessage}`)
+      }
     } finally {
       setLoading(false)
     }
   }
 
-  // Dynamic categories based on actual molds
-  const categories = (() => {
-    const catCounts: Record<string, number> = {}
-    molds.forEach(m => { 
-      catCounts[m.category] = (catCounts[m.category] || 0) + 1 
-    })
-    const entries = Object.entries(catCounts).map(([id, count]) => ({ 
-      id, 
-      name: id.charAt(0).toUpperCase() + id.slice(1), 
-      count 
-    }))
-    return [
-      { id: 'all', name: 'All Categories', count: molds.length }, 
-      ...entries
-    ]
-  })()
+  // Debounce search input -> searchQuery
+  useEffect(() => {
+    const t = setTimeout(() => setSearchQuery(searchInput), 250)
+    return () => clearTimeout(t)
+  }, [searchInput])
 
-  const filteredMolds = molds.filter((mold: Mold) => {
-    const matchesCategory = selectedCategory === 'all' || mold.category === selectedCategory
-    const matchesSearch = mold.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                         mold.primaryObjective.toLowerCase().includes(searchQuery.toLowerCase())
-    return matchesCategory && matchesSearch
-  })
+  // Dynamic categories based on actual molds (memoized)
+  const categories = useMemo(() => {
+    const catCounts: Record<string, number> = {}
+    for (const m of molds) {
+      catCounts[m.category] = (catCounts[m.category] || 0) + 1
+    }
+    const entries = Object.entries(catCounts).map(([id, count]) => ({
+      id,
+      name: id.charAt(0).toUpperCase() + id.slice(1),
+      count,
+    }))
+    return [{ id: 'all', name: 'All Categories', count: molds.length }, ...entries]
+  }, [molds])
+
+  const filteredMolds = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase()
+    return molds.filter((mold: Mold) => {
+      const matchesCategory = selectedCategory === 'all' || mold.category === selectedCategory
+      const matchesSearch =
+        !q ||
+        mold.name.toLowerCase().includes(q) ||
+        (mold.primaryObjective || '').toLowerCase().includes(q)
+      return matchesCategory && matchesSearch
+    })
+  }, [molds, selectedCategory, searchQuery])
 
   return (
     <div className="space-y-6">
@@ -97,8 +124,8 @@ export function MoldLibrary({ onMoldSelect }: MoldLibraryProps) {
               <input
                 type="text"
                 placeholder="Search molds..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
+                value={searchInput}
+                onChange={(e) => setSearchInput(e.target.value)}
                 className="pl-10 pr-4 py-3 border-2 border-black w-64 font-bold"
               />
             </div>
@@ -145,6 +172,17 @@ export function MoldLibrary({ onMoldSelect }: MoldLibraryProps) {
           <div className="text-center py-8">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600 mx-auto mb-4"></div>
             <p className="text-gray-600">Loading molds...</p>
+          </div>
+        ) : error ? (
+          <div className="text-center py-12 bg-red-50 border-2 border-red-200 rounded">
+            <h3 className="text-lg font-bold text-red-700 mb-2">{error}</h3>
+            <p className="text-sm text-red-600 mb-4">Check your connection or sign-in status.</p>
+            <button
+              onClick={loadMolds}
+              className="bg-red-600 text-white px-6 py-2 border-2 border-black shadow-brutal font-bold text-sm"
+            >
+              Retry
+            </button>
           </div>
         ) : filteredMolds.length === 0 ? (
           <div className="text-center py-12 bg-gray-50 border-2 border-gray-200 rounded">

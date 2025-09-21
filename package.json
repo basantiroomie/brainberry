@@ -7,6 +7,8 @@
     "dev": "next dev",
     "lint": "next lint",
     "start": "next start",
+    "test": "vitest",
+    "test:run": "vitest run",
     "type-check": "tsc --noEmit",
     "deploy:vercel": "vercel --prod",
     "deploy:railway": "railway up",

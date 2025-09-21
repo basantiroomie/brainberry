@@ -9,6 +9,7 @@ import { MoldLibrary } from '@/components/MoldLibrary'
 import { QuickStartTutorial } from '@/components/QuickStartTutorial'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
+import { normalizeMoldFromApi, type Mold } from '@/lib/mold-normalize'
 
 interface ValidationError {
   type: 'critical' | 'warning' | 'info'
@@ -16,20 +17,6 @@ interface ValidationError {
   section?: string
   field?: string
   sceneIndex?: number
-}
-
-interface Mold {
-  id?: string | null
-  name: string
-  category: string
-  structureType: string
-  experienceType: string
-  primaryObjective: string
-  rules: string
-  scenes: any[]
-  customization: any
-  meta: any
-  version: number
 }
 
 export default function MoldStudioPage() {
@@ -42,8 +29,21 @@ export default function MoldStudioPage() {
   
   const router = useRouter()
 
+  // Warn on navigation with unsaved changes
+  useEffect(() => {
+    const handler = (e: BeforeUnloadEvent) => {
+      if (hasUnsavedChanges) {
+        e.preventDefault()
+        e.returnValue = ''
+      }
+    }
+    window.addEventListener('beforeunload', handler)
+    return () => window.removeEventListener('beforeunload', handler)
+  }, [hasUnsavedChanges])
+
   const handleMoldSelect = (mold: any) => {
-    setCurrentMold(mold)
+    const normalized = mold ? normalizeMoldFromApi(mold) : null
+    setCurrentMold(normalized)
     setActiveTab('builder')
   }
 
@@ -55,8 +55,15 @@ export default function MoldStudioPage() {
   const handleMoldChange = (mold: Mold) => {
     setCurrentMold(mold)
     setHasUnsavedChanges(true)
-    // Auto-validate on changes
-    validateMold(mold)
+    // Debounced auto-validate on changes
+    scheduleValidate(mold)
+  }
+
+  // Debounce validation to reduce API calls while typing
+  let validateTimer: any
+  const scheduleValidate = (mold: Mold) => {
+    if (validateTimer) clearTimeout(validateTimer)
+    validateTimer = setTimeout(() => validateMold(mold), 350)
   }
 
   const validateMold = async (mold: Mold) => {
@@ -67,6 +74,10 @@ export default function MoldStudioPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(mold)
       })
+      if (response.status === 401) {
+        setValidationErrors([{ type: 'critical', message: 'You must be signed in as an educator to validate.' }])
+        return
+      }
       const result = await response.json()
       setValidationErrors(result.errors || [])
     } catch (error) {
@@ -80,7 +91,8 @@ export default function MoldStudioPage() {
   const handleSave = async () => {
     if (!currentMold) return
     
-    if (validationErrors.length > 0) {
+    const hasCritical = validationErrors.some(e => e.type === 'critical')
+    if (hasCritical) {
       toast.error('Cannot save mold with validation errors')
       setActiveTab('validation')
       return
@@ -94,15 +106,28 @@ export default function MoldStudioPage() {
       })
       
       if (!response.ok) {
+        if (response.status === 400) {
+          const body = await response.json()
+          if (body?.validationErrors) {
+            setValidationErrors(body.validationErrors)
+            setActiveTab('validation')
+            throw new Error('Validation failed')
+          }
+        }
+        if (response.status === 401) {
+          throw new Error('Unauthorized. Please sign in as an educator.')
+        }
         throw new Error('Failed to save mold')
       }
       
       const savedMold = await response.json()
-      setCurrentMold(savedMold)
+      const normalized = normalizeMoldFromApi(savedMold)
+      setCurrentMold(normalized)
       setHasUnsavedChanges(false)
       toast.success('Mold saved successfully!')
     } catch (error) {
-      toast.error('Failed to save mold')
+      const message = error instanceof Error ? error.message : 'Failed to save mold'
+      toast.error(message)
     }
   }
 

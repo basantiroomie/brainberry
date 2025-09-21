@@ -1,6 +1,6 @@
 // Avatar caching and memory management system
 import { logger } from '@/utils/logger'
-import { Object3D, Texture, Material, Geometry, BufferGeometry } from 'three'
+import { Object3D, Texture, Material, BufferGeometry, Mesh } from 'three'
 
 export interface CacheEntry {
   key: string
@@ -123,7 +123,7 @@ export class AvatarCacheManager {
       // Dispose of 3D resources
       this.disposeEntry(entry)
       
-      logger.cache('remove', key, { size: entry.size })
+      logger.cache('clear', key, { size: entry.size })
       return true
     }
     
@@ -217,20 +217,23 @@ export class AvatarCacheManager {
     let size = 0
 
     model.traverse((child) => {
-      // Geometry size
-      if (child.geometry) {
-        if (child.geometry instanceof BufferGeometry) {
-          const attributes = child.geometry.attributes
-          Object.values(attributes).forEach(attribute => {
-            size += attribute.array.byteLength
+      // Type-safe geometry check
+      const meshChild = child as Mesh
+      if (meshChild.geometry) {
+        if (meshChild.geometry instanceof BufferGeometry) {
+          const attributes = meshChild.geometry.attributes
+          Object.values(attributes).forEach((attribute: any) => {
+            if (attribute?.array?.byteLength) {
+              size += attribute.array.byteLength
+            }
           })
         }
       }
 
       // Material size (textures)
-      if (child.material) {
-        const materials = Array.isArray(child.material) ? child.material : [child.material]
-        materials.forEach(material => {
+      if (meshChild.material) {
+        const materials = Array.isArray(meshChild.material) ? meshChild.material : [meshChild.material]
+        materials.forEach((material: any) => {
           size += this.calculateMaterialSize(material)
         })
       }
@@ -329,15 +332,16 @@ export class AvatarCacheManager {
    */
   private dispose3DModel(model: Object3D): void {
     model.traverse((child) => {
+      const meshChild = child as Mesh
       // Dispose geometry
-      if (child.geometry) {
-        child.geometry.dispose()
+      if (meshChild.geometry) {
+        meshChild.geometry.dispose()
       }
 
       // Dispose materials and textures
-      if (child.material) {
-        const materials = Array.isArray(child.material) ? child.material : [child.material]
-        materials.forEach(material => {
+      if (meshChild.material) {
+        const materials = Array.isArray(meshChild.material) ? meshChild.material : [meshChild.material]
+        materials.forEach((material: any) => {
           // Dispose textures
           Object.values(material).forEach(value => {
             if (value && typeof value === 'object' && 'dispose' in value) {

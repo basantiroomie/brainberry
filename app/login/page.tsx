@@ -36,6 +36,30 @@ export default function LoginPage() {
     })
   }, [])
 
+  const testConnection = async () => {
+    setError(null)
+    setLoading(true)
+    try {
+      console.log('🔗 Testing Supabase connection...')
+      
+      // Test basic connectivity
+      const { data, error } = await supabase.auth.getSession()
+      
+      if (error) {
+        throw new Error(`Connection test failed: ${error.message}`)
+      }
+      
+      console.log('🔗 Connection test successful!')
+      setError('✅ Connection test successful! Supabase is reachable.')
+      
+    } catch (err: any) {
+      console.error('🔗 Connection test failed:', err)
+      setError(`❌ Connection test failed: ${err.message}`)
+    } finally {
+      setLoading(false)
+    }
+  }
+
   const selectRole = (role: UserRole) => {
     setSelectedRole(role)
     setModalStep("login")
@@ -56,17 +80,47 @@ export default function LoginPage() {
     e.preventDefault()
     setError(null)
     setLoading(true)
+    
     try {
       if (selectedRole === 'EDUCATOR') {
+        // Add debugging information
+        console.log('🔐 Attempting authentication...')
+        console.log('Auth mode:', authMode)
+        console.log('Supabase URL configured:', !!process.env.NEXT_PUBLIC_SUPABASE_URL)
+        console.log('Supabase key configured:', !!process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY)
+        
         if (authMode === 'signup') {
           if (loginData.password !== loginData.confirmPassword) throw new Error('Passwords do not match')
-          const { data: signUpData, error: signUpErr } = await supabase.auth.signUp({ email: loginData.email, password: loginData.password })
-          if (signUpErr) throw signUpErr
-          if (signUpData.user) router.push('/educator')
+          
+          console.log('🔐 Attempting sign up...')
+          const { data: signUpData, error: signUpErr } = await supabase.auth.signUp({ 
+            email: loginData.email, 
+            password: loginData.password 
+          })
+          
+          if (signUpErr) {
+            console.error('🔐 Sign up error:', signUpErr)
+            throw signUpErr
+          }
+          if (signUpData.user) {
+            console.log('🔐 Sign up successful:', signUpData.user.id)
+            router.push('/educator')
+          }
         } else {
-          const { data, error: signInError } = await supabase.auth.signInWithPassword({ email: loginData.email, password: loginData.password })
-          if (signInError) throw signInError
-          if (data.user) router.replace('/educator')
+          console.log('🔐 Attempting sign in...')
+          const { data, error: signInError } = await supabase.auth.signInWithPassword({ 
+            email: loginData.email, 
+            password: loginData.password 
+          })
+          
+          if (signInError) {
+            console.error('🔐 Sign in error:', signInError)
+            throw signInError
+          }
+          if (data.user) {
+            console.log('🔐 Sign in successful:', data.user.id)
+            router.replace('/educator')
+          }
         }
       } else if (selectedRole === 'CHILD') {
         // Validate child access code via API
@@ -85,7 +139,20 @@ export default function LoginPage() {
         router.push('/child')
       }
     } catch (err: any) {
-      setError(err.message || 'Login failed')
+      console.error('🔐 Login error:', err)
+      
+      // Provide more specific error messages for common issues
+      if (err.message === 'Failed to fetch') {
+        setError('Network error: Unable to connect to authentication service. Please check your internet connection and try again.')
+      } else if (err.message?.includes('Invalid login credentials')) {
+        setError('Invalid email or password. Please check your credentials and try again.')
+      } else if (err.message?.includes('Email not confirmed')) {
+        setError('Please check your email and click the confirmation link before signing in.')
+      } else if (err.message?.includes('signup_disabled')) {
+        setError('New user registration is currently disabled. Please contact support.')
+      } else {
+        setError(err.message || 'Login failed. Please try again.')
+      }
     } finally {
       setLoading(false)
     }
@@ -192,7 +259,21 @@ export default function LoginPage() {
                   />
                 </div>
               )}
-              {error && <div className="text-red-600 text-sm font-medium">{error}</div>}
+              {error && (
+                <div>
+                  <div className="text-red-600 text-sm font-medium mb-2">{error}</div>
+                  {process.env.NODE_ENV !== 'production' && error.includes('Failed to fetch') && (
+                    <button
+                      type="button"
+                      onClick={testConnection}
+                      disabled={loading}
+                      className="w-full bg-gray-200 text-gray-700 py-2 px-4 border-2 border-gray-400 text-xs font-medium hover:bg-gray-300 disabled:opacity-50"
+                    >
+                      {loading ? 'Testing...' : 'Test Supabase Connection'}
+                    </button>
+                  )}
+                </div>
+              )}
               <button
                 type="submit"
                 disabled={loading}

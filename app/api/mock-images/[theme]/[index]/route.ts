@@ -5,9 +5,10 @@ import { NextRequest, NextResponse } from 'next/server'
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { theme: string; index: string } }
+  { params }: { params: Promise<{ theme: string; index: string }> }
 ) {
-  const { theme, index } = params
+  const resolvedParams = await params
+  const { theme, index } = resolvedParams
   
   const colors = getThemeColors(theme)
   const emoji = getThemeEmoji(theme, parseInt(index) - 1)
