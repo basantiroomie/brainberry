@@ -9,6 +9,12 @@
 
 BrainBerry is a GenAI-assisted therapeutic mini-game platform that empowers educators to create safe, personalized cognitive and developmental training experiences for children. The platform uses immutable "Game Molds" (evidence-informed templates) that AI fills with child-relevant content while preserving pedagogical integrity.
 
+### 🔗 Quick links
+- 👉 Setup guide: [Local Development](./setup.md)
+- 👉 Product presentation: [Presentation](./ShadesOfDark.pdf)
+- 👉 Live deployment demo (no keys required): https://brainberry.vercel.app/
+
+
 ### 🎯 Target Audience
 - **Neurodiverse children** (early childhood to pre-teen) needing engaging repetition & adaptive reinforcement
 - **Educators/Therapists/Caregivers** supervising therapeutic or learning sessions
@@ -44,24 +50,6 @@ BrainBerry is a GenAI-assisted therapeutic mini-game platform that empowers educ
 Educator → Game Mold → Child Interest Input → AI Content Generation → Personalized Game → Play Session → Analytics
 ```
 
-## 🚀 Quick Start (TL;DR)
-
-```bash
-# 1. Clone and install dependencies
-git clone https://github.com/basantiroomie/brainberry.git
-cd brainberry
-npm install -g pnpm
-pnpm install
-
-# 2. Setup environment
-cp .env.local.example .env.local
-# Edit .env.local with your API keys (see setup guide below)
-
-# 3. Start development server
-pnpm dev
-# Open http://localhost:3000
-```
-
 ## 🛠️ Prerequisites
 
 Before setting up BrainBerry, ensure you have:
@@ -72,133 +60,11 @@ Before setting up BrainBerry, ensure you have:
 | **pnpm** | Latest | `npm install -g pnpm` | Fast package manager |
 | **Git** | Latest | [Download](https://git-scm.com/) | Version control |
 
-### Optional Dependencies
 | Tool | Purpose | Installation |
 |------|---------|--------------|
 | **Supabase CLI** | Local database management | `npm install -g supabase` |
 | **VS Code** | Recommended editor | [Download](https://code.visualstudio.com/) |
 
-## ⚙️ Environment Setup
-
-### Step 1: Create Environment File
-```bash
-# Copy the example environment file
-cp .env.local.example .env.local
-```
-
-### Step 2: Configure Required Variables
-
-Edit `.env.local` with your preferred text editor:
-
-```bash
-# Open with VS Code (recommended)
-code .env.local
-
-# Or with nano
-nano .env.local
-
-# Or with vim
-vim .env.local
-```
-
-### Step 3: Fill in the Variables
-
-#### 🔐 Required Variables (Minimum to run)
-
-```bash
-# Supabase Configuration (REQUIRED)
-NEXT_PUBLIC_SUPABASE_URL="https://your-project.supabase.co"
-NEXT_PUBLIC_SUPABASE_ANON_KEY="your-anon-key-from-supabase-dashboard"
-SUPABASE_SERVICE_ROLE_KEY="your-service-role-key-from-supabase-dashboard"
-
-# Environment
-NODE_ENV="development"
-NEXT_PUBLIC_APP_URL="http://localhost:3000"
-```
-
-#### 🤖 AI Features (Recommended)
-
-```bash
-# Google Gemini API (FREE tier available)
-GEMINI_API_KEY="your-gemini-api-key"
-# Get from: https://makersuite.google.com/app/apikey
-```
-
-#### 🎭 Avatar Features (Optional)
-
-```bash
-# Ready Player Me (FREE tier available)
-RPM_API_KEY="your-readyplayer-me-api-key"
-RPM_APP_ID="your-readyplayer-me-app-id"
-RPM_SUBDOMAIN="your-subdomain.readyplayer.me"
-NEXT_PUBLIC_RPM_SUBDOMAIN="your-subdomain"
-# Get from: https://readyplayer.me/developers
-```
-
-
-### 🔑 How to Get API Keys
-
-<details>
-<summary><strong>Supabase Setup (REQUIRED)</strong></summary>
-
-1. Go to [supabase.com](https://supabase.com)
-2. Create a new account or sign in
-3. Click "New Project"
-4. Choose organization and fill project details
-5. Wait for database setup (2-3 minutes)
-6. Go to Settings → API
-7. Copy your Project URL and anon public key
-8. Copy your service_role secret key ⚠️ (Keep this secure!)
-
-</details>
-
-<details>
-<summary><strong>Google Gemini API (FREE)</strong></summary>
-
-1. Go to [Google AI Studio](https://makersuite.google.com/app/apikey)
-2. Sign in with your Google account
-3. Click "Create API Key"
-4. Copy the generated key
-
-</details>
-
-<details>
-<summary><strong>Ready Player Me (FREE tier)</strong></summary>
-
-1. Go to [Ready Player Me Developers](https://readyplayer.me/developers)
-2. Sign up for a developer account
-3. Create a new application
-4. Get your App ID and API key from the dashboard
-5. Set up your subdomain
-
-</details>
-
-## 📁 Project Structure
-
-```
-brainberry/
-├── 📱 app/                     # Next.js App Router
-│   ├── 🔐 api/                # API endpoints
-│   ├── 👨‍🏫 educator/            # Educator interface
-│   ├── 👶 child/               # Child interface
-│   ├── 🏠 community/           # Community features
-│   └── 📄 (auth)/              # Authentication pages
-├── 🧩 components/              # Reusable UI components
-│   ├── 🎭 Avatar*.tsx         # Avatar-related components
-│   ├── 🎮 Game*.tsx           # Game components
-│   ├── 🎨 Mold*.tsx           # Game mold components
-│   └── 🎯 ui/                 # Base UI components
-├── 🎣 hooks/                   # Custom React hooks
-├── 📚 lib/                     # Utility libraries
-│   ├── 🤖 ai-generation-service.ts
-│   ├── 🎭 avatar-*.ts         # Avatar management
-│   ├── 🗃️ supabase-*.ts       # Database clients
-│   └── 🛡️ *-error-*.ts        # Error handling
-├── 🔧 scripts/                # Build and utility scripts
-├── 🗃️ supabase/               # Database migrations & config
-├── 🏷️ types/                   # TypeScript type definitions
-└── 🎨 public/                 # Static assets
-```
 
 ## 📊 Data Sources & Open Source Components
 
@@ -313,7 +179,7 @@ brainberry/
 
 | Feature | Status | Description |
 |---------|--------|-------------|
-| ✅ **Game Molds** | Live | Matching Cards, Sorting Challenges |
+| ✅ **Game Molds** | Live | Matching Cards, Sorting Challenges, Drawing game |
 | ✅ **AI Personalization** | Live | Gemini-powered content generation |
 | ✅ **Avatar System** | Live | Ready Player Me integration |
 | ✅ **Progress Tracking** | Live | Basic analytics and scoring |
@@ -322,7 +188,7 @@ brainberry/
 
 ### 🔮 Planned Features
 
-- **Additional Game Types**: Puzzle games, drawing challenges, storytelling
+- **Additional Game Types**: Storytelling games, Advanced games
 - **Advanced Personalization**: Learning style adaptation, difficulty adjustment
 - **Collaborative Features**: Multiplayer games, peer learning
 - **Accessibility**: Screen reader support, motor accessibility options
@@ -353,5 +219,5 @@ supabase start    # Local database
 supabase studio   # Database UI
 supabase db reset # Reset with seed data
 ```
-
 **Happy building & personalizing!** 🍓
+
