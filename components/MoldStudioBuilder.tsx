@@ -74,6 +74,22 @@ export function MoldStudioBuilder({ mold, onChange, validationErrors }: MoldStud
     }
   }, [mold, onChange])
 
+  // Map scene validation counts (must be declared before any early returns to keep hook order stable)
+  const sceneErrorMap = useMemo(() => {
+    const map = new Map<number, { critical: number; warning: number; info: number }>()
+    for (const e of validationErrors) {
+      if (e.section === 'scenes' && typeof e.sceneIndex === 'number') {
+        const cur = map.get(e.sceneIndex) || { critical: 0, warning: 0, info: 0 }
+        // increment counts safely
+        if (e.type === 'critical') cur.critical++
+        else if (e.type === 'warning') cur.warning++
+        else cur.info++
+        map.set(e.sceneIndex, cur)
+      }
+    }
+    return map
+  }, [validationErrors])
+
   if (!mold) return null
 
   const updateMold = (updates: Partial<Mold>) => {
@@ -129,17 +145,7 @@ export function MoldStudioBuilder({ mold, onChange, validationErrors }: MoldStud
     return validationErrors.filter(error => error.section === section)
   }
 
-  const sceneErrorMap = useMemo(() => {
-    const map = new Map<number, { critical: number; warning: number; info: number }>()
-    for (const e of validationErrors) {
-      if (e.section === 'scenes' && typeof e.sceneIndex === 'number') {
-        const cur = map.get(e.sceneIndex) || { critical: 0, warning: 0, info: 0 }
-        cur[e.type]++ as any
-        map.set(e.sceneIndex, cur)
-      }
-    }
-    return map
-  }, [validationErrors])
+  // sceneErrorMap declared above
 
   const sections = [
     { id: 'basic', label: 'Basic Info', icon: Edit3 },

@@ -169,29 +169,43 @@ export function normalizeMoldFromApi(dbMold: AnyObj): Mold {
   const scenes = scenesInput.map((s, idx) => {
     // Handle null/invalid scene objects
     const sceneObj = s && typeof s === 'object' ? s : {}
-    
-    const assetsInput = coerceArray<Record<string, unknown>>(sceneObj.assets)
+    const cfg = (sceneObj as any)?.config as Record<string, unknown> | undefined
+
+    // Derive normalized scene fields from multiple possible shapes
+    const title = coerceString((sceneObj as any)?.title ?? (sceneObj as any)?.name)
+    const narrative = coerceString((sceneObj as any)?.narrative ?? (sceneObj as any)?.description ?? cfg?.narrative)
+    const instructions = coerceString((sceneObj as any)?.instructions ?? cfg?.instructions)
+    const pacingHints = (sceneObj as any)?.pacing_hints ?? (sceneObj as any)?.pacingHints ?? cfg?.pacing_hints ?? {}
+    const reinforcement = coerceString((sceneObj as any)?.reinforcement ?? cfg?.reinforcement)
+
+    const assetsInput = coerceArray<Record<string, unknown>>((sceneObj as any)?.assets)
     const assets: Asset[] = assetsInput.map((a, aIdx) => {
       // Handle null/invalid asset objects  
       const assetObj = a && typeof a === 'object' ? a : {}
-      
+      const meta = (assetObj as any)?.metadata as Record<string, unknown> | undefined
+
+      const type = coerceString((assetObj as any)?.type ?? (assetObj as any)?.asset_type, 'image')
+      const label = coerceString((assetObj as any)?.label ?? (assetObj as any)?.name)
+      const url = coerceString((assetObj as any)?.url)
+      const description = coerceString((assetObj as any)?.description ?? meta?.description)
+
       return {
-        id: assetIdFor(moldKey, idx, aIdx, assetObj),
-        type: coerceString(assetObj.type, 'image'),
-        label: coerceString(assetObj.label),
-        url: coerceString(assetObj.url),
-        description: coerceString(assetObj.description),
+        id: assetIdFor(moldKey, idx, aIdx, { type, label, url }),
+        type,
+        label,
+        url,
+        description,
       }
     })
 
     return {
-      id: sceneIdFor(moldKey, idx, sceneObj),
-      title: coerceString(sceneObj.title),
-      narrative: coerceString(sceneObj.narrative),
-      instructions: coerceString(sceneObj.instructions),
+      id: sceneIdFor(moldKey, idx, { title, narrative }),
+      title,
+      narrative,
+      instructions,
       assets,
-      pacingHints: (sceneObj.pacing_hints as Record<string, unknown>) ?? (sceneObj.pacingHints as Record<string, unknown>) ?? {},
-      reinforcement: coerceString(sceneObj.reinforcement),
+      pacingHints: pacingHints as Record<string, unknown>,
+      reinforcement,
     }
   })
 

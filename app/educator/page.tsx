@@ -70,9 +70,8 @@ function EducatorDashboardInner() {
       case "children":
         return <ChildrenTab />
       case "studio":
-        // Redirect to dedicated studio page
-        router.push('/educator/mold-studio')
-        return <div>Redirecting to Mold Studio...</div>
+        // Render a passive hint; actual navigation happens via onClick on the tab
+        return <div className="p-6 text-sm text-gray-600">Open Mold Studio using the tab above.</div>
       case "analytics":
         return <AnalyticsTab />
       case "settings":
@@ -98,7 +97,13 @@ function EducatorDashboardInner() {
                 {tabs.map((tab) => (
                   <button
                     key={tab.id}
-                    onClick={() => setActiveTab(tab.id)}
+                    onClick={() => {
+                      if (tab.id === 'studio') {
+                        router.push('/educator/mold-studio')
+                        return
+                      }
+                      setActiveTab(tab.id)
+                    }}
                     className={`px-4 py-2 transition-all font-bold text-sm transform ${
                       activeTab === tab.id
                         ? "bg-chart-1 text-white border-2 border-black shadow-brutal-lg -rotate-1"

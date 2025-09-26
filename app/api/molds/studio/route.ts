@@ -57,52 +57,88 @@ export async function POST(req: NextRequest) {
       }, { status: 400 })
     }
 
-    // Create the mold
-    const { data: mold, error: moldError } = await supabase
-      .from('GameMold')
-      .insert({
-        name: moldData.name,
-        category: moldData.category,
-        structure_type: moldData.structureType,
-        experience_type: moldData.experienceType,
-        primary_objective: moldData.primaryObjective,
-        rules: moldData.rules ? { description: moldData.rules } : {},
-        lock_structure: moldData.customization?.lockStructure || false,
-        allow_themes: moldData.customization?.allowThemes !== false,
-        allow_pacing: moldData.customization?.allowPacing !== false,
-        allow_rewards: moldData.customization?.allowRewards !== false,
-        allow_avatars: moldData.customization?.allowAvatars !== false,
-        customization_notes: moldData.customization?.notes || '',
-        age_min: moldData.meta?.ageRange?.min || 5,
-        age_max: moldData.meta?.ageRange?.max || 12,
-        version: 1,
-        created_by: user.id,
-        metadata: {
-          difficulty: moldData.meta?.difficulty || 'Medium',
-          learnerProfiles: moldData.meta?.learnerProfiles || [],
-          executiveFunctionTargets: moldData.meta?.executiveFunctionTargets || [],
-          sensoryPreferences: moldData.meta?.sensoryPreferences || [],
-          skillTargets: moldData.meta?.skillTargets || []
-        }
-      })
-      .select()
-      .single()
-
-    if (moldError) {
-      console.error('Create mold error:', moldError)
-      return NextResponse.json({ error: 'Failed to create mold' }, { status: 500 })
+    // Create the mold (attempt modern schema first; fallback to legacy columns if needed)
+    const fullInsert = {
+      name: moldData.name,
+      category: moldData.category,
+      structure_type: moldData.structureType,
+      experience_type: moldData.experienceType,
+      primary_objective: moldData.primaryObjective,
+      rules: moldData.rules ? { description: moldData.rules } : {},
+      lock_structure: moldData.customization?.lockStructure || false,
+      allow_themes: moldData.customization?.allowThemes !== false,
+      allow_pacing: moldData.customization?.allowPacing !== false,
+      allow_rewards: moldData.customization?.allowRewards !== false,
+      allow_avatars: moldData.customization?.allowAvatars !== false,
+      customization_notes: moldData.customization?.notes || '',
+      age_min: moldData.meta?.ageRange?.min || 5,
+      age_max: moldData.meta?.ageRange?.max || 12,
+      version: 1,
+      created_by: user.id,
+      metadata: {
+        difficulty: moldData.meta?.difficulty || 'Medium',
+        learnerProfiles: moldData.meta?.learnerProfiles || [],
+        executiveFunctionTargets: moldData.meta?.executiveFunctionTargets || [],
+        sensoryPreferences: moldData.meta?.sensoryPreferences || [],
+        skillTargets: moldData.meta?.skillTargets || []
+      }
     }
+
+    let moldInsertRes = await supabase.from('GameMold').insert(fullInsert as any).select().single()
+
+    // Fallback if columns like created_by/metadata are missing
+    if (moldInsertRes.error && moldInsertRes.error.message?.includes('column') && moldInsertRes.error.message?.includes('does not exist')) {
+      console.warn('[studio] Falling back to legacy GameMold insert:', moldInsertRes.error.message)
+      const legacyInsert = {
+        name: fullInsert.name,
+        category: fullInsert.category,
+        structure_type: fullInsert.structure_type,
+        experience_type: fullInsert.experience_type,
+        primary_objective: fullInsert.primary_objective,
+        rules: fullInsert.rules,
+        lock_structure: fullInsert.lock_structure,
+        allow_themes: fullInsert.allow_themes,
+        allow_pacing: fullInsert.allow_pacing,
+        allow_rewards: fullInsert.allow_rewards,
+        allow_avatars: fullInsert.allow_avatars,
+        customization_notes: fullInsert.customization_notes,
+        age_min: fullInsert.age_min,
+        age_max: fullInsert.age_max,
+        version: 1
+      }
+      moldInsertRes = await supabase.from('GameMold').insert(legacyInsert as any).select().single()
+    }
+
+    // Helpful message when RLS prevents insert (policies not applied)
+    if (moldInsertRes.error) {
+      const e = moldInsertRes.error
+      console.error('Create mold error:', e)
+      if ((e.message && e.message.toLowerCase().includes('violates row-level security')) || e.code === '42501') {
+        return NextResponse.json({
+          error: 'Database policies missing for mold creation. Please apply migration 20250827000000_add_mold_studio_support.sql to enable educator inserts.',
+          details: e.message
+        }, { status: 403 })
+      }
+      return NextResponse.json({ error: 'Failed to create mold', details: e.message }, { status: 500 })
+    }
+
+    const mold = moldInsertRes.data
 
     // Create scenes
     if (moldData.scenes && moldData.scenes.length > 0) {
+      // Map to current DB schema: scene_index, name, description, config
       const scenesData = moldData.scenes.map((scene: any, index: number) => ({
         mold_id: mold.id,
-        title: scene.title,
-        narrative: scene.narrative || '',
-        instructions: scene.instructions,
-        reinforcement: scene.reinforcement || '',
-        order_index: index,
-        pacing_hints: scene.pacingHints || {}
+        scene_index: index + 1,
+        name: scene.title,
+        description: scene.narrative || scene.instructions || '',
+        config: {
+          title: scene.title,
+          narrative: scene.narrative || '',
+          instructions: scene.instructions || '',
+          pacing_hints: scene.pacingHints || {},
+          reinforcement: scene.reinforcement || ''
+        }
       }))
 
       const { data: scenes, error: scenesError } = await supabase
@@ -123,12 +159,13 @@ export async function POST(req: NextRequest) {
         const sceneRecord = scenes[i]
         
         if (scene.assets && scene.assets.length > 0) {
+          // Map asset fields to current DB schema: asset_type, name, url, metadata
           const assetsData = scene.assets.map((asset: any) => ({
             scene_id: sceneRecord.id,
-            type: asset.type,
-            label: asset.label,
+            asset_type: asset.type,
+            name: asset.label,
             url: asset.url,
-            description: asset.description || ''
+            metadata: { description: asset.description || '' }
           }))
 
           await supabase.from('Asset').insert(assetsData)
@@ -186,55 +223,70 @@ export async function PUT(req: NextRequest) {
       }, { status: 400 })
     }
 
-    // Update the mold
-    const { data: mold, error: moldError } = await supabase
-      .from('GameMold')
-      .update({
-        name: moldData.name,
-        category: moldData.category,
-        structure_type: moldData.structureType,
-        experience_type: moldData.experienceType,
-        primary_objective: moldData.primaryObjective,
-        rules: moldData.rules ? { description: moldData.rules } : {},
-        lock_structure: moldData.customization?.lockStructure || false,
-        allow_themes: moldData.customization?.allowThemes !== false,
-        allow_pacing: moldData.customization?.allowPacing !== false,
-        allow_rewards: moldData.customization?.allowRewards !== false,
-        allow_avatars: moldData.customization?.allowAvatars !== false,
-        customization_notes: moldData.customization?.notes || '',
-        age_min: moldData.meta?.ageRange?.min || 5,
-        age_max: moldData.meta?.ageRange?.max || 12,
-        updated_at: new Date().toISOString(),
-        metadata: {
-          difficulty: moldData.meta?.difficulty || 'Medium',
-          learnerProfiles: moldData.meta?.learnerProfiles || [],
-          executiveFunctionTargets: moldData.meta?.executiveFunctionTargets || [],
-          sensoryPreferences: moldData.meta?.sensoryPreferences || [],
-          skillTargets: moldData.meta?.skillTargets || []
-        }
-      })
-      .eq('id', moldData.id)
-      .select()
-      .single()
-
-    if (moldError) {
-      console.error('Update mold error:', moldError)
-      return NextResponse.json({ error: 'Failed to update mold' }, { status: 500 })
+    // Update the mold (attempt modern schema; fallback to legacy without metadata)
+    const fullUpdate = {
+      name: moldData.name,
+      category: moldData.category,
+      structure_type: moldData.structureType,
+      experience_type: moldData.experienceType,
+      primary_objective: moldData.primaryObjective,
+      rules: moldData.rules ? { description: moldData.rules } : {},
+      lock_structure: moldData.customization?.lockStructure || false,
+      allow_themes: moldData.customization?.allowThemes !== false,
+      allow_pacing: moldData.customization?.allowPacing !== false,
+      allow_rewards: moldData.customization?.allowRewards !== false,
+      allow_avatars: moldData.customization?.allowAvatars !== false,
+      customization_notes: moldData.customization?.notes || '',
+      age_min: moldData.meta?.ageRange?.min || 5,
+      age_max: moldData.meta?.ageRange?.max || 12,
+      updated_at: new Date().toISOString(),
+      metadata: {
+        difficulty: moldData.meta?.difficulty || 'Medium',
+        learnerProfiles: moldData.meta?.learnerProfiles || [],
+        executiveFunctionTargets: moldData.meta?.executiveFunctionTargets || [],
+        sensoryPreferences: moldData.meta?.sensoryPreferences || [],
+        skillTargets: moldData.meta?.skillTargets || []
+      }
     }
+    let moldUpdateRes = await supabase.from('GameMold').update(fullUpdate as any).eq('id', moldData.id).select().single()
+    if (moldUpdateRes.error && moldUpdateRes.error.message?.includes('column') && moldUpdateRes.error.message?.includes('does not exist')) {
+      console.warn('[studio] Falling back to legacy GameMold update:', moldUpdateRes.error.message)
+      const legacyUpdate = { ...fullUpdate }
+      // Remove metadata if not present
+      delete (legacyUpdate as any).metadata
+      moldUpdateRes = await supabase.from('GameMold').update(legacyUpdate as any).eq('id', moldData.id).select().single()
+    }
+    if (moldUpdateRes.error) {
+      const e = moldUpdateRes.error
+      console.error('Update mold error:', e)
+      if ((e.message && e.message.toLowerCase().includes('violates row-level security')) || e.code === '42501') {
+        return NextResponse.json({
+          error: 'Database policies missing for mold updates. Please apply migration 20250827000000_add_mold_studio_support.sql to enable educator edits.',
+          details: e.message
+        }, { status: 403 })
+      }
+      return NextResponse.json({ error: 'Failed to update mold', details: e.message }, { status: 500 })
+    }
+
+    const mold = moldUpdateRes.data
 
     // Delete existing scenes and assets
     await supabase.from('Scene').delete().eq('mold_id', moldData.id)
 
-    // Create new scenes
+    // Create new scenes (mapped to current DB schema)
     if (moldData.scenes && moldData.scenes.length > 0) {
       const scenesData = moldData.scenes.map((scene: any, index: number) => ({
         mold_id: moldData.id,
-        title: scene.title,
-        narrative: scene.narrative || '',
-        instructions: scene.instructions,
-        reinforcement: scene.reinforcement || '',
-        order_index: index,
-        pacing_hints: scene.pacingHints || {}
+        scene_index: index + 1,
+        name: scene.title,
+        description: scene.narrative || scene.instructions || '',
+        config: {
+          title: scene.title,
+          narrative: scene.narrative || '',
+          instructions: scene.instructions || '',
+          pacing_hints: scene.pacingHints || {},
+          reinforcement: scene.reinforcement || ''
+        }
       }))
 
       const { data: scenes, error: scenesError } = await supabase
@@ -255,10 +307,10 @@ export async function PUT(req: NextRequest) {
         if (scene.assets && scene.assets.length > 0) {
           const assetsData = scene.assets.map((asset: any) => ({
             scene_id: sceneRecord.id,
-            type: asset.type,
-            label: asset.label,
+            asset_type: asset.type,
+            name: asset.label,
             url: asset.url,
-            description: asset.description || ''
+            metadata: { description: asset.description || '' }
           }))
 
           await supabase.from('Asset').insert(assetsData)
