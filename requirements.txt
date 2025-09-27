@@ -1,0 +1,81 @@
+# BrainBerry project requirements (informational)
+# This is a Node.js/Next.js app using pnpm. This file lists the packages and version specs
+# required to run and develop the project, as declared in package.json.
+# Note: This is NOT a Python pip requirements file.
+#
+# Environment
+# - Node.js: >= 18.18.x (or 20.x recommended)
+# - Package manager: pnpm (repo includes pnpm-lock.yaml)
+#
+# Install (informational):
+#   pnpm install
+#   pnpm dev
+
+[runtime-dependencies]
+@google/genai@^1.16.0
+@google/generative-ai@^0.24.1
+@hookform/resolvers@^5.2.1
+@radix-ui/react-label@^2.1.7
+@radix-ui/react-select@^2.2.6
+@radix-ui/react-slot@^1.2.3
+@radix-ui/react-tabs@^1.1.13
+@react-three/drei@^10.7.4
+@react-three/fiber@^9.3.0
+@supabase/ssr@^0.7.0
+@supabase/supabase-js@^2.56.0
+@types/bcryptjs@^2.4.6
+@types/jsonwebtoken@^9.0.10
+@types/three@^0.179.0
+@vercel/blob@^1.1.1
+bcryptjs@^3.0.2
+bufferutil@^4.0.9
+class-variance-authority@^0.7.1
+clsx@^2.1.1
+encoding@^0.1.13
+face-api.js@^0.22.2
+ffmpeg-static@^5.2.0
+geist@latest
+jsonwebtoken@^9.0.2
+locomotive-scroll@latest
+lucide-react@^0.454.0
+next@15.5.2
+next-themes@^0.4.6
+react@^19
+react-dom@^19
+react-hook-form@^7.54.1
+react-resizable-panels@^2.1.7
+recharts@2.15.0
+sonner@^1.7.1
+tailwind-merge@^2.5.5
+tailwindcss-animate@^1.0.7
+three@^0.179.1
+utf-8-validate@^6.0.5
+vaul@^1.1.2
+wavefile@^11.0.0
+wawa-lipsync@^0.0.1
+ws@^8.18.3
+zod@^3.24.1
+
+[dev-dependencies]
+@playwright/test@^1.47.0
+@testing-library/jest-dom@^6.5.0
+@testing-library/react@^16.0.0
+@testing-library/user-event@^14.5.0
+@types/locomotive-scroll@^4.1.4
+@types/node@^22
+@types/react@^19
+@types/react-dom@^19
+@vitejs/plugin-react@^4.3.0
+autoprefixer@^10
+eslint@^8
+eslint-config-next@15.5.2
+postcss@^8.5
+tailwindcss@^3.4.17
+tsx@^4.20.4
+typescript@^5
+vitest@^2.0.0
+
+# Optional runtime notes
+# - ffmpeg-static bundles a platform-specific ffmpeg binary; no separate OS install required.
+# - Some features (e.g., WebSocket) may require build tools on certain platforms.
+# - Environment variables are required for Supabase, Gemini, Ready Player Me, etc. See setup.md.

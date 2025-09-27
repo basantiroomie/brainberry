@@ -13,6 +13,7 @@ BrainBerry is a GenAI-assisted therapeutic mini-game platform that empowers educ
 - 👉 Setup guide: [Local Development](./setup.md)
 - 👉 Product presentation: [Presentation](./ShadesOfDark.pdf)
 - 👉 Live deployment demo (no keys required): https://brainberry.vercel.app/
+- 👉 Product Showcase: https://www.youtube.com/watch?v=xzoEIqgHxS8
 
 
 ### 🎯 Target Audience
