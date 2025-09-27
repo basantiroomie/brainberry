@@ -9,11 +9,12 @@
 
 BrainBerry is a GenAI-assisted therapeutic mini-game platform that empowers educators to create safe, personalized cognitive and developmental training experiences for children. The platform uses immutable "Game Molds" (evidence-informed templates) that AI fills with child-relevant content while preserving pedagogical integrity.
 
-### 🔗 Quick links
-- 👉 Setup guide: [Local Development](./setup.md)
+### 🔗 SUBMISSION (Quick links)
+
 - 👉 Product presentation: [Presentation](./ShadesOfDark.pdf)
-- 👉 Live deployment demo (no keys required): https://brainberry.vercel.app/
-- 👉 Product Showcase: https://www.youtube.com/watch?v=xzoEIqgHxS8
+- 👉 Live Demo deployment(no keys required): https://brainberry.vercel.app/
+- 👉 Product showcase video: https://www.youtube.com/watch?v=xzoEIqgHxS8
+- 👉 Local setup guide: [Local Development](./setup.md)
 
 
 ### 🎯 Target Audience
@@ -46,7 +47,10 @@ BrainBerry is a GenAI-assisted therapeutic mini-game platform that empowers educ
 | **Charts** | Recharts | Data visualization |
 | **Package Manager** | pnpm | Fast, efficient dependency management |
 
-### 🔄 Architecture Flow
+### 🔄 Architecture and Flow
+
+![System Architecture](./images/SystemArchitecture.jpeg)
+
 ```
 Educator → Game Mold → Child Interest Input → AI Content Generation → Personalized Game → Play Session → Analytics
 ```
